@@ -1,0 +1,111 @@
+# Scatha Butcher
+
+A Fabric client mod for Minecraft 26.2 (Hypixel Skyblock, Crystal Hollows).
+Whenever the mod decides a Scatha has given up its loot, it plays a full-screen
+cutscene of the worm on a butcher's block.
+
+- **Pet drop** &rarr; the cleaver takes every body part off, and the head - which
+  *is* the pet - lifts away and turns into the real item.
+- **Anything else** &rarr; the cleaver stops short, or the Scatha ducks the last
+  swing entirely and bolts, shaking its drop loose as it goes.
+
+The run tightens as it goes: each cut is slower than the last, the camera steps
+closer, the vignette closes in and the shake grows. How many cuts a run gets is
+the drop, and nothing on screen counts them - so a long run is never a promise.
+
+The worm and the cleaver are real 3D meshes projected into the GUI layer
+(`gui/ScopeMinigameScreen`); every texture and every sound is generated at
+runtime. The cutscene covers chat while it plays, and messages that arrive
+mid-animation are dropped rather than queued.
+
+An older guillotine style (`anim/ButcherHudRenderer`) still exists in the code
+but is no longer offered in the menu.
+
+## Requirements
+
+- JDK 21 is fine to *launch* Gradle with. Minecraft 26.2 targets Java 25, and
+  `build.gradle` sets up a Gradle toolchain that auto-downloads a JDK 25 the
+  first time you build — it does not touch your existing JDK.
+- Minecraft 26.2 with Fabric Loader 0.19.3+ and a matching Fabric API jar in
+  your actual Minecraft instance.
+
+## Building
+
+The Gradle wrapper is included, so Gradle itself does not need to be installed.
+From the project folder:
+
+```
+.\gradlew.bat build
+```
+
+The first run downloads Gradle (~130MB), then Minecraft 26.2 + Fabric Loader +
+Fabric API, so it takes a few minutes. The jar lands in
+`build/libs/scatha-butcher-<version>.jar` (the `-sources.jar` beside it is not
+needed).
+
+**Versioning:** `mod_version` in `gradle.properties` is `x.y.z-beta` and the build
+bumps the patch after every *successful* build, so you never edit it by hand. Raise
+the major or minor by hand when you want to mark a release.
+
+## Installing
+
+1. Install Fabric Loader for Minecraft 26.2 (<https://fabricmc.net/use/installer/>).
+2. Put the Fabric API jar for 26.2 in `.minecraft/mods`.
+3. Put `scatha-butcher-<version>.jar` in the same folder.
+4. Launch the Fabric profile.
+
+## Commands
+
+| command | does |
+| --- | --- |
+| `/butcher` | opens the settings menu |
+| `/butcher reload` | re-reads `config/scathabutcher.json` and redraws every generated texture |
+| `/butcher log` | the decision log: every kill accepted or refused, and why |
+| `/butcher skins` | whether the real Scatha skin has been captured yet |
+| `/butcher skins forget` | drops the captured skins so they are captured again |
+| `/butcher test random` | plays a run with a drop rolled from the real table |
+| `/butcher test pet rare`<br>`… epic / legendary` | plays the pet cutscene now |
+| `/butcher test gemstone` | plays the gemstone cutscene now |
+| `/butcher test block` | plays the blocked cutscene now |
+| `/butcher test hide` | runs the pre-kill HUD hide for four seconds |
+| `/butcher debug` | what the cleaver's last real draw asked for |
+| `/butcher debug solid` | draws model faces as flat colour, to separate geometry from texture |
+
+The test commands work even when the cutscene is switched off in the menu —
+the toggle only gates real drop detection.
+
+## How a drop is detected
+
+**There is no chat message for a Scatha kill or its drop**, so detection is
+entirely observational and lives in `detect/`:
+
+- `ScathaWormTracker` watches nearby armour-stand nametags for `❤` + `Scatha`.
+  A nametag that vanishes is *not* automatically a kill — it refuses vanishes
+  that came with a teleport, a bulk chunk unload, an unsettled world, too few
+  tracked ticks or too much distance.
+- `HotbarDropWatcher` diffs inventory NBT every tick and caches anything new,
+  because Hypixel usually hands over the loot *before* the kill is noticed.
+- Gemstones can only be inferred: with a gemstone sack they never enter the
+  inventory at all, so the signal is the claim window closing empty.
+
+Because none of this can be summoned on demand, both halves narrate every
+decision into `DecisionLog` — read it with `/butcher log`.
+
+## Art
+
+Most textures are drawn at runtime by `render/art/` rather than shipped as
+PNGs, so tweaking them is a Java edit plus `/butcher reload`. The worm's own
+texture is not ours at all: a Crystal Hollows worm is a chain of armour stands
+wearing player heads, and `render/ScathaSkins` captures the real skin off a
+live one the first time you meet a Scatha.
+
+Any generated texture is also written to `config/scathabutcher/textures/` so it
+can be edited, and your edits are never overwritten - the mod keeps a hash of
+what it wrote and leaves anything that no longer matches alone. Drop a `.gltf`
+or `.glb` box model in `config/scathabutcher/models/` to replace the worm's mesh.
+
+The remaining baked PNGs are generated by the scripts in `tools/` — edit the
+script and re-run it rather than editing the PNG. The mod icon is rendered from
+the real cleaver mesh by `tools/IconGen.java`.
+
+See `../CLAUDE.md` for the technical notes.

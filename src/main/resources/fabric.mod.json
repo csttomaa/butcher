@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "scathabutcher",
+	"version": "${version}",
+	"name": "Scatha Butcher",
+	"description": "Plays a custom cutting-board animation whenever a Scatha drop is detected in Hypixel Skyblock: the Scatha's head gets cut off on a pet drop, or the knife is blocked on a gemstone / Dwarven O's drop. Hides chat while the animation plays.",
+	"authors": [
+		"toma"
+	],
+	"contact": {
+		"sources": "https://github.com/NamelessJu/Scatha-Pro"
+	},
+	"license": "MIT",
+	"icon": "assets/scathabutcher/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.scathabutcher.ScathaButcherClient"
+		]
+	},
+	"mixins": [
+		"scathabutcher.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.0",
+		"minecraft": "~26.2",
+		"fabric-api": "*",
+		"java": ">=25"
+	}
+}

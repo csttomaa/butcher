@@ -1,0 +1,18 @@
+pluginManagement {
+	repositories {
+		maven {
+			name = "Fabric"
+			url = "https://maven.fabricmc.net/"
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+plugins {
+	// Lets Gradle auto-download a JDK 25 toolchain (build.gradle asks for
+	// one) instead of failing with "Cannot find a Java installation".
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = "scatha-butcher"

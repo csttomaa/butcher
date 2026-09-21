@@ -1,0 +1,100 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+// Mixins are written against Mojang names ("renderHandsWithItems"), but the game
+// runs on intermediary names ("method_xxxx"). Something has to bridge the two.
+//
+// The legacy route is a refmap: a generated lookup table shipped in the jar. With
+// useLegacyMixinAp left on but no annotation processor wired up, no refmap gets
+// generated at all, the mixin goes looking for the literal Mojang name at runtime,
+// finds nothing, and the game dies on startup with "No refMap loaded".
+//
+// Turning it off switches to Loom's own remapper, which rewrites the names
+// directly into the compiled mixin class at build time - no refmap needed. That's
+// what Scatha-Pro does (its jar ships no refmap and no "refmap" key in its mixin
+// config), and it works on this exact Minecraft version.
+loom {
+	mixin {
+		useLegacyMixinAp = false
+	}
+}
+
+repositories {
+	maven {
+		name = "Fabric"
+		url = "https://maven.fabricmc.net/"
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+processResources {
+	inputs.property "version", project.version
+
+	filesMatching("fabric.mod.json") {
+		expand(inputs.properties)
+	}
+}
+
+// Minecraft 26.2 is built against Java 25; the Gradle toolchain below will
+// auto-download a JDK 25 the first time you build (needs internet on THIS
+// machine), even though Gradle itself can be launched with your JDK 21.
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
+
+jar {
+	from("LICENSE") {
+		rename { "${it}_${project.archives_base_name}" }
+	}
+}
+
+// Auto-incrementing beta build number: mod_version lives in
+// gradle.properties as "0.0.x-beta". This runs as the last step of the
+// "build" lifecycle task, which only reaches doLast if everything it
+// depends on (compileJava, jar, etc.) actually succeeded - a failed build
+// aborts the task graph before getting here, so the number only advances
+// on a build that really worked. It edits gradle.properties in place (just
+// the mod_version line, regex-based) so the *next* build picks up x+1.
+tasks.named("build") {
+	doLast {
+		def propsFile = file("gradle.properties")
+		def text = propsFile.text
+		// Any major.minor.patch, not just 0.0.x - the first real release moved off
+		// that shape and the bump silently stopped working.
+		def pattern = ~/(?m)^mod_version=(\d+)\.(\d+)\.(\d+)-beta$/
+		def matcher = pattern.matcher(text)
+		if (matcher.find()) {
+			def major = matcher.group(1)
+			def minor = matcher.group(2)
+			int next = matcher.group(3).toInteger() + 1
+			propsFile.text = matcher.replaceFirst("mod_version=${major}.${minor}.${next}-beta")
+			logger.lifecycle("Scatha Butcher: build succeeded as ${project.version} - next build will be ${major}.${minor}.${next}-beta")
+		} else {
+			logger.warn("Scatha Butcher: mod_version in gradle.properties isn't in the expected \"x.y.z-beta\" shape, skipping auto-bump")
+		}
+	}
+}
