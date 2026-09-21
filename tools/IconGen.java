@@ -1,10 +1,10 @@
-import com.scathabutcher.render.art.PropArt;
-import com.scathabutcher.render.model.CleaverMesh;
-import com.scathabutcher.render.model.Mesh;
-import com.scathabutcher.render.model.ModelProjection;
-import com.scathabutcher.render.model.ModelProjection.Camera;
-import com.scathabutcher.render.model.ModelProjection.Face;
-import com.scathabutcher.render.model.ModelProjection.FacePool;
+import com.butcher.render.art.PropArt;
+import com.butcher.render.model.CleaverMesh;
+import com.butcher.render.model.Mesh;
+import com.butcher.render.model.ModelProjection;
+import com.butcher.render.model.ModelProjection.Camera;
+import com.butcher.render.model.ModelProjection.Face;
+import com.butcher.render.model.ModelProjection.FacePool;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -25,9 +25,9 @@ import java.util.Random;
  * and re-running this after changing the blade updates it.
  *
  * Run from the project root:
- *   javac -d out src/main/java/com/scathabutcher/render/model/{Mesh,BoxMesh,ModelProjection,CleaverMesh,CrystalMesh}.java \
- *                src/main/java/com/scathabutcher/render/art/{Paint,PropArt}.java tools/IconGen.java
- *   java -cp out IconGen src/main/resources/assets/scathabutcher/icon.png
+ *   javac -d out src/main/java/com/butcher/render/model/{Mesh,BoxMesh,ModelProjection,CleaverMesh,CrystalMesh}.java \
+ *                src/main/java/com/butcher/render/art/{Paint,PropArt}.java tools/IconGen.java
+ *   java -cp out IconGen src/main/resources/assets/butcher/icon.png
  */
 public final class IconGen {
 

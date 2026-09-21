@@ -92,9 +92,9 @@ tasks.named("build") {
 			def minor = matcher.group(2)
 			int next = matcher.group(3).toInteger() + 1
 			propsFile.text = matcher.replaceFirst("mod_version=${major}.${minor}.${next}-beta")
-			logger.lifecycle("Scatha Butcher: build succeeded as ${project.version} - next build will be ${major}.${minor}.${next}-beta")
+			logger.lifecycle("Butcher: build succeeded as ${project.version} - next build will be ${major}.${minor}.${next}-beta")
 		} else {
-			logger.warn("Scatha Butcher: mod_version in gradle.properties isn't in the expected \"x.y.z-beta\" shape, skipping auto-bump")
+			logger.warn("Butcher: mod_version in gradle.properties isn't in the expected \"x.y.z-beta\" shape, skipping auto-bump")
 		}
 	}
 }

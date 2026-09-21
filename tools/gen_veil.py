@@ -18,7 +18,7 @@ import os
 
 # Repo-relative, so this runs from a clone anywhere.
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir,
-                     "src", "main", "resources", "assets", "scathabutcher", "textures", "gui")
+                     "src", "main", "resources", "assets", "butcher", "textures", "gui")
 
 
 OUT = ASSETS

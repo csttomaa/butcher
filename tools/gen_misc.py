@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Generates simple flat-shaded pixel-art textures for the Scatha Butcher mod.
+"""Generates simple flat-shaded pixel-art textures for the Butcher mod.
 No external assets/network used - everything is drawn procedurally with PIL."""
 
 from PIL import Image, ImageDraw
 import os
 
-OUT = "src/main/resources/assets/scathabutcher/textures/gui"
+OUT = "src/main/resources/assets/butcher/textures/gui"
 os.makedirs(OUT, exist_ok=True)
 
 def save(img, name):
