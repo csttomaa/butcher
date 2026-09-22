@@ -315,6 +315,11 @@ public class ScopeMinigameScreen extends Screen {
     /** How far into the escape the item comes free. */
     private static final float POP_AT = 0.22f;
 
+    /** How much of the reveal the cavern takes to dim all the way back. */
+    private static final float DIM_IN = 0.50f;
+    /** The same, for an escape: longer, and on a smoothstep rather than a cubic. */
+    private static final float DIM_IN_ESCAPE = 0.86f;
+
     /** When the worm started getting away, for the dodge and the "Missed..." card. */
     private long escapeAt = -1;
     /** How long the escape takes before the screen lets go. */
@@ -351,6 +356,12 @@ public class ScopeMinigameScreen extends Screen {
     }
 
     /** 0 before the dodge, 1 once the worm is gone. */
+    /**
+     * True for a run that ended with the worm bolting - ducked the blade, or simply left
+     * once the last cut landed. False for the pet, whose head never goes anywhere.
+     */
+    private boolean escaped() { return escapeAt >= 0 && !reachesHead; }
+
     private float escapeProgress(long now) {
         if (escapeAt < 0) return 0f;
         return Math.min(1f, (now - escapeAt) / (float) ESCAPE_MS);
@@ -1056,6 +1067,16 @@ public class ScopeMinigameScreen extends Screen {
     private static final float ZOOM_REVEAL = 0.74f;
     /** How fast it gets there. Short - the pull-back should feel like a release. */
     private static final long ZOOM_OUT_MS = 420;
+
+    /**
+     * The same pull-back, much slower, when the run ends with the Scatha getting away.
+     *
+     * A reveal that pulls back in 420ms is right when there is a drop arriving to look
+     * at - the snap hands the frame over. An escape has nothing arriving: the worm is
+     * leaving and the camera is letting it go, and at 420ms that read as a cut rather
+     * than a move. Slow enough here to actually follow the thing out of frame.
+     */
+    private static final long ZOOM_OUT_ESCAPE_MS = 980;
     /** How far past its target a zoom overshoots before settling. 0 is no bounce. */
     private static final float BOUNCE = 3.1f;
     /**
@@ -1196,7 +1217,8 @@ public class ScopeMinigameScreen extends Screen {
         float zoom = lerp(from, target, easeOutBack(settle));
 
         if (revealing() && revealStart > 0) {
-            float out = Math.min(1f, (now - revealStart) / (float) ZOOM_OUT_MS);
+            long span = escaped() ? ZOOM_OUT_ESCAPE_MS : ZOOM_OUT_MS;
+            float out = Math.min(1f, (now - revealStart) / (float) span);
             zoom = lerp(zoom, ZOOM_REVEAL, easeOutBack(out));
         }
         return zoom;
@@ -1530,6 +1552,19 @@ public class ScopeMinigameScreen extends Screen {
     /** How much bigger the end card is than normal text. */
     private static final float CARD_SCALE = 2.4f;
 
+    /** How far into the escape the card stops sitting still and takes off. */
+    private static final float CARD_LAUNCH_AT = 0.56f;
+    /**
+     * How far it dips before it goes, as a "back" constant.
+     *
+     * 1.6 rather than {@link #BOUNCE}'s 3.1: at 3.1 the wind-up is a quarter of the
+     * whole travel and the line visibly sags before it moves, which looks like it fell
+     * over. At 1.6 the dip is about 9% - read as a crouch, not a stumble.
+     */
+    private static final float CARD_ANTICIPATION = 1.6f;
+    /** Extra travel past the top edge, so it is properly gone rather than clipped. */
+    private static final float CARD_CLEARANCE = 0.14f;
+
     /**
      * The line that says how the run ended.
      *
@@ -1544,32 +1579,49 @@ public class ScopeMinigameScreen extends Screen {
      */
     private void drawEndCard(GuiGraphicsExtractor g, int sw, int sh, long now) {
         float e = escapeProgress(now);
-        float in = ease(Math.min(1f, e / 0.20f));
+        float in = ease(Math.min(1f, e / 0.14f));
         float out = e > 0.75f ? 1f - ease((e - 0.75f) / 0.25f) : 1f;
-        float a = in * out;
-        if (a <= 0.01f) return;
 
-        // Only dims on its own account when the reveal is not already doing it, so the
-        // two do not stack into near-black.
-        if (!revealing()) fillFull(g, sw, sh, (int) (110 * a) << 24);
+        // The dim still comes and goes by fading - it has nowhere to fly to. Only the
+        // text leaves by moving.
+        if (!revealing()) {
+            int d = (int) (110 * in * out);
+            if (d > 1) fillFull(g, sw, sh, d << 24);
+        }
 
-        Component text = Component.literal(missedSwing ? "Missed..." : "It ran off...");
-        int alpha = Math.round(255 * a);
+        int alpha = Math.round(255 * in);
         if (alpha < 6) return;
         int colour = alpha << 24 | 0xD8D2C2;
+
+        Component text = Component.literal(missedSwing ? "Missed..." : "It ran off...");
 
         // Well above the drop, which rises to about 0.46 of the screen and is up to a
         // third of its height tall. At 0.38 the two were sitting on top of each other.
         float cx = sw / 2f;
-        float cy = sh * 0.17f - ease(e) * sh * 0.02f;
-        int w = font.width(text);
+        float rest = sh * 0.17f;
 
+        // It arrives with the overshoot everything else here arrives with - punched in
+        // slightly too big and settling back - rather than simply appearing at size.
+        float pop = easeOutBack(Math.min(1f, e / 0.20f));
+        float scale = CARD_SCALE * lerp(0.58f, 1f, pop);
+
+        // And it leaves by being thrown off the top, gathering itself downwards first.
+        // It used to dissolve on the spot, which put two fades on screen at once - this
+        // one and the cavern's - and the eye has nothing to follow through a fade.
+        float launch = Math.max(0f, (e - CARD_LAUNCH_AT) / (1f - CARD_LAUNCH_AT));
+        float cy = rest - easeInBack(Math.min(1f, launch), CARD_ANTICIPATION)
+                * (rest + sh * CARD_CLEARANCE);
+        // Scaled about its own centre, the glyphs sit roughly 12px below cy at this
+        // size, so that is when the last of it has left the screen.
+        if (cy + 14f < 0f) return;
+
+        int w = font.width(text);
         Matrix3x2fStack pose = g.pose();
         pose.pushMatrix();
         // Scale about the point the text should be centred on, then draw it centred
         // there in unscaled coordinates - so the centre stays put whatever the scale.
         pose.translate(cx, cy);
-        pose.scale(CARD_SCALE, CARD_SCALE);
+        pose.scale(scale, scale);
         pose.translate(-cx, -cy);
         g.text(font, text, Math.round(cx - w / 2f), Math.round(cy - 4f), colour, true);
         pose.popMatrix();
@@ -1628,8 +1680,19 @@ public class ScopeMinigameScreen extends Screen {
         float travel = easeOutCubic(Math.min(1f, rp / 0.50f)) * Math.min(1f, launched * 1.6f);
         float shrink = rp > 0.78f ? easeIn((rp - 0.78f) / 0.22f) : 0f;
 
-        // dim the cavern back so the drop carries the frame
-        fillFull(g, sw, sh, (int) (170 * travel) << 24);
+        // Dim the cavern back so the drop carries the frame.
+        //
+        // Deliberately not `travel`, which it used to be. easeOutCubic is heavily
+        // front-loaded - 87% of it is done by the time the drop is a quarter of the way
+        // across - and on the escape ending, where the drop pops out late and there is a
+        // worm to watch leave, that dumped most of the darkening into the first third of
+        // a second. The drop still flies on `travel`; only the light goes on its own,
+        // slower, evenly-paced ramp.
+        float dim = escaped()
+                ? ease(Math.min(1f, rp / DIM_IN_ESCAPE))
+                : easeOutCubic(Math.min(1f, rp / DIM_IN));
+        dim *= Math.min(1f, launched * 1.6f);
+        fillFull(g, sw, sh, (int) (170 * dim) << 24);
 
         float ix = lerp(originX, cx, travel);
         float iy = lerp(originY, cy, travel) - (float) Math.sin(travel * Math.PI) * sh * 0.06f;
@@ -1722,6 +1785,21 @@ public class ScopeMinigameScreen extends Screen {
     }
 
     private static float lerp(float a, float b, float t) { return a + (b - a) * t; }
+    /**
+     * Eases in, dipping the wrong way first - the wind-up before something is thrown.
+     *
+     * {@link #easeOutBack} read backwards. The overshoot constant is passed in rather
+     * than taken from {@link #BOUNCE}, because 3.1 is tuned for an arrival, where the
+     * overshoot lands on top of the target and settles; used as an anticipation it dips
+     * a quarter of the whole travel, which reads as the text falling over before it
+     * goes rather than gathering itself.
+     */
+    private static float easeInBack(float t, float back) {
+        if (t <= 0f) return 0f;
+        if (t >= 1f) return 1f;
+        return t * t * ((back + 1f) * t - back);
+    }
+
     private static float ease(float t) { return t * t * (3 - 2 * t); }
     private static float easeIn(float t) { return t * t; }
     private static float easeOutCubic(float t) { float u = 1f - t; return 1f - u * u * u; }

@@ -30,12 +30,24 @@ public final class PetDropFirework {
     private PetDropFirework() {}
 
     public static void burst(String rarity) {
-        if (ButcherClient.config == null || !ButcherClient.config.petDropFirework) return;
+        if (ButcherClient.config == null || !ButcherClient.config.petDropFirework) {
+            ButcherClient.decisions.note("§8Firework skipped - petDropFirework is off in the config");
+            return;
+        }
 
         LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null || player.level() == null) return;
+        if (player == null || player.level() == null) {
+            ButcherClient.decisions.note("§cFirework skipped - no player or level");
+            return;
+        }
 
-        Vec3 at = player.getEyePosition().add(player.getForward().scale(1.0));
+        // One block ahead, half a block up.
+        //
+        // This was moved out to three while chasing a report that the firework had stopped
+        // showing up. It had not - it fires fine at one block, and at three it reads as a
+        // firework going off somewhere else rather than one going off for you. The lift
+        // stays, because the player is usually looking slightly down at a worm.
+        Vec3 at = player.getEyePosition().add(player.getForward().scale(1.0)).add(0.0, 0.5, 0.0);
         player.level().createFireworks(at.x, at.y, at.z, 0.0, 0.0, 0.0,
                 List.of(new FireworkExplosion(
                         FireworkExplosion.Shape.SMALL_BALL,
@@ -43,6 +55,13 @@ public final class PetDropFirework {
                         IntList.of(),                      // no fade colours
                         false,                             // no trail
                         true)));                           // twinkle
+
+        // Narrated because this is the one payoff nobody can confirm from the outside: it
+        // fires in the world, a beat before the screen closes, on a drop that happens once
+        // in a couple of thousand kills. "It did not show up" and "it was never called"
+        // look identical without this line.
+        ButcherClient.decisions.note("§aFirework fired §8- " + (rarity == null ? "no rarity" : rarity)
+                + " at " + String.format("%.1f, %.1f, %.1f", at.x, at.y, at.z));
     }
 
     /** Matches the rarity colours the reveal text already uses, so the burst reads as the same rarity. */
