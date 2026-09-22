@@ -88,6 +88,24 @@ public class PatternConfig {
     public boolean cutsceneAudio = true;
 
     /**
+     * Play the Thaw when a Vanguard Frozen Corpse is opened.
+     *
+     * Separate from {@code animationMode}, which is the Scatha's. They are different
+     * sources with different detection and different cutscenes, and someone who wants one
+     * has no particular reason to want the other.
+     */
+    public boolean vanguardAnimation = true;
+
+    /**
+     * Keep the corpse's loot message out of chat while the Thaw plays it back.
+     *
+     * The message IS the reveal - ten lines of it, arriving before the animation has
+     * drawn a single frame. Leaving it in chat hands the player the answer and turns the
+     * cutscene into a replay of something they have already read.
+     */
+    public boolean vanguardHideChat = true;
+
+    /**
      * Take the vanilla HUD off the screen during the pre-kill hide and the cutscene.
      *
      * The hotbar is the leak this closes. A pet lands in it before the cutscene even

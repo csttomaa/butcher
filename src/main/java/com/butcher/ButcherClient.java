@@ -10,6 +10,9 @@ import com.butcher.detect.DecisionLog;
 import com.butcher.detect.DropDetector.DropResult;
 import com.butcher.detect.HotbarDropWatcher;
 import com.butcher.detect.ScathaWormTracker;
+import com.butcher.detect.vanguard.CorpseHaul;
+import com.butcher.detect.vanguard.VanguardLoot;
+import com.butcher.detect.vanguard.VanguardWatcher;
 import com.butcher.gui.ButcherMenuScreen;
 import com.butcher.render.TextureBank;
 import com.butcher.render.ScathaSkins;
@@ -60,6 +63,13 @@ public class ButcherClient implements ClientModInitializer {
 
     private static final ScathaWormTracker wormTracker = new ScathaWormTracker(decisions);
     private static final HotbarDropWatcher dropWatcher = new HotbarDropWatcher(decisions);
+
+    /**
+     * Vanguard Frozen Corpses, which announce themselves in chat and so need none of the
+     * machinery above - no tracker, no claim window, no inference.
+     */
+    public static final VanguardWatcher vanguardWatcher =
+            new VanguardWatcher(decisions, ButcherClient::onCorpseHaul);
 
     // Below this many hearts, a tracked Scatha's death (and therefore its drop)
     // is imminent - that's the cue to start covering the hotbar/chat so the
@@ -199,13 +209,17 @@ public class ButcherClient implements ClientModInitializer {
                 dropWatcher.tick(client.player, wormTracker, !isAnimationPlaying() || awaitingDrop());
                 com.butcher.audio.ButcherAudio.tick();
             }
+            // Outside the player check: a half-read loot message has to be able to time
+            // out even if the player went away mid-message.
+            vanguardWatcher.tick();
         });
 
         // Chat still gets hidden while an animation is playing (that's the
         // whole point of the cutscene), even though it's no longer what
         // triggers the animation in the first place.
-        ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> !isAnimationPlaying() && !shouldHidePreKill());
-        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> !isAnimationPlaying() && !shouldHidePreKill());
+        ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
+                allowChatLine(message.getString()));
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> allowChatLine(message.getString()));
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             LiteralArgumentBuilder<FabricClientCommandSource> petNode = ClientCommands.literal("pet");
@@ -238,6 +252,22 @@ public class ButcherClient implements ClientModInitializer {
                     }))
                     .then(ClientCommands.literal("random").executes(ctx -> {
                         trigger(randomDrop());
+                        return 1;
+                    }))
+                    .then(ClientCommands.literal("vanguard").executes(ctx -> {
+                        CorpseHaul haul = randomCorpse();
+                        ctx.getSource().sendFeedback(Component.literal(
+                                "§6[Butcher] §7rolled a corpse: §f" + haul.describe()));
+                        vanguardWatcher.inject(haul);
+                        return 1;
+                    }))
+                    .then(ClientCommands.literal("firework").executes(ctx -> {
+                        // The firework is the one payoff that cannot be checked without a
+                        // pet, which is a one-in-two-thousand drop - so it gets its own
+                        // command rather than being untestable in practice.
+                        com.butcher.anim.PetDropFirework.burst("legendary");
+                        ctx.getSource().sendFeedback(Component.literal(
+                                "§6[Butcher] §7firework fired §8- look straight ahead"));
                         return 1;
                     }))
                     .then(petNode);
@@ -480,6 +510,85 @@ public class ButcherClient implements ClientModInitializer {
         if (c == null || !c.hideHud) return false;
         if (isAnimationPlaying()) return true;
         return shouldHidePreKill() && PreKillHider.closed();
+    }
+
+    // ------------------------------------------------------------------ Vanguard
+
+    /**
+     * Whether one incoming chat line should reach the chat box.
+     *
+     * Offered to the Vanguard watcher first, and <b>exactly once per line</b>: it is a
+     * state machine, and handing it the same line twice would count a drop twice. The two
+     * message events it is wired to carry different kinds of message, so no line reaches
+     * both.
+     *
+     * A line that belongs to a corpse's loot message is hidden because that message IS the
+     * reveal - it lists the whole haul before the animation has drawn anything, so leaving
+     * it in chat is handing over the answer.
+     */
+    private static boolean allowChatLine(String text) {
+        if (config != null && config.vanguardAnimation && vanguardWatcher.onChatLine(text)) {
+            return !config.vanguardHideChat;
+        }
+        return !isAnimationPlaying() && !shouldHidePreKill();
+    }
+
+    /**
+     * A Vanguard corpse has been read.
+     *
+     * The Thaw does not exist yet, so for now this records the haul and prints it. That
+     * printing is deliberate and temporary: with the loot message hidden, a corpse would
+     * otherwise be completely silent, and there would be no way to tell a working parser
+     * from a broken one in normal play. It comes out when the cutscene goes in.
+     */
+    private static void onCorpseHaul(CorpseHaul haul) {
+        int commons = 0, uncommons = 0, legendaries = 0, specials = 0;
+        for (CorpseHaul.Drop drop : haul.drops()) {
+            switch (drop.tier()) {
+                case SPECIAL -> specials++;
+                case LEGENDARY -> legendaries++;
+                case UNCOMMON -> uncommons++;
+                default -> commons++;
+            }
+        }
+        com.butcher.config.ButcherStats.get().onCorpse(commons, uncommons, legendaries, specials);
+
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null) return;
+        StringBuilder line = new StringBuilder("§6[Butcher] §7Vanguard corpse §8(" + haul.rolls() + " rolls)§7:");
+        for (CorpseHaul.Drop drop : haul.revealOrder()) {
+            line.append("\n  ").append(switch (drop.tier()) {
+                case LEGENDARY -> "§6";
+                case UNCOMMON -> "§b";
+                default -> "§f";
+            }).append(drop.name()).append(drop.amount() > 1 ? " §8x" + drop.amount() : "");
+        }
+        client.player.sendSystemMessage(Component.literal(line.toString()));
+    }
+
+    /**
+     * A corpse rolled against the real table, for {@code /butcher test vanguard}.
+     *
+     * Rolls properly rather than picking a pleasing set: the point of the test command is
+     * to see what the animation will actually look like most of the time, and most of the
+     * time that is a pile of commons. A version that dealt a legendary every run would
+     * make the pacing impossible to judge.
+     */
+    private static CorpseHaul randomCorpse() {
+        int rolls = VanguardLoot.MIN_ROLLS
+                + (int) (Math.random() * (VanguardLoot.MAX_ROLLS - VanguardLoot.MIN_ROLLS + 1));
+        java.util.List<CorpseHaul.Drop> drops = new java.util.ArrayList<>();
+        for (int i = 0; i < rolls; i++) {
+            int pick = (int) (Math.random() * VanguardLoot.TOTAL_WEIGHT);
+            for (VanguardLoot.Entry entry : VanguardLoot.all()) {
+                pick -= entry.weight();
+                if (pick < 0) {
+                    drops.add(new CorpseHaul.Drop(entry, 1));
+                    break;
+                }
+            }
+        }
+        return new CorpseHaul(drops);
     }
 
     /** True while a cleaver cutscene is on screen but still doesn't know what dropped. */

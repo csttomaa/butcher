@@ -1,6 +1,8 @@
 package com.butcher.gui;
 
 import com.butcher.ButcherClient;
+import com.butcher.detect.vanguard.VanguardLoot;
+import com.butcher.render.ButcherFont;
 import com.butcher.config.ButcherStats;
 import com.butcher.config.PatternConfig;
 import com.butcher.config.PatternConfig.AnimationMode;
@@ -59,7 +61,16 @@ public class ButcherMenuScreen extends Screen {
     private static final int SECTION_H = 16;
     private static final int GAP = 4;
     private static final int LINE_H = 10;
-    private static final int SCROLLBAR_W = 4;
+    private static final int SCROLLBAR_W = 6;
+
+    /**
+     * How far either side of the bar still counts as grabbing it.
+     *
+     * The bar is six pixels wide and the thumb can be sixteen tall; at a high GUI scale
+     * that is a small target for a click-and-drag, and this menu has to be usable by
+     * someone whose scroll wheel does not work - which is the whole reason it is draggable.
+     */
+    private static final int SCROLLBAR_GRAB = 5;
 
     // ---- setting ranges ----
     private static final int SCOPE_MIN_MS = 3000, SCOPE_MAX_MS = 16000, SCOPE_STEP = 100;
@@ -90,18 +101,31 @@ public class ButcherMenuScreen extends Screen {
     private static final int COL_TEXT_DISABLED = 0xFF5E645E;
 
     private int tab = TAB_GAMBLING;
-    private boolean gamblingOpen = false;
+    /**
+     * Which collapsible groups are open, by id.
+     *
+     * A set rather than a boolean per group: there is one group today, four by the time
+     * the Vanguard and sea creatures have their own, and a field each would have to be
+     * threaded through the click routing individually. Empty means everything is closed,
+     * which is the right first impression - the menu opens as a short list of headings
+     * rather than a wall of settings.
+     */
+    private final java.util.Set<String> openGroups = new java.util.HashSet<>();
+
+    private boolean isOpen(String id) { return openGroups.contains(id); }
 
     private float scroll = 0f;
     private int contentHeight = 0;
 
     private String draggingId = null;
+    /** True while the scrollbar thumb is being dragged. */
+    private boolean draggingBar = false;
     private final List<Placed> placed = new ArrayList<>();
 
     private final long openedAt = System.currentTimeMillis();
 
     public ButcherMenuScreen() {
-        super(Component.literal("Butcher"));
+        super(ButcherFont.of("Butcher"));
     }
 
     @Override protected void init() { }
@@ -131,6 +155,25 @@ public class ButcherMenuScreen extends Screen {
     }
     private int viewHeight() { return panelH() - TAB_H - PAD * 2; }
 
+    private int scrollbarX() { return panelX() + PANEL_W - PAD + 2; }
+
+    private boolean scrollable() { return contentHeight > viewHeight(); }
+
+    /**
+     * Put the thumb's centre at {@code my}.
+     *
+     * Shared by the click and the drag so a click on the track jumps to where you clicked
+     * and then keeps tracking the mouse from there, rather than jumping once and sticking.
+     */
+    private void scrollbarTo(double my) {
+        int viewTop = contentTop() + PAD, viewH = viewHeight();
+        int thumbH = Math.max(16, Math.round(viewH * (viewH / (float) contentHeight)));
+        int travel = viewH - thumbH;
+        if (travel <= 0) return;
+        float f = (float) ((my - viewTop - thumbH / 2.0) / travel);
+        scroll = clampScroll(Math.max(0f, Math.min(1f, f)) * (contentHeight - viewH), viewH);
+    }
+
     // Minecraft 26.2 replaced the old immediate-mode Screen.render(...) with a
     // "render state extraction" pass: extractRenderState(...) is the new
     // per-frame draw hook, and extractBackground(...) is the separate hook that
@@ -150,7 +193,7 @@ public class ButcherMenuScreen extends Screen {
         int px = panelX(), py = panelY();
 
         // ---- title, sitting above the frame ----
-        Component title = Component.literal("BUTCHER").withStyle(ChatFormatting.BOLD);
+        Component title = ButcherFont.of("BUTCHER").withStyle(ChatFormatting.BOLD);
         g.text(font, title, px + (PANEL_W - font.width(title)) / 2, py - 24, COL_GOLD, true);
 
         // ---- tab bar ----
@@ -169,7 +212,7 @@ public class ButcherMenuScreen extends Screen {
                 g.fill(tx0, py + 2, tx0 + 1, py + TAB_H, COL_BORDER);
                 g.fill(tx1 - 1, py + 2, tx1, py + TAB_H, COL_BORDER);
             }
-            Component label = Component.literal(TAB_NAMES[i]);
+            Component label = ButcherFont.of(TAB_NAMES[i]);
             int lw = font.width(label);
             g.text(font, label, tx0 + (tx1 - tx0 - lw) / 2, py + TAB_H / 2 - 4,
                     active ? COL_TEXT : (hover ? COL_TEXT_DIM : COL_TEXT_DISABLED), false);
@@ -199,12 +242,17 @@ public class ButcherMenuScreen extends Screen {
 
         // ---- scrollbar ----
         if (contentHeight > viewH) {
-            int barX = px + PANEL_W - PAD + 2;
+            int barX = scrollbarX();
+            boolean overBar = mouseX >= barX - SCROLLBAR_GRAB && mouseX <= barX + SCROLLBAR_W + SCROLLBAR_GRAB
+                    && mouseY >= viewTop && mouseY <= viewTop + viewH;
             g.fill(barX, viewTop, barX + SCROLLBAR_W, viewTop + viewH, 0x40000000);
             int thumbH = Math.max(16, Math.round(viewH * (viewH / (float) contentHeight)));
             int travel = viewH - thumbH;
             int thumbY = viewTop + Math.round(travel * (scroll / (float) Math.max(1, contentHeight - viewH)));
-            g.fill(barX, thumbY, barX + SCROLLBAR_W, thumbY + thumbH, COL_GOLD);
+            // Lit while hovered or held, so it reads as something you can take hold of
+            // rather than a progress indicator.
+            g.fill(barX, thumbY, barX + SCROLLBAR_W, thumbY + thumbH,
+                    (draggingBar || overBar) ? 0xFFFFD87A : COL_GOLD);
         }
 
         // The fade itself. Everything above is drawn at full strength and then
@@ -254,8 +302,8 @@ public class ButcherMenuScreen extends Screen {
         }
 
         boolean on = cfg.animationMode != AnimationMode.NONE;
-        rows.add(new HeaderRow("Scatha Gambling", on, gamblingOpen));
-        if (!gamblingOpen) return rows;
+        rows.add(new HeaderRow("gambling", "Scatha Gambling", on, isOpen("gambling")));
+        if (!isOpen("gambling")) return rows;
 
         boolean cleaver = cfg.animationMode != AnimationMode.GUILLOTINE;
 
@@ -334,10 +382,34 @@ public class ButcherMenuScreen extends Screen {
      * about a one-in-two-thousand drop: the number anyone actually wants is "how long
      * has it been", and burying that under a list of counters gets it wrong.
      */
+    /**
+     * The stats tab: one collapsible group per drop source.
+     *
+     * Flat, every number was on screen at once and a Scatha dry streak sat three rows
+     * above a corpse count it has nothing to do with. They are separate grinds with
+     * separate odds - a pet is one in two thousand, a Vanguard legendary about one corpse
+     * in fifteen - and reading them as one list makes both meaningless.
+     */
     private List<Row> statsRows(Font font) {
         List<Row> rows = new ArrayList<>();
         ButcherStats st = ButcherStats.get();
 
+        rows.add(new HeaderRow("stats-scatha", "Scatha", null, isOpen("stats-scatha")));
+        if (isOpen("stats-scatha")) {
+            scathaStats(rows, st);
+            resetRow(rows, font, "stats-scatha", "Reset Scatha stats", st::resetScatha);
+        }
+
+        rows.add(new HeaderRow("stats-vanguard", "Vanguard Corpses", null, isOpen("stats-vanguard")));
+        if (isOpen("stats-vanguard")) {
+            vanguardStats(rows, st, font);
+            resetRow(rows, font, "stats-vanguard", "Reset Vanguard stats", st::resetVanguard);
+        }
+
+        return rows;
+    }
+
+    private void scathaStats(List<Row> rows, ButcherStats st) {
         rows.add(new SectionRow("The dry streak"));
         rows.add(new StatRow("Kills since a pet", Integer.toString(st.dryStreak), COL_GOLD));
         rows.add(new StatRow("Worst it has been", Integer.toString(st.worstDryStreak), COL_TEXT_DIM));
@@ -359,23 +431,81 @@ public class ButcherMenuScreen extends Screen {
         rows.add(new StatRow("Dwarven O's", String.format("%,d", st.dwarvenOs), COL_TEXT_DIM));
         rows.add(new StatRow("Got away", String.format("%,d", st.misses), COL_TEXT_DIM));
         rows.add(new StatRow("Cuts landed", String.format("%,d", st.chops), COL_TEXT_DIM));
-
-        rows.add(new SectionRow("Start again"));
-        rows.add(new ToggleRow(resetArmed ? "Click again to confirm" : "Reset statistics",
-                resetArmed, () -> {
-            if (resetArmed) {
-                ButcherStats.get().reset();
-                resetArmed = false;
-            } else {
-                resetArmed = true;
-            }
-        }));
-        rows.add(new NoticeRow("Kept in stats.json. Only kills the mod accepted are counted.", font, rowsWidth()));
-        return rows;
     }
 
-    /** Two clicks to wipe the stats, so a misclick cannot throw away a long streak. */
-    private boolean resetArmed;
+    private void vanguardStats(List<Row> rows, ButcherStats st, Font font) {
+        rows.add(new SectionRow("The dry streak"));
+        rows.add(new StatRow("Corpses since a legendary", Integer.toString(st.corpseDryStreak), COL_GOLD));
+        rows.add(new StatRow("Worst it has been", Integer.toString(st.worstCorpseDryStreak), COL_TEXT_DIM));
+        // The table says roughly one corpse in fifteen carries a legendary, so showing the
+        // expectation next to the streak is what turns a number into "am I due".
+        rows.add(new StatRow("Expected", String.format("1 in %.0f",
+                1f / VanguardLoot.legendaryChance(VanguardLoot.AVG_ROLLS)), COL_TEXT_DIM));
+
+        rows.add(new SectionRow("Drops"));
+        // Always shown, even at zero. A counter you have never moved is the point of this
+        // one - it is the Frostbitten Dye, and most players will never move it.
+        rows.add(new StatRow("Frostbitten Dye", Integer.toString(st.corpseSpecials),
+                VanguardLoot.Tier.SPECIAL.glow()));
+        rows.add(new StatRow("Legendary", Integer.toString(st.corpseLegendaries), 0xFFFFAA00));
+        rows.add(new StatRow("Uncommon", Integer.toString(st.corpseUncommons), 0xFF55FFFF));
+        rows.add(new StatRow("Common", Integer.toString(st.corpseCommons), COL_TEXT_DIM));
+
+        rows.add(new SectionRow("Everything else"));
+        rows.add(new StatRow("Corpses opened", String.format("%,d", st.corpses), COL_TEXT));
+        rows.add(new StatRow("Rolls seen", String.format("%,d", st.corpseRolls), COL_TEXT_DIM));
+        if (st.corpses > 0) {
+            rows.add(new StatRow("Rolls per corpse",
+                    String.format("%.2f", st.corpseRolls / (float) st.corpses), COL_TEXT_DIM));
+        }
+        if (st.corpses == 0) {
+            rows.add(new NoticeRow("Nothing yet. Open a Vanguard corpse, or try /butcher test vanguard.",
+                    font, rowsWidth()));
+        }
+    }
+
+    /**
+     * Which reset is armed, and when it armed.
+     *
+     * Two clicks to wipe a set of stats, so a misclick cannot throw away a long streak -
+     * and the armed state expires, so a menu left open on "click again to confirm" cannot
+     * still be waiting when someone comes back to it an hour later and clicks to scroll.
+     */
+    private String resetArmed;
+    private long resetArmedAt;
+
+    /** How long a "click again to confirm" stays live. */
+    private static final long RESET_ARM_MS = 4000;
+
+    private boolean isArmed(String id) {
+        if (!id.equals(resetArmed)) return false;
+        if (System.currentTimeMillis() - resetArmedAt > RESET_ARM_MS) {
+            resetArmed = null;
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * The reset row that sits at the bottom of each source's own stats.
+     *
+     * One per section rather than a single global wipe: the Scatha dry streak and the
+     * corpse dry streak are separate grinds, and someone starting a fresh corpse count has
+     * no reason to lose two thousand Scatha kills with it.
+     */
+    private void resetRow(List<Row> rows, Font font, String id, String label, Runnable wipe) {
+        rows.add(new SectionRow("Start again"));
+        boolean armed = isArmed(id);
+        rows.add(new ToggleRow(armed ? "Click again to confirm" : label, armed, () -> {
+            if (isArmed(id)) {
+                wipe.run();
+                resetArmed = null;
+            } else {
+                resetArmed = id;
+                resetArmedAt = System.currentTimeMillis();
+            }
+        }));
+    }
 
     /** Everything about what the cutscene sounds like. */
     private List<Row> soundRows(Font font, PatternConfig cfg) {
@@ -433,8 +563,12 @@ public class ButcherMenuScreen extends Screen {
 
     /** The collapsible bar. Its ON/OFF is a readout, not a switch - clicking anywhere opens it. */
     private static final class HeaderRow implements Row {
-        private final String label; private final boolean on, open;
-        HeaderRow(String label, boolean on, boolean open) { this.label = label; this.on = on; this.open = open; }
+        private final String id, label; private final Boolean on; private final boolean open;
+        /** @param on ON/OFF readout, or null for a group that is not a feature toggle. */
+        HeaderRow(String id, String label, Boolean on, boolean open) {
+            this.id = id; this.label = label; this.on = on; this.open = open;
+        }
+        String id() { return id; }
 
         @Override public int height() { return HEADER_H; }
 
@@ -444,8 +578,9 @@ public class ButcherMenuScreen extends Screen {
             g.fill(x, y, x + w, y + height(), open ? COL_SEL_FILL : (hover ? COL_ROW_HOVER : COL_ROW));
             if (open) g.outline(x, y, w, height(), COL_SEL_BORDER);
 
-            Component c = Component.literal(label + "  ")
-                    .append(Component.literal(on ? "ON" : "OFF")
+            Component c = on == null
+                    ? ButcherFont.of(label)
+                    : ButcherFont.of(label + "  ").append(ButcherFont.of(on ? "ON" : "OFF")
                             .withStyle(on ? ChatFormatting.GREEN : ChatFormatting.RED));
             int tw = font.width(c);
             int cx = x + w / 2;
@@ -474,7 +609,7 @@ public class ButcherMenuScreen extends Screen {
             int ty = y + height() - 9;
             // A stub of gold to the left of the label, like a bullet with intent.
             g.fill(x + 1, ty, x + 3, ty + 7, COL_GOLD);
-            Component c = Component.literal(label);
+            Component c = ButcherFont.of(label);
             g.text(font, c, x + 8, ty, COL_GOLD, false);
             int ruleX = x + 8 + font.width(c) + 6;
             int ruleY = ty + 3;
@@ -491,7 +626,7 @@ public class ButcherMenuScreen extends Screen {
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
             int ly = y;
             for (String line : lines) {
-                g.text(font, Component.literal(line), x + 2, ly, COL_TEXT_DIM, false);
+                g.text(font, ButcherFont.of(line), x + 2, ly, COL_TEXT_DIM, false);
                 ly += LINE_H;
             }
         }
@@ -507,8 +642,8 @@ public class ButcherMenuScreen extends Screen {
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
             boolean hover = within(mouseX, mouseY, x, y, x + w, y + height());
             g.fill(x, y, x + w, y + height(), hover ? COL_ROW_HOVER : COL_ROW);
-            Component c = Component.literal(label + ": ")
-                    .append(Component.literal(on ? "ON" : "OFF")
+            Component c = ButcherFont.of(label + ": ")
+                    .append(ButcherFont.of(on ? "ON" : "OFF")
                             .withStyle(on ? ChatFormatting.GREEN : ChatFormatting.RED));
             g.text(font, c, x + w / 2 - font.width(c) / 2, y + height() / 2 - 4, COL_TEXT, false);
         }
@@ -539,8 +674,8 @@ public class ButcherMenuScreen extends Screen {
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
             boolean hover = within(mouseX, mouseY, x, y, x + w, y + height());
             g.fill(x, y, x + w, y + height(), hover ? COL_ROW_HOVER : COL_ROW);
-            Component l = Component.literal(label);
-            Component v = Component.literal(value);
+            Component l = ButcherFont.of(label);
+            Component v = ButcherFont.of(value);
             int ty = y + height() / 2 - 4;
             g.text(font, l, x + 6, ty, COL_TEXT_DIM, false);
             g.text(font, v, x + w - 6 - font.width(v), ty, colour, false);
@@ -559,8 +694,8 @@ public class ButcherMenuScreen extends Screen {
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
             boolean hover = within(mouseX, mouseY, x, y, x + w, y + height());
             g.fill(x, y, x + w, y + height(), hover ? COL_ROW_HOVER : COL_ROW);
-            Component c = Component.literal(label + ": ")
-                    .append(Component.literal(value).withStyle(lit ? ChatFormatting.YELLOW : ChatFormatting.GRAY));
+            Component c = ButcherFont.of(label + ": ")
+                    .append(ButcherFont.of(value).withStyle(lit ? ChatFormatting.YELLOW : ChatFormatting.GRAY));
             g.text(font, c, x + w / 2 - font.width(c) / 2, y + height() / 2 - 4, COL_TEXT, false);
         }
 
@@ -599,8 +734,8 @@ public class ButcherMenuScreen extends Screen {
             if (fillW > 0) g.fill(x, y, x + fillW, y + height(), COL_SLIDER_FILL);
             if (fillW > 1) g.fill(x + fillW - 1, y, x + fillW, y + height(), COL_GOLD_DIM);
 
-            Component c = Component.literal(label + ": ")
-                    .append(Component.literal(text).withStyle(ChatFormatting.YELLOW));
+            Component c = ButcherFont.of(label + ": ")
+                    .append(ButcherFont.of(text).withStyle(ChatFormatting.YELLOW));
             g.text(font, c, x + w / 2 - font.width(c) / 2, y + height() / 2 - 4, COL_TEXT, false);
         }
 
@@ -649,6 +784,17 @@ public class ButcherMenuScreen extends Screen {
         }
 
         int viewTop = contentTop() + PAD, viewH = viewHeight();
+
+        // The bar first: it overlaps the right-hand end of the rows, and a click there
+        // means the bar, not the row behind it.
+        int barX = scrollbarX();
+        if (scrollable() && mx >= barX - SCROLLBAR_GRAB && mx <= barX + SCROLLBAR_W + SCROLLBAR_GRAB
+                && my >= viewTop && my <= viewTop + viewH) {
+            draggingBar = true;
+            scrollbarTo(my);
+            return true;
+        }
+
         if (!within(mx, my, px, viewTop, px + PANEL_W, viewTop + viewH)) {
             return super.mouseClicked(event, doubleClick);
         }
@@ -657,9 +803,11 @@ public class ButcherMenuScreen extends Screen {
         for (Placed p : placed) {
             int ry = viewTop + p.y() - Math.round(scroll);
             if (!p.row().click(mx, my, x, ry, w)) continue;
-            if (p.row() instanceof HeaderRow) {
-                gamblingOpen = !gamblingOpen;
-                if (!gamblingOpen) scroll = 0f;
+            if (p.row() instanceof HeaderRow header) {
+                if (!openGroups.remove(header.id())) openGroups.add(header.id());
+                // Scrolled-down content that has just collapsed leaves the view showing
+                // nothing at all, so a close always returns to the top.
+                if (!isOpen(header.id())) scroll = 0f;
             } else if (p.row().dragId() != null) {
                 draggingId = p.row().dragId();
             }
@@ -670,6 +818,10 @@ public class ButcherMenuScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (draggingBar && event.button() == 0) {
+            scrollbarTo(event.y());
+            return true;
+        }
         if (draggingId != null && event.button() == 0) {
             int x = rowsLeft(), w = rowsWidth();
             for (Placed p : placed) {
@@ -682,6 +834,10 @@ public class ButcherMenuScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (draggingBar && event.button() == 0) {
+            draggingBar = false;
+            return true;
+        }
         if (draggingId != null && event.button() == 0) {
             draggingId = null;
             ButcherClient.config.save();
@@ -712,7 +868,7 @@ public class ButcherMenuScreen extends Screen {
         StringBuilder cur = new StringBuilder();
         for (String word : text.split(" ")) {
             String candidate = cur.isEmpty() ? word : cur + " " + word;
-            if (cur.isEmpty() || font.width(Component.literal(candidate)) <= width) {
+            if (cur.isEmpty() || font.width(ButcherFont.of(candidate)) <= width) {
                 cur.setLength(0);
                 cur.append(candidate);
             } else {

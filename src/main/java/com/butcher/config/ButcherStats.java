@@ -54,6 +54,26 @@ public final class ButcherStats {
     public int dryStreak;
     public int worstDryStreak;
 
+    // ---------------------------------------------------------------- Vanguard
+    // Counted separately from the Scatha's numbers all the way down. They are different
+    // grinds with different odds - a pet is one in two thousand, a Vanguard legendary is
+    // about one corpse in fifteen - and averaging them together would make both
+    // meaningless.
+
+    /** Vanguard corpses whose loot message was read. */
+    public int corpses;
+    /** Every roll across every corpse - 5 to 8 per corpse. */
+    public long corpseRolls;
+    /** Drops in each tier, across every corpse. */
+    public int corpseCommons;
+    public int corpseUncommons;
+    public int corpseLegendaries;
+    /** Frostbitten Dyes. Counted apart because it is the one number worth bragging about. */
+    public int corpseSpecials;
+    /** Corpses since the last legendary, and the worst that has ever got. */
+    public int corpseDryStreak;
+    public int worstCorpseDryStreak;
+
     private static ButcherStats instance;
 
     public static ButcherStats get() {
@@ -63,6 +83,11 @@ public final class ButcherStats {
 
     public int pets() {
         return petsRare + petsEpic + petsLegendary;
+    }
+
+    /** Every drop ever pulled out of a corpse, whatever it was. */
+    public int corpseDrops() {
+        return corpseCommons + corpseUncommons + corpseLegendaries + corpseSpecials;
     }
 
     // ------------------------------------------------------------------ counting
@@ -113,6 +138,63 @@ public final class ButcherStats {
         save();
     }
 
+    /**
+     * One Vanguard corpse was opened and read.
+     *
+     * Takes the tier counts rather than the haul so that {@code config} does not have to
+     * know what a {@code CorpseHaul} is - the stats file outlives any one feature's types.
+     */
+    public void onCorpse(int commons, int uncommons, int legendaries, int specials) {
+        corpses++;
+        corpseRolls += commons + uncommons + legendaries + specials;
+        corpseCommons += commons;
+        corpseUncommons += uncommons;
+        corpseLegendaries += legendaries;
+        corpseSpecials += specials;
+        // A Dye ends a dry streak too - it is better than a legendary, not other than one.
+        if (legendaries + specials > 0) {
+            // Record how bad it got before resetting, or the worst streak would only ever
+            // be the one currently running.
+            worstCorpseDryStreak = Math.max(worstCorpseDryStreak, corpseDryStreak);
+            corpseDryStreak = 0;
+        } else {
+            corpseDryStreak++;
+            worstCorpseDryStreak = Math.max(worstCorpseDryStreak, corpseDryStreak);
+        }
+        save();
+    }
+
+    /** Wipe only the Scatha numbers, leaving the corpse ones alone. */
+    public void resetScatha() {
+        ButcherStats fresh = new ButcherStats();
+        kills = fresh.kills;
+        cutscenes = fresh.cutscenes;
+        petsRare = fresh.petsRare;
+        petsEpic = fresh.petsEpic;
+        petsLegendary = fresh.petsLegendary;
+        gemstones = fresh.gemstones;
+        dwarvenOs = fresh.dwarvenOs;
+        misses = fresh.misses;
+        chops = fresh.chops;
+        dryStreak = fresh.dryStreak;
+        worstDryStreak = fresh.worstDryStreak;
+        save();
+    }
+
+    /** Wipe only the Vanguard numbers. */
+    public void resetVanguard() {
+        ButcherStats fresh = new ButcherStats();
+        corpses = fresh.corpses;
+        corpseRolls = fresh.corpseRolls;
+        corpseCommons = fresh.corpseCommons;
+        corpseUncommons = fresh.corpseUncommons;
+        corpseLegendaries = fresh.corpseLegendaries;
+        corpseSpecials = fresh.corpseSpecials;
+        corpseDryStreak = fresh.corpseDryStreak;
+        worstCorpseDryStreak = fresh.worstCorpseDryStreak;
+        save();
+    }
+
     public void reset() {
         ButcherStats fresh = new ButcherStats();
         kills = fresh.kills;
@@ -126,6 +208,14 @@ public final class ButcherStats {
         chops = fresh.chops;
         dryStreak = fresh.dryStreak;
         worstDryStreak = fresh.worstDryStreak;
+        corpses = fresh.corpses;
+        corpseRolls = fresh.corpseRolls;
+        corpseCommons = fresh.corpseCommons;
+        corpseUncommons = fresh.corpseUncommons;
+        corpseLegendaries = fresh.corpseLegendaries;
+        corpseSpecials = fresh.corpseSpecials;
+        corpseDryStreak = fresh.corpseDryStreak;
+        worstCorpseDryStreak = fresh.worstCorpseDryStreak;
         save();
     }
 
