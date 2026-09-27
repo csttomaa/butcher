@@ -208,9 +208,21 @@ public class ScopeMinigameScreen extends Screen {
     private boolean payoffFired = false;
     private boolean active = true;
 
+    /**
+     * Opened by /butcher test: plays as normal, counts nothing in the stats. Set in the
+     * constructor, not after it - the cutscene is counted in the constructor.
+     */
+    private final boolean test;
+
     /** @param result the drop, or null to open now and be told later via {@link #resolve}. */
     public ScopeMinigameScreen(DropResult result) {
+        this(result, false);
+    }
+
+    /** @param test true for /butcher test, which is never counted in the stats */
+    public ScopeMinigameScreen(DropResult result, boolean test) {
         super(Component.literal("Butcher"));
+        this.test = test;
         if (result != null) resolve(result);
 
         // Fresh pair of gemstone colours every run. The second index is picked from
@@ -241,7 +253,7 @@ public class ScopeMinigameScreen extends Screen {
         // The cavern's low swell, started with the screen rather than on the first frame
         // so it is already under way by the time the fade-up finishes.
         ButcherAudio.onOpen(this.introMs);
-        com.butcher.config.ButcherStats.get().onCutscene();
+        if (!test) com.butcher.config.ButcherStats.get().onCutscene();
     }
 
     private static long scaled(long base, float scale) {
@@ -408,7 +420,7 @@ public class ScopeMinigameScreen extends Screen {
                     missedSwing = true;
                     lastImpactAt = now;
                     ButcherAudio.onMiss();
-                    com.butcher.config.ButcherStats.get().onMiss();
+                    if (!test) com.butcher.config.ButcherStats.get().onMiss();
                     decisionsNoteMiss();
                     enter(Phase.REVEAL, now);
                     revealStart = now;
@@ -424,7 +436,7 @@ public class ScopeMinigameScreen extends Screen {
                     partsRemoved++;
                     lastImpactAt = now;      // sets the body thrashing; see thrash(now)
                     ButcherAudio.onImpact(partsRemoved - 1, chops);
-                    com.butcher.config.ButcherStats.get().onChop();
+                    if (!test) com.butcher.config.ButcherStats.get().onChop();
                     enter(Phase.IMPACT, now);
                 }
             }
@@ -458,7 +470,7 @@ public class ScopeMinigameScreen extends Screen {
                         // good the drop was, so playing it before the reveal would hand
                         // the answer over exactly the way a chat line would.
                         ButcherAudio.onReveal(reachesHead && result != null ? result.rarity : null);
-                        com.butcher.config.ButcherStats.get().onDrop(
+                        if (!test) com.butcher.config.ButcherStats.get().onDrop(
                                 reachesHead && result != null ? result.rarity : null,
                                 result != null && result.outcome == Outcome.BLOCKED);
                         enter(Phase.REVEAL, now);

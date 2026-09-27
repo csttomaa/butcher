@@ -70,6 +70,12 @@ public final class ButcherStats {
     public int corpseLegendaries;
     /** Frostbitten Dyes. Counted apart because it is the one number worth bragging about. */
     public int corpseSpecials;
+    /**
+     * How many of each drop, by name - what lets the Locket's and the Dye's endings say
+     * "your 3rd". A map rather than a field per item, so an item Hypixel adds later is
+     * counted without a change here. Null in a stats file written before this existed.
+     */
+    public java.util.Map<String, Integer> corpseItems = new java.util.HashMap<>();
     /** Corpses since the last legendary, and the worst that has ever got. */
     public int corpseDryStreak;
     public int worstCorpseDryStreak;
@@ -190,9 +196,21 @@ public final class ButcherStats {
         corpseUncommons = fresh.corpseUncommons;
         corpseLegendaries = fresh.corpseLegendaries;
         corpseSpecials = fresh.corpseSpecials;
+        corpseItems = fresh.corpseItems;
         corpseDryStreak = fresh.corpseDryStreak;
         worstCorpseDryStreak = fresh.worstCorpseDryStreak;
         save();
+    }
+
+    /** Adds one corpse's drops to the per-item counts. Saved by the {@link #onCorpse} that follows. */
+    public void countItems(java.util.List<String> names) {
+        if (corpseItems == null) corpseItems = new java.util.HashMap<>();
+        for (String n : names) corpseItems.merge(n, 1, Integer::sum);
+    }
+
+    /** How many of this item the player has had from corpses, the current one included. */
+    public int itemCount(String name) {
+        return corpseItems == null ? 0 : corpseItems.getOrDefault(name, 0);
     }
 
     public void reset() {
@@ -214,6 +232,7 @@ public final class ButcherStats {
         corpseUncommons = fresh.corpseUncommons;
         corpseLegendaries = fresh.corpseLegendaries;
         corpseSpecials = fresh.corpseSpecials;
+        corpseItems = fresh.corpseItems;
         corpseDryStreak = fresh.corpseDryStreak;
         worstCorpseDryStreak = fresh.worstCorpseDryStreak;
         save();

@@ -123,6 +123,8 @@ public final class VanguardLoot {
     public static final int UNKNOWN_COLOUR = 0xFFFFFFFF;
 
     private static final Map<String, Entry> BY_NAME = new LinkedHashMap<>();
+    /** Declared before the static block below fills it: fields initialise in order. */
+    private static final Map<String, Listing> LISTINGS = new java.util.HashMap<>();
 
     private static void add(String name, int weight, Tier tier, int colour) {
         BY_NAME.put(key(name), new Entry(name, weight, tier, colour));
@@ -158,6 +160,63 @@ public final class VanguardLoot {
         add("Refined Umber",                    240, Tier.COMMON, 0xFFAA00AA);   // dark purple
         add("Refined Tungsten",                 240, Tier.COMMON, 0xFFAA00AA);   // dark purple
         add("Glacite Amalgamation",             280, Tier.COMMON, 0xFFAA00AA);   // dark purple
+
+        // Not a roll: every corpse gives some, as "Glacite Powder x4,401". Weight 0, so it is
+        // never rolled and counts as an unknown - which sorts it first, where a guaranteed
+        // reward belongs. In the table so it gets a name colour and a proper render.
+        add("Glacite Powder",                     0, Tier.COMMON, 0xFF55FFFF);   // aqua
+
+        // Where each drop sells, by SkyBlock item ID (NEU repo). Checked against the live
+        // bazaar and Coflnet on 2026-09-24: the crystals and the powder have no market at all.
+        list(Market.AUCTION, "DYE_FROSTBITTEN", "Frostbitten Dye");
+        list(Market.AUCTION, "SHATTERED_PENDANT", "Shattered Locket");
+        list(Market.AUCTION, "CAGED_WISP", "Caged Wisp");
+        list(Market.BAZAAR, "FROZEN_SCUTE", "Frozen Scute");
+        list(Market.BAZAAR, "SKELETON_KEY", "Skeleton Key");
+        list(Market.BAZAAR, "UMBER_PLATE", "Umber Plate");
+        list(Market.BAZAAR, "TUNGSTEN_PLATE", "Tungsten Plate");
+        list(Market.BAZAAR, "MITHRIL_PLATE", "Mithril Plate");
+        list(Market.BAZAAR, "DWARVEN_OS_METALLIC_MINIS", "Dwarven O's Metallic Minis");
+        list(Market.NONE, "OPAL_CRYSTAL", "Opal Crystal");
+        list(Market.NONE, "ONYX_CRYSTAL", "Onyx Crystal");
+        list(Market.NONE, "PERIDOT_CRYSTAL", "Peridot Crystal");
+        list(Market.NONE, "CITRINE_CRYSTAL", "Citrine Crystal");
+        list(Market.NONE, "AQUAMARINE_CRYSTAL", "Aquamarine Crystal");
+        list(Market.BAZAAR, "UMBER_KEY", "Umber Key");
+        list(Market.BAZAAR, "TUNGSTEN_KEY", "Tungsten Key");
+        list(Market.BAZAAR, "ENCHANTMENT_ICE_COLD_1", "Ice Cold I");
+        list(Market.BAZAAR, "FLAWLESS_ONYX_GEM", "Flawless Onyx Gemstone");
+        list(Market.BAZAAR, "FLAWLESS_CITRINE_GEM", "Flawless Citrine Gemstone");
+        list(Market.BAZAAR, "FLAWLESS_PERIDOT_GEM", "Flawless Peridot Gemstone");
+        list(Market.BAZAAR, "FLAWLESS_AQUAMARINE_GEM", "Flawless Aquamarine Gemstone");
+        list(Market.BAZAAR, "SUSPICIOUS_SCRAP", "Suspicious Scrap");
+        list(Market.BAZAAR, "GOBLIN_EGG_BLUE", "Blue Goblin Egg");
+        list(Market.BAZAAR, "REFINED_UMBER", "Refined Umber");
+        list(Market.BAZAAR, "REFINED_TUNGSTEN", "Refined Tungsten");
+        list(Market.BAZAAR, "GLACITE_AMALGAMATION", "Glacite Amalgamation");
+        list(Market.NONE, null, "Glacite Powder");
+    }
+
+    /** Where a drop can be sold. */
+    public enum Market {
+        /** Priced at the bazaar's instant-sell. */
+        BAZAAR,
+        /** Priced at the auction house's lowest BIN. */
+        AUCTION,
+        /** Cannot be sold at all - the crystals, the powder. Worth 0. */
+        NONE
+    }
+
+    /** A drop's SkyBlock item ID and where it sells. The ID is null for the powder. */
+    public record Listing(String id, Market market) {}
+
+    private static void list(Market market, String id, String name) {
+        LISTINGS.put(key(name), new Listing(id, market));
+    }
+
+    /** Where this drop sells, or null for an item this table has never heard of. */
+    public static Listing listing(String chatName) {
+        return LISTINGS.get(key(chatName));
     }
 
     /**

@@ -233,7 +233,7 @@ public final class VanguardWatcher {
         }
     }
 
-    /** Feed a haul straight in, for {@code /butcher test vanguard}. */
+    /** Feed a haul straight in, for the {@code /butcher test vanguard} commands. */
     public void inject(CorpseHaul haul) {
         log.note("§bTest Vanguard corpse §8- " + haul.describe());
         onHaul.accept(haul);

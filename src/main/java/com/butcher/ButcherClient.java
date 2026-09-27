@@ -46,6 +46,44 @@ public class ButcherClient implements ClientModInitializer {
     public static PatternConfig config;
     public static final AnimationManager animationManager = new AnimationManager();
     private static ScopeMinigameScreen currentScope;
+
+    /** The Thaw on screen, if one is. Owned exactly the way currentScope is. */
+    private static com.butcher.gui.ThawScreen currentThaw;
+
+    /**
+     * Corpses read while a Thaw was already playing.
+     *
+     * Two corpses can be opened within seconds of each other, and the second one's loot
+     * message is hidden just like the first's - so dropping it would lose it entirely. It
+     * waits here and plays straight after.
+     */
+    private record PendingThaw(CorpseHaul haul, int streakBefore) {}
+    private static final java.util.ArrayDeque<PendingThaw> thawQueue = new java.util.ArrayDeque<>();
+
+    /** The profit window, while it is up - the next queued corpse waits for it. */
+    private static com.butcher.gui.ProfitScreen currentProfit;
+
+    private static boolean profitShowing() {
+        return currentProfit != null && !currentProfit.isClosed();
+    }
+
+    /**
+     * The Thaw has ended, finished or skipped: put the corpse's profit window up.
+     *
+     * Deferred like every other setScreen here. The Thaw has already stepped down by the time
+     * this is called, so the screen-ownership mixin lets it through.
+     */
+    public static void onThawFinished(CorpseHaul haul) {
+        if (config == null || !config.vanguardProfit || !config.livePrices) return;
+        Minecraft client = Minecraft.getInstance();
+        com.butcher.gui.ProfitScreen screen = new com.butcher.gui.ProfitScreen(haul);
+        currentProfit = screen;
+        client.execute(() -> client.gui.setScreen(screen));
+    }
+
+    private static boolean thawActive() {
+        return currentThaw != null && currentThaw.isActive();
+    }
     /** The kill a cutscene has already been opened for, so one death opens one screen. */
     private static long lastOpenedKill = -1;
 
@@ -161,6 +199,30 @@ public class ButcherClient implements ClientModInitializer {
         TextureBank.register(PropArt.TEX_CLEAVER, PropArt::cleaver);
         TextureBank.register(PropArt.TEX_STONE, PropArt::stone);
 
+        // The Thaw. One ice sheet per crack pattern per stage - drawn lazily like everything
+        // else here, so the twenty-four of them cost nothing until a corpse is opened.
+        for (int v = 0; v < com.butcher.render.art.ThawArt.VARIANTS; v++) {
+            for (int st = 0; st < com.butcher.render.art.ThawArt.STAGES; st++) {
+                final int variant = v, stage = st;
+                TextureBank.register(com.butcher.render.art.ThawArt.iceName(variant, stage),
+                        () -> com.butcher.render.art.ThawArt.ice(variant, stage));
+            }
+        }
+        TextureBank.register(com.butcher.render.art.ThawArt.TEX_CORPSE, com.butcher.render.art.ThawArt::corpse);
+        TextureBank.register(com.butcher.render.art.ThawArt.TEX_PICK, com.butcher.render.art.ThawArt::pick);
+        TextureBank.register(com.butcher.render.art.ThawArt.TEX_RAY, com.butcher.render.art.ThawArt::ray);
+        TextureBank.register(com.butcher.render.art.ThawArt.TEX_SHARD, com.butcher.render.art.ThawArt::shard);
+        TextureBank.register(com.butcher.render.art.ThawArt.TEX_AURA, com.butcher.render.art.ThawArt::aura);
+        TextureBank.register(com.butcher.render.VanguardItems.TEX_GLACITE_POWDER,
+                com.butcher.render.art.ThawArt::glacitePowder);
+        TextureBank.register(com.butcher.render.art.ThawArt.TEX_COIN, com.butcher.render.art.ThawArt::coin);
+        TextureBank.register(com.butcher.render.art.ThawArt.TEX_DRIP, com.butcher.render.art.ThawArt::drip);
+        for (int v = 0; v < com.butcher.render.art.ThawArt.SPLATS; v++) {
+            final int variant = v;
+            TextureBank.register(com.butcher.render.art.ThawArt.splatName(variant),
+                    () -> com.butcher.render.art.ThawArt.splat(variant));
+        }
+
         // Draw the cutscene on top of everything else every frame. Using
         // addLast() so it renders after (i.e. visually on top of) chat and
         // every other vanilla HUD element.
@@ -212,53 +274,68 @@ public class ButcherClient implements ClientModInitializer {
             // Outside the player check: a half-read loot message has to be able to time
             // out even if the player went away mid-message.
             vanguardWatcher.tick();
+
+            if (client.player != null) {
+                // Start every Vanguard item's skin download the first time there is a player,
+                // so the heads are ready long before anyone opens a corpse.
+                com.butcher.render.VanguardItems.prewarm();
+            }
+            if (currentThaw != null && !currentThaw.isActive()) currentThaw = null;
+            if (!ChatHold.isEmpty() && !chatHeld()) ChatHold.release();
+            if (currentThaw == null && !thawQueue.isEmpty() && !isAnimationPlaying() && !profitShowing()) {
+                PendingThaw next = thawQueue.poll();
+                openThaw(client, next.haul(), next.streakBefore());
+            }
         });
 
         // Chat still gets hidden while an animation is playing (that's the
         // whole point of the cutscene), even though it's no longer what
         // triggers the animation in the first place.
         ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-                allowChatLine(message.getString()));
-        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> allowChatLine(message.getString()));
+                allowChatLine(message, true, false));
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> allowChatLine(message, false, overlay));
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            LiteralArgumentBuilder<FabricClientCommandSource> petNode = ClientCommands.literal("pet");
+            // Two branches, one per drop source, and every level on its own lists what is
+            // under it - "/butcher test", "/butcher test scatha" and so on each print their
+            // options, clickable, instead of failing with an unhelpful "incomplete command".
+            LiteralArgumentBuilder<FabricClientCommandSource> petNode = ClientCommands.literal("pet")
+                    .executes(ctx -> options(ctx, "test scatha pet",
+                            "rare", "a rare pet", "epic", "an epic pet", "legendary", "a legendary pet"));
             for (String rarity : RARITIES) {
                 petNode.then(ClientCommands.literal(rarity).executes(ctx -> {
-                    trigger(DropResult.pet(rarity));
+                    triggerTest(DropResult.pet(rarity));
                     return 1;
                 }));
             }
 
-            // One test branch per outcome the detectors can produce, so every
-            // path through the cutscene can be triggered on demand: "/butcher
-            // test block", "/butcher test gemstone", "/butcher test pet <rarity>".
-            LiteralArgumentBuilder<FabricClientCommandSource> testNode = ClientCommands.literal("test")
-                    .then(ClientCommands.literal("block").executes(ctx -> {
-                        trigger(DropResult.blocked());
+            LiteralArgumentBuilder<FabricClientCommandSource> scathaNode = ClientCommands.literal("scatha")
+                    .executes(ctx -> options(ctx, "test scatha",
+                            "random", "a drop rolled against the real odds",
+                            "gemstone", "the gemstone ending",
+                            "block", "the Dwarven O's ending",
+                            "pet", "the pet ending - pick a rarity",
+                            "hide", "the pre-kill HUD hide, for four seconds",
+                            "firework", "the pet-drop firework on its own"))
+                    .then(ClientCommands.literal("random").executes(ctx -> {
+                        triggerTest(randomDrop());
                         return 1;
                     }))
                     .then(ClientCommands.literal("gemstone").executes(ctx -> {
-                        trigger(DropResult.gemstone());
+                        triggerTest(DropResult.gemstone());
                         return 1;
                     }))
+                    .then(ClientCommands.literal("block").executes(ctx -> {
+                        triggerTest(DropResult.blocked());
+                        return 1;
+                    }))
+                    .then(petNode)
                     .then(ClientCommands.literal("hide").executes(ctx -> {
                         testPreKillHide(4000);
                         ctx.getSource().sendFeedback(Component.literal(
                                 "§6[Butcher] §7running the pre-kill hide for 4 seconds"
                                         + (config.hideHud
                                         ? " §8(veil, then the HUD goes)" : " §8(veil only)")));
-                        return 1;
-                    }))
-                    .then(ClientCommands.literal("random").executes(ctx -> {
-                        trigger(randomDrop());
-                        return 1;
-                    }))
-                    .then(ClientCommands.literal("vanguard").executes(ctx -> {
-                        CorpseHaul haul = randomCorpse();
-                        ctx.getSource().sendFeedback(Component.literal(
-                                "§6[Butcher] §7rolled a corpse: §f" + haul.describe()));
-                        vanguardWatcher.inject(haul);
                         return 1;
                     }))
                     .then(ClientCommands.literal("firework").executes(ctx -> {
@@ -269,8 +346,38 @@ public class ButcherClient implements ClientModInitializer {
                         ctx.getSource().sendFeedback(Component.literal(
                                 "§6[Butcher] §7firework fired §8- look straight ahead"));
                         return 1;
+                    }));
+
+            LiteralArgumentBuilder<FabricClientCommandSource> vanguardNode = ClientCommands.literal("vanguard")
+                    .executes(ctx -> options(ctx, "test vanguard",
+                            "random", "a corpse rolled against the real loot table",
+                            "crash", "all commons",
+                            "reveal", "ends on a random uncommon",
+                            "explode", "ends on a random legendary",
+                            "locket", "ends on the Shattered Locket, with its own ending",
+                            "dye", "ends on the Frostbitten Dye"))
+                    .then(ClientCommands.literal("random").executes(ctx -> {
+                        CorpseHaul haul = randomCorpse();
+                        ctx.getSource().sendFeedback(Component.literal(
+                                "§6[Butcher] §7rolled a corpse: §f" + haul.describe()));
+                        injectTest(haul);
+                        return 1;
                     }))
-                    .then(petNode);
+                    // Each ending on demand. A legendary is one corpse in fifteen and the Dye
+                    // one in several thousand, so without these most of the Thaw could only
+                    // ever be seen by luck.
+                    .then(ClientCommands.literal("crash").executes(ctx -> testThaw(ctx, VanguardLoot.Tier.COMMON)))
+                    .then(ClientCommands.literal("reveal").executes(ctx -> testThaw(ctx, VanguardLoot.Tier.UNCOMMON)))
+                    .then(ClientCommands.literal("explode").executes(ctx -> testThaw(ctx, VanguardLoot.Tier.LEGENDARY)))
+                    .then(ClientCommands.literal("locket").executes(ctx -> testThaw(ctx, VanguardLoot.Tier.LEGENDARY, "Shattered Locket")))
+                    .then(ClientCommands.literal("dye").executes(ctx -> testThaw(ctx, VanguardLoot.Tier.SPECIAL)));
+
+            LiteralArgumentBuilder<FabricClientCommandSource> testNode = ClientCommands.literal("test")
+                    .executes(ctx -> options(ctx, "test",
+                            "scatha", "the cleaver cutscene",
+                            "vanguard", "the Thaw"))
+                    .then(scathaNode)
+                    .then(vanguardNode);
 
             dispatcher.register(ClientCommands.literal("butcher")
                     .executes(ctx -> {
@@ -424,7 +531,7 @@ public class ButcherClient implements ClientModInitializer {
     }
 
     /**
-     * A drop drawn from the real table, for {@code /butcher test random}.
+     * A drop drawn from the real table, for {@code /butcher test scatha random}.
      *
      * Weighted the way Hypixel's actually is, near enough: the pet rarities come
      * straight off the wiki's drop table (0.24 / 0.12 / 0.04 percent) and everything
@@ -445,7 +552,7 @@ public class ButcherClient implements ClientModInitializer {
     }
 
     private static boolean isAnimationPlaying() {
-        return animationManager.isPlaying() || (currentScope != null && currentScope.isActive());
+        return animationManager.isPlaying() || (currentScope != null && currentScope.isActive()) || thawActive();
     }
 
     /**
@@ -473,7 +580,8 @@ public class ButcherClient implements ClientModInitializer {
      * again", and cannot do that without knowing which screen is ours.
      */
     public static Screen activeCutscene() {
-        return currentScope != null && currentScope.isActive() ? currentScope : null;
+        if (currentScope != null && currentScope.isActive()) return currentScope;
+        return thawActive() ? currentThaw : null;
     }
 
     /**
@@ -486,7 +594,7 @@ public class ButcherClient implements ClientModInitializer {
      * still running.
      */
     public static boolean cutsceneOwnsScreen() {
-        return currentScope != null && currentScope.isActive();
+        return (currentScope != null && currentScope.isActive()) || thawActive();
     }
 
     /**
@@ -526,11 +634,25 @@ public class ButcherClient implements ClientModInitializer {
      * reveal - it lists the whole haul before the animation has drawn anything, so leaving
      * it in chat is handing over the answer.
      */
-    private static boolean allowChatLine(String text) {
-        if (config != null && config.vanguardAnimation && vanguardWatcher.onChatLine(text)) {
+    private static boolean allowChatLine(Component message, boolean player, boolean overlay) {
+        if (config != null && config.vanguardAnimation && vanguardWatcher.onChatLine(message.getString())) {
             return !config.vanguardHideChat;
         }
-        return !isAnimationPlaying() && !shouldHidePreKill();
+        // The action bar never reaches the chat box, so ChatHold cannot hold it; it is kept
+        // off during a cutscene here, as everything used to be. It replaces itself every
+        // second, so nothing is lost by not putting it back.
+        if (overlay && (isAnimationPlaying() || shouldHidePreKill())) return false;
+        // Everything else goes on towards the chat box. While a cutscene or the profit window
+        // covers it, it is held there rather than here - see ChatHold for why.
+        return true;
+    }
+
+    /**
+     * Whether chat is covered right now, so new lines should wait: a cutscene, the Scatha's
+     * pre-kill hide, or the profit window.
+     */
+    public static boolean chatHeld() {
+        return isAnimationPlaying() || shouldHidePreKill() || profitShowing();
     }
 
     /**
@@ -541,6 +663,22 @@ public class ButcherClient implements ClientModInitializer {
      * otherwise be completely silent, and there would be no way to tell a working parser
      * from a broken one in normal play. It comes out when the cutscene goes in.
      */
+    /** The Shattered Locket's item ID on the auction house - it is still called a pendant there. */
+    public static final String LOCKET_ID = "SHATTERED_PENDANT";
+
+    /** Set while a /butcher test corpse is being fed in, so it plays but is not counted. */
+    private static boolean testingCorpse;
+
+    /** Feeds a test corpse through the real path - Thaw, profit window and all - uncounted. */
+    private static void injectTest(CorpseHaul haul) {
+        testingCorpse = true;
+        try {
+            vanguardWatcher.inject(haul);
+        } finally {
+            testingCorpse = false;
+        }
+    }
+
     private static void onCorpseHaul(CorpseHaul haul) {
         int commons = 0, uncommons = 0, legendaries = 0, specials = 0;
         for (CorpseHaul.Drop drop : haul.drops()) {
@@ -551,13 +689,66 @@ public class ButcherClient implements ClientModInitializer {
                 default -> commons++;
             }
         }
-        com.butcher.config.ButcherStats.get().onCorpse(commons, uncommons, legendaries, specials);
+        // Read before counting this corpse: the Thaw's closing line is about the streak this
+        // corpse either extended or ended, and after onCorpse that number has moved on.
+        com.butcher.config.ButcherStats stats = com.butcher.config.ButcherStats.get();
+        int streakBefore = stats.corpseDryStreak;
+        // A test corpse plays exactly like a real one but leaves the stats alone: the
+        // numbers are the player's real grind, and a conjured Dye is not a Dye.
+        if (!testingCorpse) {
+            java.util.List<String> names = new java.util.ArrayList<>();
+            for (CorpseHaul.Drop drop : haul.drops()) names.add(drop.name());
+            stats.countItems(names);
+            stats.onCorpse(commons, uncommons, legendaries, specials);
+        }
+        // Every price asked for now, while the strikes are still to play: the profit window
+        // and the Locket's counter need them in ten seconds or so, and by then they are back.
+        com.butcher.market.CorpseValue.request(haul);
 
         Minecraft client = Minecraft.getInstance();
+        if (config == null || !config.vanguardAnimation) {
+            announceHaul(haul);
+            return;
+        }
+        if (isAnimationPlaying() || profitShowing()) {
+            thawQueue.add(new PendingThaw(haul, streakBefore));
+            return;
+        }
+        openThaw(client, haul, streakBefore);
+    }
+
+    /**
+     * Opens the Thaw.
+     *
+     * Claimed as {@link #currentThaw} here, synchronously, and only the setScreen deferred -
+     * the same split openScope makes, for the same reason: from a command, vanilla closes the
+     * chat screen straight after running it, which would stomp a setScreen made now.
+     */
+    private static void openThaw(Minecraft client, CorpseHaul haul, int streakBefore) {
+        com.butcher.gui.ThawScreen screen = new com.butcher.gui.ThawScreen(haul, streakBefore);
+        currentThaw = screen;
+        client.execute(() -> client.gui.setScreen(screen));
+    }
+
+    /**
+     * Puts a corpse's haul into chat.
+     *
+     * The loot message is hidden while the Thaw plays, because it IS the reveal. But the
+     * player still wants the record of what they got, so it comes back here - after the
+     * animation, or straight away when the animation is switched off. The Thaw calls this
+     * when it closes, whether it finished or was skipped.
+     */
+    public static void announceHaul(CorpseHaul haul) {
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) return;
+        // Held lines first, so the summary is the newest. When the profit window is about
+        // to open, nothing is released yet and the summary itself is held with the rest -
+        // everything then arrives together when the window closes, fresh enough to read.
+        if (!chatHeld()) ChatHold.release();
         StringBuilder line = new StringBuilder("§6[Butcher] §7Vanguard corpse §8(" + haul.rolls() + " rolls)§7:");
         for (CorpseHaul.Drop drop : haul.revealOrder()) {
             line.append("\n  ").append(switch (drop.tier()) {
+                case SPECIAL -> "§d";
                 case LEGENDARY -> "§6";
                 case UNCOMMON -> "§b";
                 default -> "§f";
@@ -567,7 +758,68 @@ public class ButcherClient implements ClientModInitializer {
     }
 
     /**
-     * A corpse rolled against the real table, for {@code /butcher test vanguard}.
+     * Lists the options under a test command, one per line, each clickable.
+     *
+     * Clicking puts the full command in the chat box rather than running it, so a branch
+     * like "pet" can be completed and nothing plays by accident. Hovering shows what it does.
+     *
+     * @param pairs option, description, option, description...
+     */
+    private static int options(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> ctx,
+                               String path, String... pairs) {
+        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7/butcher " + path + " §8- pick one:"));
+        for (int i = 0; i + 1 < pairs.length; i += 2) {
+            String full = "/butcher " + path + " " + pairs[i];
+            Component line = Component.literal("  §e" + pairs[i] + " §8- §7" + pairs[i + 1])
+                    .withStyle(st -> st
+                            .withClickEvent(new net.minecraft.network.chat.ClickEvent.SuggestCommand(full))
+                            .withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowText(
+                                    Component.literal("§7Click to type §f" + full))));
+            ctx.getSource().sendFeedback(line);
+        }
+        return 1;
+    }
+
+    /**
+     * A corpse that ends a particular way: commons, then one drop of {@code tier} to finish.
+     *
+     * The finishing drop is picked at random from everything in that tier, evenly rather than
+     * by weight - the point is to see each item the ending can show off, and weighted the
+     * Shattered Locket would turn up half as often as the others.
+     *
+     * @param tier the ending to show; COMMON for an all-commons corpse
+     */
+    private static int testThaw(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> ctx,
+                                VanguardLoot.Tier tier) {
+        return testThaw(ctx, tier, null);
+    }
+
+    /** As above, but ending on {@code forced} rather than a random item of the tier. */
+    private static int testThaw(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> ctx,
+                                VanguardLoot.Tier tier, String forced) {
+        String best = forced;
+        if (best == null && tier != VanguardLoot.Tier.COMMON) {
+            java.util.List<VanguardLoot.Entry> pool = new java.util.ArrayList<>();
+            for (VanguardLoot.Entry e : VanguardLoot.all()) if (e.tier() == tier) pool.add(e);
+            best = pool.get((int) (Math.random() * pool.size())).name();
+        }
+        java.util.List<CorpseHaul.Drop> drops = new java.util.ArrayList<>();
+        String[] commons = {"Glacite Amalgamation", "Suspicious Scrap", "Refined Umber",
+                "Blue Goblin Egg", "Flawless Onyx Gemstone", "Refined Tungsten"};
+        int rolls = best == null ? 6 : 5;
+        for (int i = 0; i < rolls; i++) {
+            VanguardLoot.Entry e = VanguardLoot.find(commons[i % commons.length]);
+            drops.add(new CorpseHaul.Drop(e, i == 0 ? 4 : (i == 1 ? 16 : 1)));
+        }
+        if (best != null) drops.add(new CorpseHaul.Drop(VanguardLoot.find(best), 1));
+        CorpseHaul haul = new CorpseHaul(drops);
+        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7test corpse: §f" + haul.describe()));
+        injectTest(haul);
+        return 1;
+    }
+
+    /**
+     * A corpse rolled against the real table, for {@code /butcher test vanguard random}.
      *
      * Rolls properly rather than picking a pleasing set: the point of the test command is
      * to see what the animation will actually look like most of the time, and most of the
@@ -639,7 +891,11 @@ public class ButcherClient implements ClientModInitializer {
      *     a second cutscene on top of it.
      */
     private static void openScope(Minecraft client, DropResult result, boolean deferSetScreen) {
-        ScopeMinigameScreen screen = new ScopeMinigameScreen(result);
+        openScope(client, result, deferSetScreen, false);
+    }
+
+    private static void openScope(Minecraft client, DropResult result, boolean deferSetScreen, boolean test) {
+        ScopeMinigameScreen screen = new ScopeMinigameScreen(result, test);
         currentScope = screen;
         if (deferSetScreen) {
             client.execute(() -> client.gui.setScreen(screen));
@@ -652,7 +908,7 @@ public class ButcherClient implements ClientModInitializer {
      *  drop-detection window is still open, and the real cutscene (which covers the whole screen itself)
      *  hasn't started yet. Public so {@link com.butcher.mixin.ItemInHandRendererMixin} can read it. */
     /**
-     * Forces the pre-kill hide on until this time, for {@code /butcher test hide}.
+     * Forces the pre-kill hide on until this time, for {@code /butcher test scatha hide}.
      *
      * The hide only ever fires when a real Scatha is nearby and nearly dead, which makes
      * it the one feature here that cannot be tried out - "/butcher test" conjures a drop,
@@ -675,6 +931,19 @@ public class ButcherClient implements ClientModInitializer {
     /** Plays whichever drop animation is currently active in the /butcher menu (or none). Called both
      *  by the real detectors (worm/hotbar watching) and by the /butcher test commands. */
     public static void trigger(DropResult result) {
+        trigger(result, false);
+    }
+
+    /**
+     * As {@link #trigger}, for {@code /butcher test scatha}: the same cutscene, but nothing it
+     * does is counted in the stats. A test is not a kill, and a pet conjured by command used
+     * to count towards the real pet total and reset the real dry streak.
+     */
+    public static void triggerTest(DropResult result) {
+        trigger(result, true);
+    }
+
+    private static void trigger(DropResult result, boolean test) {
         Minecraft client = Minecraft.getInstance();
         // A cutscene opened by the kill is already on screen waiting to be told what
         // fell - hand it the answer rather than starting a second one over the top.
@@ -685,7 +954,7 @@ public class ButcherClient implements ClientModInitializer {
         }
         switch (config.animationMode) {
             case GUILLOTINE -> animationManager.start(result);
-            case SCOPE -> openScope(client, result, true);
+            case SCOPE -> openScope(client, result, true, test);
             case NONE -> { }
         }
     }

@@ -2,7 +2,6 @@ package com.butcher.gui;
 
 import com.butcher.ButcherClient;
 import com.butcher.detect.vanguard.VanguardLoot;
-import com.butcher.render.ButcherFont;
 import com.butcher.config.ButcherStats;
 import com.butcher.config.PatternConfig;
 import com.butcher.config.PatternConfig.AnimationMode;
@@ -125,7 +124,7 @@ public class ButcherMenuScreen extends Screen {
     private final long openedAt = System.currentTimeMillis();
 
     public ButcherMenuScreen() {
-        super(ButcherFont.of("Butcher"));
+        super(Component.literal("Butcher"));
     }
 
     @Override protected void init() { }
@@ -193,7 +192,7 @@ public class ButcherMenuScreen extends Screen {
         int px = panelX(), py = panelY();
 
         // ---- title, sitting above the frame ----
-        Component title = ButcherFont.of("BUTCHER").withStyle(ChatFormatting.BOLD);
+        Component title = Component.literal("BUTCHER").withStyle(ChatFormatting.BOLD);
         g.text(font, title, px + (PANEL_W - font.width(title)) / 2, py - 24, COL_GOLD, true);
 
         // ---- tab bar ----
@@ -212,7 +211,7 @@ public class ButcherMenuScreen extends Screen {
                 g.fill(tx0, py + 2, tx0 + 1, py + TAB_H, COL_BORDER);
                 g.fill(tx1 - 1, py + 2, tx1, py + TAB_H, COL_BORDER);
             }
-            Component label = ButcherFont.of(TAB_NAMES[i]);
+            Component label = Component.literal(TAB_NAMES[i]);
             int lw = font.width(label);
             g.text(font, label, tx0 + (tx1 - tx0 - lw) / 2, py + TAB_H / 2 - 4,
                     active ? COL_TEXT : (hover ? COL_TEXT_DIM : COL_TEXT_DISABLED), false);
@@ -303,7 +302,7 @@ public class ButcherMenuScreen extends Screen {
 
         boolean on = cfg.animationMode != AnimationMode.NONE;
         rows.add(new HeaderRow("gambling", "Scatha Gambling", on, isOpen("gambling")));
-        if (!isOpen("gambling")) return rows;
+        if (!isOpen("gambling")) return vanguardRows(rows, font, cfg);
 
         boolean cleaver = cfg.animationMode != AnimationMode.GUILLOTINE;
 
@@ -372,7 +371,7 @@ public class ButcherMenuScreen extends Screen {
             rows.add(new NoticeRow("These build as a run goes on. Set shake to 0 if it bothers you.", font, rowsWidth()));
         }
 
-        return rows;
+        return vanguardRows(rows, font, cfg);
     }
 
     /**
@@ -382,6 +381,57 @@ public class ButcherMenuScreen extends Screen {
      * about a one-in-two-thousand drop: the number anyone actually wants is "how long
      * has it been", and burying that under a list of counters gets it wrong.
      */
+    /**
+     * The Vanguard's group, under the Scatha's on the same tab.
+     *
+     * Deliberately short. The cutscene's feel - shake, vignette, volume, the achievement
+     * sting - is shared with the Scatha's and set there, so this only holds what is
+     * genuinely the Thaw's own.
+     */
+    private List<Row> vanguardRows(List<Row> rows, Font font, PatternConfig cfg) {
+        rows.add(new HeaderRow("vanguard", "Vanguard Thaw", cfg.vanguardAnimation, isOpen("vanguard")));
+        if (!isOpen("vanguard")) return rows;
+        rows.add(new SectionRow("The cutscene"));
+        rows.add(new ToggleRow("Vanguard Thaw", cfg.vanguardAnimation, () -> {
+            cfg.vanguardAnimation = !cfg.vanguardAnimation;
+            cfg.save();
+        }));
+        rows.add(new ToggleRow("Hide the loot message", cfg.vanguardHideChat, () -> {
+            cfg.vanguardHideChat = !cfg.vanguardHideChat;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("The haul goes to chat when the cutscene ends.", font, rowsWidth()));
+
+        rows.add(new SectionRow("Pacing"));
+        rows.add(new SliderRow("vg_speed", "Speed", cfg.vanguardSpeed, 50, 200, 10,
+                v -> { cfg.vanguardSpeed = v; }, v -> v + "%"));
+        rows.add(new ToggleRow("Flare before each strike", cfg.vanguardFlare, () -> {
+            cfg.vanguardFlare = !cfg.vanguardFlare;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("Each flare is the true colour of its drop, and the last one climbs. Off makes every ending a surprise.",
+                font, rowsWidth()));
+
+        rows.add(new SectionRow("Look and sound"));
+        rows.add(new SliderRow("vg_name", "Item name size", cfg.vanguardNameSize, 60, 160, 10,
+                v -> { cfg.vanguardNameSize = v; }, v -> v + "%"));
+        rows.add(new SliderRow("vg_finale", "Ending volume", cfg.vanguardFinaleVolume, 0, 150, 5,
+                v -> { cfg.vanguardFinaleVolume = v; }, v -> v + "%"));
+        rows.add(new NoticeRow("The legendary, Locket and Dye endings. Try them with /butcher test vanguard.",
+                font, rowsWidth()));
+        rows.add(new ToggleRow("Profit window after the Thaw", cfg.vanguardProfit, () -> {
+            cfg.vanguardProfit = !cfg.vanguardProfit;
+            cfg.save();
+        }));
+        rows.add(new ToggleRow("Live prices", cfg.livePrices, () -> {
+            cfg.livePrices = !cfg.livePrices;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("Bazaar prices from api.hypixel.net, auction prices from sky.coflnet.com, fetched when a corpse opens. Off hides the profit window.",
+                font, rowsWidth()));
+        return rows;
+    }
+
     /**
      * The stats tab: one collapsible group per drop source.
      *
@@ -459,7 +509,7 @@ public class ButcherMenuScreen extends Screen {
                     String.format("%.2f", st.corpseRolls / (float) st.corpses), COL_TEXT_DIM));
         }
         if (st.corpses == 0) {
-            rows.add(new NoticeRow("Nothing yet. Open a Vanguard corpse, or try /butcher test vanguard.",
+            rows.add(new NoticeRow("Nothing yet. Open a Vanguard corpse, or try /butcher test vanguard random.",
                     font, rowsWidth()));
         }
     }
@@ -544,7 +594,7 @@ public class ButcherMenuScreen extends Screen {
             cfg.hideHud = !cfg.hideHud;
             cfg.save();
         }));
-        rows.add(new NoticeRow("Hides the hotbar and chat outright once the veil is dark, and for the whole cutscene. Try it with /butcher test hide.", font, rowsWidth()));
+        rows.add(new NoticeRow("Hides the hotbar and chat outright once the veil is dark, and for the whole cutscene. Try it with /butcher test scatha hide.", font, rowsWidth()));
 
         rows.add(new SectionRow("Art"));
         rows.add(new ToggleRow("Write art to config", cfg.writeGeneratedArt, () -> {
@@ -579,8 +629,8 @@ public class ButcherMenuScreen extends Screen {
             if (open) g.outline(x, y, w, height(), COL_SEL_BORDER);
 
             Component c = on == null
-                    ? ButcherFont.of(label)
-                    : ButcherFont.of(label + "  ").append(ButcherFont.of(on ? "ON" : "OFF")
+                    ? Component.literal(label)
+                    : Component.literal(label + "  ").append(Component.literal(on ? "ON" : "OFF")
                             .withStyle(on ? ChatFormatting.GREEN : ChatFormatting.RED));
             int tw = font.width(c);
             int cx = x + w / 2;
@@ -609,7 +659,7 @@ public class ButcherMenuScreen extends Screen {
             int ty = y + height() - 9;
             // A stub of gold to the left of the label, like a bullet with intent.
             g.fill(x + 1, ty, x + 3, ty + 7, COL_GOLD);
-            Component c = ButcherFont.of(label);
+            Component c = Component.literal(label);
             g.text(font, c, x + 8, ty, COL_GOLD, false);
             int ruleX = x + 8 + font.width(c) + 6;
             int ruleY = ty + 3;
@@ -626,7 +676,7 @@ public class ButcherMenuScreen extends Screen {
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
             int ly = y;
             for (String line : lines) {
-                g.text(font, ButcherFont.of(line), x + 2, ly, COL_TEXT_DIM, false);
+                g.text(font, Component.literal(line), x + 2, ly, COL_TEXT_DIM, false);
                 ly += LINE_H;
             }
         }
@@ -642,8 +692,8 @@ public class ButcherMenuScreen extends Screen {
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
             boolean hover = within(mouseX, mouseY, x, y, x + w, y + height());
             g.fill(x, y, x + w, y + height(), hover ? COL_ROW_HOVER : COL_ROW);
-            Component c = ButcherFont.of(label + ": ")
-                    .append(ButcherFont.of(on ? "ON" : "OFF")
+            Component c = Component.literal(label + ": ")
+                    .append(Component.literal(on ? "ON" : "OFF")
                             .withStyle(on ? ChatFormatting.GREEN : ChatFormatting.RED));
             g.text(font, c, x + w / 2 - font.width(c) / 2, y + height() / 2 - 4, COL_TEXT, false);
         }
@@ -674,8 +724,8 @@ public class ButcherMenuScreen extends Screen {
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
             boolean hover = within(mouseX, mouseY, x, y, x + w, y + height());
             g.fill(x, y, x + w, y + height(), hover ? COL_ROW_HOVER : COL_ROW);
-            Component l = ButcherFont.of(label);
-            Component v = ButcherFont.of(value);
+            Component l = Component.literal(label);
+            Component v = Component.literal(value);
             int ty = y + height() / 2 - 4;
             g.text(font, l, x + 6, ty, COL_TEXT_DIM, false);
             g.text(font, v, x + w - 6 - font.width(v), ty, colour, false);
@@ -694,8 +744,8 @@ public class ButcherMenuScreen extends Screen {
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
             boolean hover = within(mouseX, mouseY, x, y, x + w, y + height());
             g.fill(x, y, x + w, y + height(), hover ? COL_ROW_HOVER : COL_ROW);
-            Component c = ButcherFont.of(label + ": ")
-                    .append(ButcherFont.of(value).withStyle(lit ? ChatFormatting.YELLOW : ChatFormatting.GRAY));
+            Component c = Component.literal(label + ": ")
+                    .append(Component.literal(value).withStyle(lit ? ChatFormatting.YELLOW : ChatFormatting.GRAY));
             g.text(font, c, x + w / 2 - font.width(c) / 2, y + height() / 2 - 4, COL_TEXT, false);
         }
 
@@ -734,8 +784,8 @@ public class ButcherMenuScreen extends Screen {
             if (fillW > 0) g.fill(x, y, x + fillW, y + height(), COL_SLIDER_FILL);
             if (fillW > 1) g.fill(x + fillW - 1, y, x + fillW, y + height(), COL_GOLD_DIM);
 
-            Component c = ButcherFont.of(label + ": ")
-                    .append(ButcherFont.of(text).withStyle(ChatFormatting.YELLOW));
+            Component c = Component.literal(label + ": ")
+                    .append(Component.literal(text).withStyle(ChatFormatting.YELLOW));
             g.text(font, c, x + w / 2 - font.width(c) / 2, y + height() / 2 - 4, COL_TEXT, false);
         }
 
@@ -868,7 +918,7 @@ public class ButcherMenuScreen extends Screen {
         StringBuilder cur = new StringBuilder();
         for (String word : text.split(" ")) {
             String candidate = cur.isEmpty() ? word : cur + " " + word;
-            if (cur.isEmpty() || font.width(ButcherFont.of(candidate)) <= width) {
+            if (cur.isEmpty() || font.width(Component.literal(candidate)) <= width) {
                 cur.setLength(0);
                 cur.append(candidate);
             } else {

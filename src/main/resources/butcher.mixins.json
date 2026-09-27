@@ -7,7 +7,9 @@
 		"ItemInHandRendererMixin",
 		"SoundEngineMixin",
 		"GuiScreenMixin",
-		"HudMixin"
+		"HudMixin",
+		"ChatComponentMixin",
+		"ChatComponentInvoker"
 	],
 	"injectors": {
 		"defaultRequire": 1

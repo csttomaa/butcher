@@ -79,12 +79,16 @@ public final class CorpseHaul {
     /**
      * The order to reveal them in: worst first, best last.
      *
-     * Ties keep the order Hypixel printed, so two commons do not shuffle between runs -
-     * the sort is stable and only the tier is compared.
+     * By tier, and within a tier by rarity - the more common drop first. So a haul with both
+     * a Skeleton Key and a Shattered Locket ends on the Locket, which is the one with its own
+     * ending, and a run of commons still climbs a little. An unknown item has no weight to
+     * go by and goes first in its tier. Anything still tied keeps the order Hypixel printed,
+     * since the sort is stable.
      */
     public List<Drop> revealOrder() {
         List<Drop> ordered = new ArrayList<>(drops);
-        ordered.sort(Comparator.comparingInt(d -> d.tier().ordinal()));
+        ordered.sort(Comparator.<Drop>comparingInt(d -> d.tier().ordinal())
+                .thenComparingInt(d -> d.unknown() ? Integer.MIN_VALUE : -d.entry().weight()));
         return ordered;
     }
 

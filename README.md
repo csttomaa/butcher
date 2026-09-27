@@ -63,11 +63,15 @@ the major or minor by hand when you want to mark a release.
 | `/butcher log` | the decision log: every kill accepted or refused, and why |
 | `/butcher skins` | whether the real Scatha skin has been captured yet |
 | `/butcher skins forget` | drops the captured skins so they are captured again |
-| `/butcher test random` | plays a run with a drop rolled from the real table |
-| `/butcher test pet rare`<br>`… epic / legendary` | plays the pet cutscene now |
-| `/butcher test gemstone` | plays the gemstone cutscene now |
-| `/butcher test block` | plays the blocked cutscene now |
-| `/butcher test hide` | runs the pre-kill HUD hide for four seconds |
+| `/butcher test` | lists the two test groups; each level on its own lists what is under it, clickable |
+| `/butcher test scatha random` | plays a run with a drop rolled from the real table |
+| `/butcher test scatha pet rare`<br>`… epic / legendary` | plays the pet cutscene now |
+| `/butcher test scatha gemstone` | plays the gemstone cutscene now |
+| `/butcher test scatha block` | plays the blocked cutscene now |
+| `/butcher test scatha hide` | runs the pre-kill HUD hide for four seconds |
+| `/butcher test scatha firework` | fires the pet-drop firework on its own |
+| `/butcher test vanguard random` | rolls a Vanguard corpse against the real table and plays the Thaw |
+| `/butcher test vanguard crash`<br>`… reveal / explode / locket / dye` | plays a particular ending of the Thaw |
 | `/butcher debug` | what the cleaver's last real draw asked for |
 | `/butcher debug solid` | draws model faces as flat colour, to separate geometry from texture |
 

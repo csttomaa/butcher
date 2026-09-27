@@ -236,6 +236,378 @@ public final class Voices {
         return out;
     }
 
+    // =====================================================================
+    // the Thaw's cues
+    // =====================================================================
+
+    /**
+     * The block rising into view: a cold, hollow swell with a high breath of air over it.
+     *
+     * Higher and thinner than the cavern's {@link #open} - that one is a cave, this is ice -
+     * with a quiet shimmer on top that sounds like frost settling.
+     */
+    public static Voice[] thawOpen(float seconds) {
+        return new Voice[]{
+                tone(98f, 110f, seconds * 1.2f, 0.40f, seconds * 0.5f,
+                        new float[]{1f, 0.25f, 0.30f, 0.06f}, 0.9f),
+                noise(6200f, 2.2f, seconds * 1.1f, 0.05f, seconds * 0.6f, 0.95f, 4104L),
+        };
+    }
+
+    /**
+     * The root of each flare's swell: G2, C3 and E3.
+     *
+     * Together a C major triad, and every one of them also in the A minor pentatonic the
+     * strikes and the rest of the cues ring on - so a flare can never clash with anything
+     * sounding over it.
+     *
+     * @param colour 0 blue, 1 violet, 2 gold
+     */
+    private static float flareRoot(int colour) {
+        return switch (colour) {
+            case 2 -> 164.81f;
+            case 1 -> 130.81f;
+            default -> 98.0f;
+        };
+    }
+
+    /**
+     * The flare: a swell that rises under the pick as it winds up.
+     *
+     * <h3>Brighter by its overtones, not its pitch</h3>
+     *
+     * Gold used to be the highest of the three, up at 330Hz, and it sat badly: a thin high
+     * tone swelling for a second and then cut dead by a short, sharp hit reads as the sound
+     * being interrupted rather than paying off. Now all three sit low, a detuned pair under
+     * each so it has body, and what separates them is how many overtones they carry - blue
+     * is nearly a pure tone, gold has a stack of bright partials and a fifth and an octave
+     * over it. It sounds richer and more important without sounding shrill.
+     *
+     * The colour is still audible as well as visible, because a tell the player can only
+     * see is a tell they can miss while watching the pick.
+     *
+     * @param colour 0 blue, 1 violet, 2 gold
+     */
+    public static Voice[] thawFlare(int colour, float seconds) {
+        float hz = flareRoot(colour);
+        float[] shape = switch (colour) {
+            case 2 -> new float[]{1f, 0.8f, 0.65f, 0.5f, 0.38f, 0.26f, 0.16f};
+            case 1 -> new float[]{1f, 0.5f, 0.3f, 0.15f};
+            default -> new float[]{1f, 0.25f, 0.06f};
+        };
+        // Gold a touch lower than the formula would give: it has five voices stacked, and at
+        // the full 0.30 it came out 10dB over blue - standing out is the point, jumping is not.
+        float amp = colour == 2 ? 0.24f : 0.20f + 0.05f * colour;
+        if (colour < 2) {
+            return new Voice[]{
+                    swell(hz, seconds, amp, shape),
+                    swell(hz * 1.004f, seconds, amp * 0.7f, shape),
+            };
+        }
+        return new Voice[]{
+                swell(hz, seconds, amp, shape),
+                swell(hz * 1.004f, seconds, amp * 0.7f, shape),
+                swell(hz * 1.5f, seconds, amp * 0.22f, new float[]{1f, 0.3f}),
+                swell(hz * 2f, seconds, amp * 0.15f, new float[]{1f, 0.2f}),
+                noise(5200f, 3f, seconds, 0.035f, seconds * 0.7f, 0.9f, 8812L),
+        };
+    }
+
+    /**
+     * The pick going into the ice - a real, heavy strike, not a tap.
+     *
+     * <h3>What a pick on ice actually sounds like</h3>
+     *
+     * Four things, and the old cue only had the first two, all of them brief:
+     * <ul>
+     * <li>the crunch of the ice fracturing, high and broad;
+     * <li>the thud of a heavy head arriving, low;
+     * <li>the steel ringing - a long tone plus an inharmonic partial at 2.76 times it,
+     *     which is what makes struck metal sound like metal and not like a bell;
+     * <li>and a tail of loose ice crumbling off afterwards, a scatter of tiny ticks.
+     * </ul>
+     * The ring and the crumble are what make it last, and what make a strike feel like it
+     * has weight.
+     *
+     * <h3>It lands on the flare's chord</h3>
+     *
+     * The ring is two octaves above the flare that preceded it, so the swell does not get
+     * cut off by an unrelated note - it resolves into the hit. That was the other half of
+     * the gold flare sounding wrong.
+     *
+     * @param flareColour 0 blue, 1 violet, 2 gold - the flare this strike followed
+     * @param progress    0 on the first strike, 1 on the last; later strikes crunch harder
+     */
+    public static Voice[] thawStrike(int flareColour, float progress, long seed) {
+        float ring = flareRoot(flareColour) * 4f;
+        float crunch = 0.26f + 0.08f * progress;
+        Voice[] out = new Voice[5 + 6];
+        out[0] = noise(2700f, 1.2f, 0.26f, crunch, 0.001f, 0.45f, seed);
+        out[1] = noise(80f, 1.1f, 0.34f, 0.26f, 0.001f, 0.15f, seed + 1);
+        out[2] = noise(900f, 0.9f, 0.16f, 0.14f, 0.001f, 0.30f, seed + 2);
+        out[3] = after(0.004f, tone(ring, ring * 0.998f, 1.1f, 0.19f, 0.001f,
+                new float[]{1f, 0.55f, 0.3f, 0.18f, 0.08f}, 0.75f));
+        out[4] = after(0.004f, tone(ring * 2.76f, ring * 2.74f, 0.38f, 0.07f, 0.001f,
+                new float[]{1f}, 0.7f));
+        // The crumble: loose ice pattering off for a third of a second after the hit.
+        for (int k = 0; k < 6; k++) {
+            float at = 0.07f + k * 0.055f + ((seed >>> k) & 7) * 0.004f;
+            out[5 + k] = after(at, noise(3600f + k * 300f, 2.2f, 0.05f, 0.06f * (1f - k / 7f),
+                    0.001f, 0.6f, seed + 10 + k));
+        }
+        return out;
+    }
+
+    /**
+     * An item landing in its slot.
+     *
+     * A single plucked note, pitched up the major pentatonic by the slot it lands in - so a
+     * full tray is a rising phrase. Commons are soft and short; an uncommon rings brighter
+     * and longer. Legendaries do not use this: they have the whole ending to themselves.
+     *
+     * @param tier  0 common, 1 uncommon
+     * @param index which slot, from 0
+     */
+    public static Voice thawLand(int tier, int index) {
+        float[] steps = {1f, 9f / 8f, 5f / 4f, 3f / 2f, 5f / 3f, 2f, 9f / 4f, 5f / 2f, 3f};
+        float hz = 523.25f * steps[Math.max(0, Math.min(steps.length - 1, index))];
+        return tier == 0
+                ? tone(hz, hz, 0.22f, 0.10f, 0.002f, new float[]{1f, 0.3f, 0.1f}, 0.5f)
+                : tone(hz, hz, 0.55f, 0.20f, 0.002f, new float[]{1f, 0.42f, 0.28f, 0.12f}, 0.7f);
+    }
+
+    /**
+     * An all-commons corpse coming to nothing.
+     *
+     * A dull knock and a minor third falling - the same deflation as the cleaver's miss,
+     * pitched lower and played quieter. It should sound like a shrug, not a punishment.
+     */
+    public static Voice[] thawCrash(long seed) {
+        return new Voice[]{
+                noise(140f, 0.9f, 0.30f, 0.20f, 0.002f, 0.2f, seed),
+                noise(1600f, 0.8f, 0.18f, 0.08f, 0.002f, 0.3f, seed + 1),
+                after(0.08f, tone(294f, 294f, 0.45f, 0.18f, 0.01f, new float[]{1f, 0.3f, 0.1f}, 0.6f)),
+                after(0.26f, tone(247f, 247f, 0.80f, 0.16f, 0.01f, new float[]{1f, 0.3f, 0.1f}, 0.7f)),
+        };
+    }
+
+    /**
+     * The block detonating for a legendary.
+     *
+     * Broad noise high and low - the shatter and the boom - with a long bright hiss of
+     * falling fragments, and then {@link #fanfare} on top. The fanfare is what makes it an
+     * arrival rather than just an explosion.
+     */
+    public static Voice[] thawExplode(long seed) {
+        Voice[] fan = fanfare();
+        Voice[] out = new Voice[fan.length + 3];
+        out[0] = noise(3400f, 0.7f, 0.65f, 0.30f, 0.001f, 0.6f, seed);
+        out[1] = noise(62f, 1.0f, 0.55f, 0.34f, 0.002f, 0.3f, seed + 1);
+        out[2] = noise(8200f, 2.5f, 1.4f, 0.07f, 0.01f, 0.95f, seed + 2);
+        for (int i = 0; i < fan.length; i++) out[3 + i] = after(0.05f, fan[i]);
+        return out;
+    }
+
+    /**
+     * The colour draining out of everything, for the Dye.
+     *
+     * A filtered whoosh falling away and a low tone sinking under it - and then nothing.
+     * The silence after this is part of the cue: the concept holds the drain "a beat too
+     * long", and it only lands if the sound has genuinely stopped.
+     */
+    public static Voice[] thawDrain(float seconds, long seed) {
+        return new Voice[]{
+                noise(1800f, 1.6f, seconds * 0.55f, 0.16f, 0.02f, 0.9f, seed),
+                tone(220f, 110f, seconds * 0.6f, 0.26f, 0.02f, new float[]{1f, 0.2f}, 0.85f),
+        };
+    }
+
+    /**
+     * The colour flooding back, pink.
+     *
+     * The only cue in the mod built on a major seventh: a high arpeggio that climbs past
+     * where the fanfare stops, over the fanfare itself. Everything else here is minor or
+     * plain major; this is meant to sound like nothing the player has heard from it before.
+     */
+    public static Voice[] thawFlood(long seed) {
+        float root = 659.25f;                                   // E5
+        float[] steps = {1f, 5f / 4f, 3f / 2f, 15f / 8f, 2f, 5f / 2f};
+        float[] bell = {1f, 0.3f, 0.22f, 0.1f, 0.06f};
+        Voice[] fan = fanfare();
+        Voice[] out = new Voice[steps.length + fan.length + 1];
+        for (int i = 0; i < steps.length; i++) {
+            float hz = root * steps[i];
+            out[i] = after(i * 0.055f, tone(hz, hz, 1.4f - i * 0.1f, 0.22f, 0.003f, bell, 0.9f));
+        }
+        for (int i = 0; i < fan.length; i++) out[steps.length + i] = after(0.12f, fan[i]);
+        out[out.length - 1] = noise(9000f, 3f, 2.2f, 0.07f, 0.05f, 0.97f, seed);
+        return out;
+    }
+
+    // =====================================================================
+    // the climb, and the two big endings
+    // =====================================================================
+
+    /**
+     * The last strike's white glow, before the colour starts to climb: a thin, high breath
+     * of air with nothing tonal in it. It must not hint at a colour, so it has no pitch.
+     */
+    public static Voice[] thawClimbWhite(float seconds) {
+        return new Voice[]{
+                noise(7400f, 2.4f, seconds + 0.25f, 0.025f, seconds * 0.7f, 0.95f, 3301L),
+        };
+    }
+
+    /**
+     * The build-up under the last strike's colour cycle: a low tone and its fifth sliding up
+     * an octave, a high shimmer sliding with them, and air rising under it all - each getting
+     * louder the longer it runs, and cut dead on the landing so the landing note stands alone.
+     * The same whatever the drop, like the cycle it sits under.
+     */
+    public static Voice[] thawBuildUp(float seconds) {
+        float[] body = {1f, 0.45f, 0.25f, 0.12f};
+        return new Voice[]{
+                new Shaped(98f, 196f, seconds, 0.30f, Shaped.RISE, body, 0.7f, 0f),
+                new Shaped(147f, 294f, seconds, 0.20f, Shaped.RISE, body, 0.7f, 0f),
+                new Shaped(784f, 1568f, seconds, 0.07f, Shaped.RISE, new float[]{1f, 0.2f}, 0.9f, 6f),
+                new Shaped(1175f, 2349f, seconds, 0.04f, Shaped.RISE, new float[]{1f}, 0.9f, 7f),
+                noise(2400f, 1.4f, seconds, 0.05f, seconds * 0.95f, 0.9f, 3319L),
+        };
+    }
+
+    /**
+     * A glassy tick for each colour of the cycle, a semitone higher every step, so the cycle
+     * is heard winding up as well as seen.
+     */
+    public static Voice thawCycleTick(int step) {
+        float hz = 1046.5f * (float) Math.pow(2, Math.min(step, 12) / 12.0);
+        return tone(hz, hz, 0.16f, 0.33f, 0.002f, new float[]{1f, 0.3f, 0.1f}, 0.8f);
+    }
+
+    /**
+     * The landing: that colour's own flare note, held until the pick comes down, with a
+     * glassy ping two octaves over it. It is the chord of the flare it lands on, so a player
+     * who has heard the earlier strikes knows by ear which colour it stopped on.
+     *
+     * @param colour 0 blue, 1 violet, 2 gold
+     */
+    public static Voice[] thawClimb(int colour, float holdSeconds) {
+        float hz = flareRoot(colour);
+        float[] shape = switch (colour) {
+            case 2 -> new float[]{1f, 0.8f, 0.65f, 0.5f, 0.38f, 0.26f};
+            case 1 -> new float[]{1f, 0.5f, 0.3f, 0.15f};
+            default -> new float[]{1f, 0.25f, 0.06f};
+        };
+        float ping = hz * 4f;
+        Voice[] out = new Voice[colour == 2 ? 4 : 3];
+        out[0] = swell(hz, holdSeconds, 0.42f, shape);
+        out[1] = swell(hz * 1.006f, holdSeconds, 0.30f, shape);
+        out[2] = tone(ping, ping, 0.9f, 0.30f, 0.003f, new float[]{1f, 0.3f, 0.12f}, 0.85f);
+        if (colour == 2) out[3] = noise(9000f, 3f, 0.9f, 0.018f, 0.01f, 0.95f, 3313L);
+        return out;
+    }
+
+    /**
+     * The moment of impact on one of the two big drops, where time slows down: a deep
+     * falling boom and a muffled rush, as if the room itself had been pitched down.
+     */
+    public static Voice[] slowMotion(float seconds, long seed) {
+        return new Voice[]{
+                tone(92f, 34f, seconds, 0.46f, 0.008f, new float[]{1f, 0.45f, 0.2f}, 0.8f),
+                noise(320f, 0.8f, seconds * 0.9f, 0.20f, 0.01f, 0.9f, seed),
+                noise(2600f, 1.2f, 0.35f, 0.10f, 0.002f, 0.7f, seed + 1),
+        };
+    }
+
+    /** A heartbeat: lub-dub. Low enough to be felt more than heard. */
+    public static Voice[] heartbeat(long seed) {
+        return new Voice[]{
+                tone(62f, 44f, 0.20f, 0.72f, 0.004f, new float[]{1f, 0.35f}, 0.3f),
+                noise(110f, 1.1f, 0.12f, 0.20f, 0.002f, 0.2f, seed),
+                after(0.21f, tone(56f, 40f, 0.18f, 0.52f, 0.004f, new float[]{1f, 0.35f}, 0.3f)),
+                after(0.21f, noise(100f, 1.1f, 0.10f, 0.14f, 0.002f, 0.2f, seed + 1)),
+        };
+    }
+
+    /**
+     * A swell played backwards - silent, then rising faster and faster, and cut dead. Placed
+     * so the cut lands exactly on the Dye's burst, which makes the burst feel sucked in
+     * rather than simply arriving.
+     */
+    public static Voice[] reverseSwell(float seconds) {
+        float root = 329.63f;                                   // E4, under the flood's E5
+        float[] soft = {1f, 0.35f, 0.18f, 0.08f};
+        return new Voice[]{
+                new Shaped(root, root, seconds, 0.40f, Shaped.REVERSE, soft, 0.9f, 0f),
+                new Shaped(root * 1.5f, root * 1.5f, seconds, 0.26f, Shaped.REVERSE, soft, 0.9f, 0f),
+                new Shaped(root * 2f, root * 2f, seconds, 0.18f, Shaped.REVERSE, soft, 0.9f, 0f),
+        };
+    }
+
+    /**
+     * The Locket's music box: a small tune on a plucked tine, played while the pieces orbit.
+     * A tine is a stiff bar, so its overtones are not in the harmonic series - the 2.76x
+     * partial is what makes it read as a music box and not a piano. Minor, and rising, so it
+     * asks a question the fanfare answers.
+     *
+     * @param seconds how long it has, from the first note to the snap
+     */
+    public static Voice[] musicBox(float seconds) {
+        float[] tune = {880f, 1046.5f, 1318.5f, 1760f, 1568f, 1318.5f, 1174.7f, 1318.5f,
+                1568f, 1760f};
+        Voice[] out = new Voice[tune.length * 2];
+        // Gaps shrink from 1.25 to 0.75 of the average - it speeds up as the pieces close
+        // in, the way a wound spring runs - so the average is what fits the time given.
+        float gap = seconds / (tune.length - 0.5f);
+        float at = 0f;
+        for (int i = 0; i < tune.length; i++) {
+            float hz = tune[i];
+            out[i * 2] = after(at, tone(hz, hz, 0.9f, 0.42f, 0.002f, new float[]{1f, 0.12f}, 0.8f));
+            out[i * 2 + 1] = after(at, tone(hz * 2.76f, hz * 2.76f, 0.25f, 0.13f, 0.001f, null, 0.8f));
+            at += gap * (1.25f - 0.5f * i / (float) (tune.length - 1));
+        }
+        return out;
+    }
+
+    /**
+     * The Locket snapping whole: a bright click, the fanfare, and a choir - a slow A major
+     * pad of breathy voices, a little vibrato in each, holding under everything after.
+     */
+    public static Voice[] locketSnap(long seed) {
+        Voice[] fan = fanfare();
+        float[] chord = {220f, 277.18f, 329.63f, 440f, 554.37f};
+        float[] vowel = {1f, 0.55f, 0.42f, 0.18f, 0.12f, 0.05f};
+        Voice[] out = new Voice[fan.length + chord.length * 2 + 2];
+        int k = 0;
+        out[k++] = noise(5200f, 3.5f, 0.18f, 0.06f, 0.001f, 0.8f, seed);
+        out[k++] = tone(2093f, 2093f, 1.2f, 0.12f, 0.002f, new float[]{1f, 0.3f, 0.1f}, 0.9f);
+        for (Voice v : fan) out[k++] = after(0.04f, v);
+        for (int i = 0; i < chord.length; i++) {
+            // Two voices a few cents apart per note - a choir, not an organ.
+            out[k++] = new Shaped(chord[i], chord[i], 4.2f, 0.06f, Shaped.PAD, vowel, 0.95f, 5.2f + i * 0.3f);
+            out[k++] = new Shaped(chord[i] * 1.004f, chord[i] * 1.004f, 4.2f, 0.045f, Shaped.PAD, vowel, 0.95f,
+                    4.6f + i * 0.4f);
+        }
+        return out;
+    }
+
+    /** One letter of a big drop's name being stamped out. Rises a little each letter. */
+    public static Voice letterTick(int index) {
+        float hz = 1760f * (float) Math.pow(2, Math.min(index, 20) / 36.0);
+        return tone(hz, hz * 0.97f, 0.05f, 0.30f, 0.001f, new float[]{1f, 0.3f}, 0.5f);
+    }
+
+    /** A coin on the counter as the price ticks up. */
+    public static Voice coinTick(int index) {
+        float hz = 2637f * (float) Math.pow(2, (index % 12) / 48.0);
+        return tone(hz, hz, 0.11f, 0.26f, 0.001f, new float[]{1f, 0f, 0f, 0f, 0.35f}, 0.6f);
+    }
+
+    /** The counter arriving on the price. */
+    public static Voice[] coinLand() {
+        return chime(4, 659.25f);
+    }
+
     /** A low swell as the cavern fades up. Sets the space before anything happens in it. */
     public static Voice open(float seconds) {
         return tone(58f, 66f, seconds, 0.62f, seconds * 0.45f,
@@ -361,6 +733,79 @@ public final class Voices {
                 send[i] += v * 0.55f;
 
                 phase += Math.PI * 2 * hz * step;
+                if (phase > Math.PI * 2) phase -= Math.PI * 2;
+                t += step;
+            }
+            return true;
+        }
+    }
+
+    /**
+     * A tone with an envelope other than struck-and-decaying.
+     *
+     * {@link #PAD} fades in and out slowly and holds between - a choir. {@link #REVERSE} is
+     * a struck envelope played backwards: nothing, then an exponential rise, then a hard
+     * stop, which is what a reversed cymbal or a "sucked in" swell sounds like.
+     */
+    private static final class Shaped implements Voice {
+        static final int PAD = 0, REVERSE = 1, RISE = 2;
+        private final float hz, endHz, total, amplitude, reverb, vibrato;
+        private final int shape;
+        private final float[] harmonics;
+        private final float norm;
+        private double phase;
+        private float t;
+
+        Shaped(float hz, float endHz, float total, float amplitude, int shape,
+               float[] harmonics, float reverb, float vibratoHz) {
+            this.hz = hz;
+            this.endHz = endHz;
+            this.total = Math.max(0.05f, total);
+            this.amplitude = amplitude * HEADROOM;
+            this.shape = shape;
+            this.harmonics = harmonics == null || harmonics.length == 0 ? new float[]{1f} : harmonics;
+            this.reverb = reverb;
+            this.vibrato = vibratoHz;
+            float energy = 0f;
+            for (float h : this.harmonics) energy += h * h;
+            this.norm = energy <= 0f ? 1f : 1f / (float) Math.sqrt(energy);
+        }
+
+        private float env(float u) {
+            if (shape == RISE) {
+                // Gets louder the whole way, faster towards the end; cut in the last 1.5%.
+                float cut = u > 0.985f ? (1f - u) / 0.015f : 1f;
+                return (0.12f + 0.88f * u * u) * cut;
+            }
+            if (shape == REVERSE) {
+                // The mirror of envelope(): an exponential rise, and the last 1.5% a ramp to
+                // zero so the cut does not click.
+                float rise = (float) Math.exp(-4.2f * (1f - u));
+                float cut = u > 0.985f ? (1f - u) / 0.015f : 1f;
+                return rise * cut;
+            }
+            float in = Math.min(1f, u / 0.18f);
+            float out = u > 0.55f ? (1f - u) / 0.45f : 1f;
+            return in * in * out * out;
+        }
+
+        @Override
+        public boolean render(float[] left, float[] right, float[] send, int frames, float sampleRate) {
+            float step = 1f / sampleRate;
+            for (int i = 0; i < frames; i++) {
+                if (t >= total) return false;
+                float u = t / total;
+                float f = hz + (endHz - hz) * u;
+                if (vibrato > 0f) f *= 1f + 0.004f * (float) Math.sin(t * vibrato * Math.PI * 2);
+                float v = 0f;
+                for (int h = 0; h < harmonics.length; h++) {
+                    v += harmonics[h] * (float) Math.sin(phase * (h + 1));
+                }
+                v *= norm * env(u) * amplitude;
+                left[i] += v;
+                right[i] += v;
+                send[i] += v * reverb;
+                phase += Math.PI * 2 * f * step;
                 if (phase > Math.PI * 2) phase -= Math.PI * 2;
                 t += step;
             }

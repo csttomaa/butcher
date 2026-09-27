@@ -106,6 +106,45 @@ public class PatternConfig {
     public boolean vanguardHideChat = true;
 
     /**
+     * How fast the Thaw plays, in percent. 100 is the reference pace; 200 is twice as fast.
+     *
+     * Stretches every part of the run evenly - wind-ups, strikes, endings - so it changes
+     * how long the Thaw takes and never its shape. A losing corpse still ends quicker than
+     * a winning one at any speed.
+     */
+    public int vanguardSpeed = 100;
+
+    /**
+     * Whether the ice flares a colour before each strike.
+     *
+     * The flare is a tell - honest about real wins, lying about everything else - and some
+     * players will find that exciting and others will find it noise. Off, every strike
+     * winds up plain and the payoff is a surprise every time.
+     */
+    public boolean vanguardFlare = true;
+
+    /** How big a drop's name is drawn in the Thaw, in percent of the default. */
+    public int vanguardNameSize = 100;
+
+    /**
+     * Volume of the Thaw's two big endings - the legendary detonation and the Dye's flood -
+     * in percent. Separate from the Scatha's pet sting, because they are different moments
+     * and a player may want one loud and the other not.
+     */
+    public int vanguardFinaleVolume = 100;
+
+    /**
+     * Fetch live prices when a corpse is opened: the bazaar from Hypixel's public API, and
+     * the lowest BIN for the Dye, the Locket and the Wisp from Coflnet. Only item IDs are
+     * sent. Needed by the profit window and the Locket's price counter; off, the window is
+     * not shown and the Locket shows its NPC price.
+     */
+    public boolean livePrices = true;
+
+    /** Show the corpse's profit or loss, drop by drop, when the Thaw ends. */
+    public boolean vanguardProfit = true;
+
+    /**
      * Take the vanilla HUD off the screen during the pre-kill hide and the cutscene.
      *
      * The hotbar is the leak this closes. A pet lands in it before the cutscene even

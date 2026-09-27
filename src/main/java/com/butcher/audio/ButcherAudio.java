@@ -171,6 +171,116 @@ public final class ButcherAudio {
         for (Voice v : Voices.miss(9091L)) play(v);
     }
 
+    // ------------------------------------------------------------------ the Thaw
+
+    public static void onThawOpen(long introMs) {
+        for (Voice v : Voices.thawOpen(Math.max(0.4f, introMs / 1000f))) play(v);
+    }
+
+    /** @param colour 0 blue, 1 violet, 2 gold */
+    public static void onThawFlare(int colour, long windupMs) {
+        for (Voice v : Voices.thawFlare(colour, Math.max(0.12f, windupMs / 1000f))) play(v);
+    }
+
+    /** @param flareColour the flare this strike followed - its ring lands on that chord */
+    public static void onThawStrike(int strike, int total, int flareColour) {
+        float progress = total <= 1 ? 0f : Math.min(1f, strike / (float) (total - 1));
+        for (Voice v : Voices.thawStrike(flareColour, progress, 5503L * (strike + 1))) play(v);
+    }
+
+    /** @param tier 0 common, 1 uncommon */
+    public static void onThawLand(int tier, int slot) {
+        play(Voices.thawLand(tier, slot));
+    }
+
+    public static void onThawCrash() {
+        for (Voice v : Voices.thawCrash(6607L)) play(v);
+    }
+
+    /** The legendary's detonation. On its own slider, in the Vanguard menu group. */
+    public static void onThawExplode() {
+        float gain = thawFinaleGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.thawExplode(7719L)) play(gained(v, gain));
+    }
+
+    public static void onThawDrain(long drainMs) {
+        for (Voice v : Voices.thawDrain(Math.max(0.3f, drainMs / 1000f), 8821L)) play(v);
+    }
+
+    /** The Dye's pink flood - the rarest sound in the mod. Same slider as the detonation. */
+    public static void onThawFlood() {
+        float gain = thawFinaleGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.thawFlood(9931L)) play(gained(v, gain));
+    }
+
+    /** The last strike's white glow, before its colour climbs. */
+    public static void onThawClimbWhite(long ms) {
+        for (Voice v : Voices.thawClimbWhite(Math.max(0.1f, ms / 1000f))) play(v);
+    }
+
+    /** The riser under the last strike's colour cycle, ending exactly {@code ms} from now. */
+    public static void onThawBuildUp(long ms) {
+        for (Voice v : Voices.thawBuildUp(Math.max(0.3f, ms / 1000f))) play(v);
+    }
+
+    /** One colour of the cycle. {@code step} counts up, and the ping rises with it. */
+    public static void onThawCycleTick(int step) {
+        play(Voices.thawCycleTick(step));
+    }
+
+    /** The cycle landing on the true colour. {@code holdMs} is how long until the hit. */
+    public static void onThawClimb(int colour, long holdMs) {
+        for (Voice v : Voices.thawClimb(colour, Math.max(0.15f, holdMs / 1000f))) play(v);
+    }
+
+    /** Impact on the Locket or the Dye: time slows down. */
+    public static void onThawSlowMotion(long ms) {
+        for (Voice v : Voices.slowMotion(Math.max(0.4f, ms / 1000f), 1207L)) play(v);
+    }
+
+    public static void onThawHeartbeat(int beat) {
+        for (Voice v : Voices.heartbeat(1301L + beat)) play(v);
+    }
+
+    /** The Dye's swell, played backwards into the burst. Ends exactly {@code ms} from now. */
+    public static void onThawReverseSwell(long ms) {
+        float gain = thawFinaleGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.reverseSwell(Math.max(0.2f, ms / 1000f))) play(gained(v, gain));
+    }
+
+    /** The Locket's music box, from the first note to the snap {@code ms} later. */
+    public static void onThawMusicBox(long ms) {
+        float gain = thawFinaleGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.musicBox(Math.max(0.5f, ms / 1000f))) play(gained(v, gain));
+    }
+
+    public static void onThawLocketSnap() {
+        float gain = thawFinaleGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.locketSnap(1409L)) play(gained(v, gain));
+    }
+
+    public static void onThawLetter(int index) {
+        play(Voices.letterTick(index));
+    }
+
+    public static void onThawCoin(int index) {
+        play(Voices.coinTick(index));
+    }
+
+    public static void onThawCoinLand() {
+        for (Voice v : Voices.coinLand()) play(v);
+    }
+
+    private static float thawFinaleGain() {
+        int pct = ButcherClient.config == null ? 100 : ButcherClient.config.vanguardFinaleVolume;
+        return Math.max(0f, Math.min(1.5f, pct / 100f));
+    }
+
     private static void play(Voice voice) {
         if (!enabled()) return;
         ENGINE.play(voice);
