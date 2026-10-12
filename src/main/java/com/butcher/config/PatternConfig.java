@@ -145,6 +145,113 @@ public class PatternConfig {
     public boolean vanguardProfit = true;
 
     /**
+     * Write every real drop event to config/butcher-drops.jsonl - the chat around it and the
+     * detector's reasoning - so a rare drop that comes out wrong can be replayed. Local only.
+     */
+    public boolean recordDrops = true;
+
+    /**
+     * The game itself in a small window in a corner of every cutscene (SkyMaxx's gameplay view):
+     * 0 off, 1 top right, 2 top left, 3 bottom right, 4 bottom left.
+     */
+    public int gameplayCorner = 1;
+
+    /** Diana's cutscene, "The Chopping Block": Sphinx, Inquisitor, Manticore and King Minos kills, a Minos Relic, a Mythological Dye. */
+    public boolean dianaAnimation = true;
+
+    /** The Chopping Block's win sounds, 0-150%. */
+    public int dianaVolume = 100;
+
+    /** Which creatures' kills play it (the Champion's only when it drops a Relic), and the Dye from anything. */
+    public boolean dianaSphinx = true, dianaInquisitor = true, dianaManticore = true, dianaKingMinos = true,
+            dianaChampion = true, dianaDye = true;
+
+    /** Every drop's own ending; off gives every drop the plain one, the drop rising out of the split. */
+    public boolean dianaFullEndings = true;
+
+    /** The "RARE DROP!" banner over the expensive drops' names. */
+    public boolean dianaBanner = true;
+
+    /** Each expensive ending's own music, building to the reveal. */
+    public boolean dianaMusic = true;
+
+    /** The drop's price, counting up under it. */
+    public boolean dianaPrice = true;
+
+    /** How big the Chopping Block is drawn, 60-140%. */
+    public int dianaSize = 130;
+
+    /**
+     * The HUD and chat fade out once a creature that may be ours is at or below this many million
+     * HP (DianaWatcher.armed - SkyMaxx's way). 0 turns it off: they go when the cutscene opens.
+     */
+    public int dianaHideBelowM = 3;
+    /**
+     * The pre-kill hide as a percentage of the creature's health (0.2.85; the review, A9): millions were wrong across
+     * tiers and levels. Diana's, the Demonlord's and the Seraph's; lava's was a percentage already. The old million
+     * fields are read once, by {@link #migrateHides}, and kept so an older jar still finds them.
+     */
+    public int dianaHidePct = 5, blazeHidePct = 7, seraphHidePct = 7;
+    public boolean hidesInPercent = false;
+    /** Once: the Chopping Block's default size went from 100% to 130% (the review, D1); an untouched 100 follows it. */
+    public boolean dianaSizeRaised = false;
+
+    /** Busts, per source: 0 the whole cutscene, 1 short (straight to the bust's own ending), 2 none (wins only). */
+    public int dianaBusts = 0, blazeBusts = 0, seraphBusts = 0, lavaBusts = 0;
+    /** Only play drops worth at least this ({@link #MIN_WORTH} index; 0 any): one under it plays as a bust. */
+    public int minWorth = 0;
+    public static final long[] MIN_WORTH = {0, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000, 25_000_000, 50_000_000, 100_000_000};
+    /** A line in chat once each cutscene ends: what dropped, its price, which one of yours. */
+    public boolean chatSummary = true;
+    /** No screen shake, softer flashes - every animation. */
+    public boolean calmEffects = false;
+    /** "Quick Thaw": a corpse with nothing above common skips to its last strike. */
+    public boolean vanguardQuick = false;
+
+    /** "Hellion": the cutscene on every kill of the player's own tier IV Inferno Demonlord. */
+    public boolean blazeAnimation = true;
+    /** The HUD and chat fade once your Demonlord is at or below this many million HP (0 off). Max 150M. */
+    public int blazeHideBelowM = 10;
+    /** Hellion's "PRAY TO RNGESUS DROP!" banner on the dice and the dye. */
+    public boolean blazeBanner = true;
+    /** Hellion's price under the drop. */
+    public boolean blazePrice = true;
+    /** Hellion's sounds, 0-150%. */
+    public int blazeVolume = 100;
+
+    /** "The Seraph's Glyph": the Voidgloom Seraph's cutscene (tier IV; detection still waits on real records). */
+    public boolean seraphAnimation = true;
+    /** The HUD and chat fade once your Seraph is at or below this many million HP (0 off). Max 210M. */
+    public int seraphHideBelowM = 15;
+    public boolean seraphBanner = true;
+    public boolean seraphPrice = true;
+    /** The Seraph's sounds, 0-150%. */
+    public int seraphVolume = 100;
+
+    /** "Eruption": lava fishing's cutscene on the rare Crimson Isle creatures (Jawbus, Thunder, Ragnarok, the Fiery Scuttler, Plhlegblast). */
+    public boolean lavaAnimation = true;
+    /** Per creature: whether its kills play (Plhlegblast only ever plays for the Carmine Dye). */
+    public boolean lavaJawbus = true, lavaThunder = true, lavaRagnarok = true, lavaScuttler = true;
+    /** Kills you only assisted (loot share) play too. */
+    public boolean lavaLootShare = true;
+    /** The HUD and chat fade once your creature is at or below this share of its health, % (0 off). */
+    public int lavaHidePct = 4;
+    public boolean lavaBanner = true;
+    public boolean lavaPrice = true;
+    /** Eruption's sounds, 0-150%. */
+    public int lavaVolume = 100;
+
+    /** "Fin": the short pop-up when a Great White Shark drops a Megalodon pet or its tooth. */
+    public boolean fishingAnnounce = true;
+    /** Fin's bust: the fin ducks the cleaver when your Great White Shark dies with nothing. */
+    public boolean fishingBust = true;
+    /** Fin's price under the drop (George's for the pets). */
+    public boolean fishingPrice = true;
+
+    /** Fin's sounds, 0-150%. */
+    public int fishingVolume = 100;
+
+    /**
      * Take the vanilla HUD off the screen during the pre-kill hide and the cutscene.
      *
      * The hotbar is the leak this closes. A pet lands in it before the cutscene even
@@ -152,15 +259,16 @@ public class PatternConfig {
      * without this the player can read the answer through it and the reveal is spoiled
      * before the cleaver has moved.
      *
-     * The dark veil stays either way - it darkens the world on the way in, which this
-     * does not. The two do different halves of the same job, and the HUD only goes once
-     * the veil is dark enough to cover it going.
+     * Before the kill the HUD simply goes, the moment the hide starts - Diana's way. The dark
+     * veil that used to grow over the screen first is gone (the user asked).
      *
      * ON by default. The version of this that faded each HUD element one at a time was
      * off by default and never worked; {@code HudMixin} simply does not build the HUD
      * on the frames it should not be there, which is what the game itself does for F1.
      */
     public boolean hideHud = true;
+    /** While the HUD is away, the hotbar and the health, hunger, armour and XP bars stay (drawn over the cutscene). */
+    public boolean keepVitals = true;
 
     /**
      * Write every generated texture to {@code config/butcher/textures/} so it can
@@ -173,16 +281,6 @@ public class PatternConfig {
      */
     public boolean writeGeneratedArt = true;
 
-    /**
-     * Drop the cavern and the gemstone outcrops, and play the cutscene over a plain
-     * dimmed backdrop that fades in and out with it.
-     *
-     * ON by default. The cave and the outcrops were the busiest things on screen and
-     * they fought the animation rather than framing it - the worm, the blade and the
-     * timing all read better against nothing. The cavern art is still there and still
-     * generated (see CaveArt); set this false to bring it back.
-     */
-    public boolean plainBackdrop = true;
 
     /**
      * Percent chance that a non-pet run ends with the Scatha ducking the last swing and
@@ -236,6 +334,7 @@ public class PatternConfig {
                 String json = Files.readString(PATH);
                 PatternConfig loaded = GSON.fromJson(json, PatternConfig.class);
                 if (loaded != null) {
+                    loaded.migrateHides();
                     return loaded;
                 }
             }
@@ -245,6 +344,21 @@ public class PatternConfig {
         PatternConfig fresh = new PatternConfig();
         fresh.save();
         return fresh;
+    }
+
+    /** Once: the old million thresholds become percentages of each boss's health (150M Demonlord, 210M Seraph). */
+    void migrateHides() {
+        if (!dianaSizeRaised) {
+            dianaSizeRaised = true;
+            if (dianaSize == 100) dianaSize = 130;
+            save();
+        }
+        if (hidesInPercent) return;
+        hidesInPercent = true;
+        blazeHidePct = blazeHideBelowM <= 0 ? 0 : Math.max(1, Math.round(blazeHideBelowM / 150f * 100f));
+        seraphHidePct = seraphHideBelowM <= 0 ? 0 : Math.max(1, Math.round(seraphHideBelowM / 210f * 100f));
+        dianaHidePct = dianaHideBelowM <= 0 ? 0 : 5;
+        save();
     }
 
     public void save() {

@@ -16,11 +16,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * picked-up pet/item can't flash into view in the player's hand for a frame
  * before the drop cutscene reveals it.
  *
- * Our {@code PreKillHider} HUD overlay (solid black rectangles drawn over
- * the hotbar/chat) can't reach this - the held-item model is rendered in
- * first-person 3D space, not as part of the 2D GUI layer at all, so no 2D
- * overlay could ever cover it. Cancelling the render outright is the only
- * way to actually hide it.
+ * Hiding the HUD elements can't reach this - the held-item model is rendered
+ * in first-person 3D space, not as part of the 2D GUI layer at all.
+ * Cancelling the render outright is the only way to actually hide it.
  *
  * The class, injection point and parameter list come from Scatha-Pro's own
  * compiled `ItemInHandRendererMixin.class` (read with javap), which does
@@ -39,7 +37,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * same vanilla method (that's the standard way such HUD-element APIs are
  * implemented) - cancelling it at HEAD risks silently cancelling our own
  * HudElementRegistry callbacks too and breaking the whole mod's rendering,
- * for a gap (hotbar/chat) the existing PreKillHider overlay already covers.
+ * for a gap (hotbar/chat) that ButcherClient.hideVanillaHud already covers.
  * This mixin only touches a class our own rendering never goes near, so
  * there's no such risk here.
  */

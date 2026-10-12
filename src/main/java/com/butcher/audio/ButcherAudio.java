@@ -151,6 +151,11 @@ public final class ButcherAudio {
     }
 
     /** Wraps a voice so one cue can be louder or quieter than the rest. */
+    /** A skipped or cut-in cutscene: a short tape stop, so the cut sounds meant (the review, Tier 2). */
+    public static void onSkip() {
+        for (Voice v : Voices.seraphStutter()) play(v);
+    }
+
     private static Voice gained(Voice inner, float gain) {
         return (left, right, send, frames, rate) -> {
             // Rendered into scratch and added at gain, because a Voice writes straight
@@ -276,13 +281,234 @@ public final class ButcherAudio {
         for (Voice v : Voices.coinLand()) play(v);
     }
 
+    // ------------------------------------------------------------------ the Labyrinth
+
+    public static void onLabRise(long seed) { for (Voice v : Voices.labRise(seed)) play(v); }
+
+    public static void onLabIgnite(long runMs) { for (Voice v : Voices.labIgnite(Math.max(0.3f, runMs / 1000f))) play(v); }
+
+    public static void onLabCorner(float progress) { for (Voice v : Voices.labCorner(progress)) play(v); }
+
+    public static void onLabKnock(long seed) { for (Voice v : Voices.labKnock(seed)) play(v); }
+
+    public static void onLabTorch(long seed) { for (Voice v : Voices.labTorch(seed)) play(v); }
+
+    /** The last stretch's riser - the Thaw's, cut dead by the slam. */
+    public static void onLabBuildUp(long ms) { for (Voice v : Voices.thawBuildUp(Math.max(0.2f, ms / 1000f))) play(v); }
+
+    public static void onLabCycleTick(int step) { play(Voices.thawCycleTick(step)); }
+
+    public static void onLabSlam() { for (Voice v : Voices.labSlam()) play(v); }
+
+    public static void onLabRising(long ms) { for (Voice v : Voices.labRising(Math.max(0.2f, ms / 1000f))) play(v); }
+
+    /** The drop arriving. On the Diana volume slider. */
+    public static void onLabArrive() {
+        int pct = ButcherClient.config == null ? 100 : ButcherClient.config.dianaVolume;
+        float gain = Math.max(0f, Math.min(1.5f, pct / 100f));
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.labArrive()) play(gained(v, gain));
+    }
+
+    public static void onLabEmpty() { for (Voice v : Voices.labEmpty()) play(v); }
+
+    // ---- Fin: the Fishing Festival announcement, on its own volume slider
+
+    private static float finGain() {
+        int pct = ButcherClient.config == null ? 100 : ButcherClient.config.fishingVolume;
+        return Math.max(0f, Math.min(1.5f, pct / 100f));
+    }
+
+    /** The fin breaking the surface. */
+    public static void onFinRise() {
+        float gain = finGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.paintBlup()) play(gained(v, gain));
+    }
+
+    /** The cleaver landing, and the water going up. */
+    public static void onFinChop(long seed) {
+        float gain = finGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.chopHit(1, seed)) play(gained(v, gain));
+        for (Voice v : Voices.paintSplash(seed)) play(gained(v, gain * 0.8f));
+    }
+
+    /** The bust: the blade going through empty air into the water, and the little falling notes. */
+    public static void onFinMiss(long seed) {
+        float gain = finGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.miss(seed)) play(gained(v, gain));
+        for (Voice v : Voices.finPlunge(seed)) play(gained(v, gain));
+    }
+
+    /** The drop out of the splash: a short rising chime, one note longer for a legendary. */
+    public static void onFinReveal(boolean legendary) {
+        float gain = finGain();
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.chime(legendary ? 4 : 3, 293.66f)) play(gained(v, gain));
+    }
+
+    public static void onLabSnuff(long seed) { for (Voice v : Voices.labSnuff(seed)) play(v); }
+
+    public static void onLabSink(long seed) { for (Voice v : Voices.labSink(seed)) play(v); }
+
+    public static void onLabUnknown() { for (Voice v : Voices.labUnknown()) play(v); }
+
+    // The Minos Relic's ending. Its reverse swell, letters and arrival reuse the Thaw's and the win's.
+
+    public static void onRelicDust(long ms, long seed) { for (Voice v : Voices.relicDust(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    public static void onRelicBurst(int ring, long seed) { for (Voice v : Voices.relicBurst(ring, seed)) play(v); }
+
+    public static void onRelicWind(long ms) { for (Voice v : Voices.relicWind(Math.max(0.3f, ms / 1000f))) play(v); }
+
+    public static void onRelicIgnite() { for (Voice v : Voices.relicIgnite()) play(v); }
+
+    public static void onBrainHum(long ms) { for (Voice v : Voices.brainHum(Math.max(0.3f, ms / 1000f))) play(v); }
+
+    public static void onChiShimmer(long ms, long seed) { for (Voice v : Voices.chiShimmer(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    public static void onChiOpen(long seed) { for (Voice v : Voices.chiOpen(seed)) play(v); }
+
+    /** One of the three heads getting loose: 0 lion, 1 goat, 2 serpent. */
+    public static void onChiHead(int k, long seed) {
+        Voice[] vs = k == 0 ? Voices.chiLion(seed) : k == 1 ? Voices.chiGoat() : Voices.chiSerpent(seed);
+        for (Voice v : vs) play(v);
+    }
+
+    public static void onChiSlam() { for (Voice v : Voices.chiSlam()) play(v); }
+
+    // The Chopping Block.
+    public static void onChopLand(long seed) { for (Voice v : Voices.chopLand(seed)) play(v); }
+
+    public static void onChopWhoosh(int blow, long seed) { for (Voice v : Voices.chopWhoosh(blow, seed)) play(v); }
+
+    public static void onChopHit(int blow, long seed) { for (Voice v : Voices.chopHit(blow, seed)) play(v); }
+
+    public static void onChopSplit() { for (Voice v : Voices.chopSplit()) play(v); }
+
+    public static void onChopCrumble(long seed) { for (Voice v : Voices.chopCrumble(seed)) play(v); }
+
+    // The Fatal Sting.
+    public static void onStingRise(long ms, long seed) { for (Voice v : Voices.stingRise(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    public static void onStingClick(int plate, boolean sinking, long seed) { for (Voice v : Voices.stingClick(plate, sinking, seed)) play(v); }
+
+    public static void onStingCreak(long ms, float fromHz, float toHz, long seed) { for (Voice v : Voices.stingCreak(Math.max(0.1f, ms / 1000f), fromHz, toHz, seed)) play(v); }
+
+    public static void onStingHiss(long ms, long seed) { for (Voice v : Voices.stingHiss(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    public static void onStingDrip(long seed) { for (Voice v : Voices.stingDrip(seed)) play(v); }
+
+    public static void onStingWhoosh(long ms, long seed) { for (Voice v : Voices.stingWhoosh(Math.max(0.05f, ms / 1000f), seed)) play(v); }
+
+    public static void onStingImpact(long seed) { for (Voice v : Voices.stingImpact(seed)) play(v); }
+
+    public static void onStingStab(long seed) { for (Voice v : Voices.stingStab(seed)) play(v); }
+
+    public static void onStingHeal(long ms, long seed) { for (Voice v : Voices.stingHeal(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    // Wet Paint.
+
+
+
+
+
+
+
+    // The Golden Fleece.
+    public static void onFleeceHarp(long ms, boolean down) { for (Voice v : Voices.fleeceHarp(Math.max(0.2f, ms / 1000f), down)) play(v); }
+
+    public static void onFleeceAir(long ms, long seed) { for (Voice v : Voices.fleeceAir(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    public static void onFleeceWind(long ms, long seed) { for (Voice v : Voices.fleeceWind(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    public static void onFleeceBloom(long seed) { for (Voice v : Voices.fleeceBloom(seed)) play(v); }
+
+    public static void onFleeceSettle(long seed) { for (Voice v : Voices.fleeceSettle(seed)) play(v); }
+
+    // The Heart of the Beast.
+    public static void onHeartRumble(long ms, long seed) { for (Voice v : Voices.heartRumble(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    public static void onWingUnfurl(long ms, long seed) { for (Voice v : Voices.wingUnfurl(Math.max(0.2f, ms / 1000f), seed)) play(v); }
+
+    public static void onWingGust(long seed) { for (Voice v : Voices.wingGust(seed)) play(v); }
+
+    public static void onWingWrap(long ms, long seed) { for (Voice v : Voices.wingWrap(Math.max(0.2f, ms / 1000f), seed)) play(v); }
+
+    public static void onHeartMuffled() { for (Voice v : Voices.heartMuffled()) play(v); }
+
+    /** An expensive ending's score: see Voices.score. Ends {@code ms} from now, at the reveal. */
+    public static void onScore(float root, int[] scale, long ms) {
+        for (Voice v : Voices.score(root, scale, Math.max(0.5f, ms / 1000f))) play(v);
+    }
+
+    // Midas.
+    public static void onMidasCreep(long ms, long seed) { for (Voice v : Voices.midasCreep(Math.max(0.3f, ms / 1000f), seed)) play(v); }
+
+    public static void onMidasClank(long seed) { for (Voice v : Voices.midasClank(seed)) play(v); }
+
+    public static void onMidasShine() { for (Voice v : Voices.midasShine()) play(v); }
+
+    public static void onMidasCrowned() { for (Voice v : Voices.midasCrowned()) play(v); }
+
+    public static void onMidasAvalanche(long seed) { for (Voice v : Voices.midasAvalanche(seed)) play(v); }
+
+    public static void onRelicMoon(long ms) {
+        int pct = ButcherClient.config == null ? 100 : ButcherClient.config.dianaVolume;
+        float gain = Math.max(0f, Math.min(1.5f, pct / 100f));
+        if (gain <= 0.001f) return;
+        for (Voice v : Voices.relicMoon(Math.max(0.5f, ms / 1000f))) play(gained(v, gain));
+    }
+
     private static float thawFinaleGain() {
         int pct = ButcherClient.config == null ? 100 : ButcherClient.config.vanguardFinaleVolume;
         return Math.max(0f, Math.min(1.5f, pct / 100f));
     }
 
+    /** Hellion's cues come ready-made from {@link HellionSound}'s schedule. */
+    public static void playHellion(Voice[] voices) {
+        playSlayer(voices, ButcherClient.config == null ? 100 : ButcherClient.config.blazeVolume);
+    }
+
+    /** The Seraph's cues, on its own volume. */
+    public static void playSeraph(Voice[] voices) {
+        playSlayer(voices, ButcherClient.config == null ? 100 : ButcherClient.config.seraphVolume);
+    }
+
+    /** Diana's ending cues, on the Diana volume (the win volume). */
+    public static void playDiana(Voice[] voices) {
+        playSlayer(voices, ButcherClient.config == null ? 100 : ButcherClient.config.dianaVolume);
+    }
+
+    /** Eruption's cues (lava fishing), on its own volume. */
+    public static void playEruption(Voice[] voices) {
+        playSlayer(voices, ButcherClient.config == null ? 100 : ButcherClient.config.lavaVolume);
+    }
+
+    private static void playSlayer(Voice[] voices, int pct) {
+        float gain = Math.max(0f, Math.min(1.5f, pct / 100f));
+        if (gain <= 0.001f) return;
+        for (Voice v : voices) play(Math.abs(gain - 1f) < 0.01f ? v : gained(v, gain));
+    }
+
+    /** While true nothing new starts: a skipped cutscene runs the cues it jumps over without sounding them. */
+    private static boolean muted;
+
+    /** Runs {@code r} with every cue it starts dropped. */
+    public static void muted(Runnable r) {
+        boolean was = muted;
+        muted = true;
+        try {
+            r.run();
+        } finally {
+            muted = was;
+        }
+    }
+
     private static void play(Voice voice) {
-        if (!enabled()) return;
+        if (!enabled() || muted) return;
         ENGINE.play(voice);
     }
 }

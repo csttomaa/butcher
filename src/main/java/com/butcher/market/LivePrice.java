@@ -53,6 +53,15 @@ public final class LivePrice {
             .connectTimeout(Duration.ofSeconds(4))
             .build();
 
+    /**
+     * "ID/bin", or for an id carrying a filter ("PET_SCATHA?Rarity=LEGENDARY") "ID/bin?Rarity=LEGENDARY" - Coflnet
+     * filters the lowest BIN by it (checked 2026-10-11: a legendary Scatha 360M, a rare 77M).
+     */
+    static String binPath(String itemId) {
+        int q = itemId.indexOf('?');
+        return q < 0 ? itemId + "/bin" : itemId.substring(0, q) + "/bin" + itemId.substring(q);
+    }
+
     /** Starts a fetch for {@code itemId} unless a fresh answer is already held or on its way. */
     public static void request(String itemId) {
         if (ButcherClient.config != null && !ButcherClient.config.livePrices) return;
@@ -61,7 +70,7 @@ public final class LivePrice {
         if (IN_FLIGHT.putIfAbsent(itemId, true) != null) return;
 
         HttpRequest req = HttpRequest.newBuilder(
-                        URI.create("https://sky.coflnet.com/api/item/price/" + itemId + "/bin"))
+                        URI.create("https://sky.coflnet.com/api/item/price/" + binPath(itemId)))
                 .timeout(Duration.ofSeconds(6))
                 .header("User-Agent", "Butcher (Minecraft mod)")
                 .GET().build();

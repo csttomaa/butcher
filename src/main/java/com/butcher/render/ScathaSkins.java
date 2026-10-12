@@ -130,7 +130,7 @@ public final class ScathaSkins {
     }
 
     /** Reads the base64 "textures" property off a player-head item, or null if it is not one. */
-    private static String texturesProperty(ItemStack stack) {
+    public static String texturesProperty(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return null;
         ResolvableProfile profile = stack.getComponents().get(DataComponents.PROFILE);
         if (profile == null) return null;

@@ -47,7 +47,7 @@ public class ButcherMenuScreen extends Screen {
     private static final int TAB_H = 22;
     private static final int PAD = 10;
 
-    private static final String[] TAB_NAMES = {"Gambling", "Sound", "General", "Stats"};
+    private static final String[] TAB_NAMES = {"Animations", "Sound", "General", "Stats"};
     private static final int TAB_COUNT = TAB_NAMES.length;
     private static final int TAB_GAMBLING = 0;
     private static final int TAB_SOUND = 1;
@@ -301,13 +301,13 @@ public class ButcherMenuScreen extends Screen {
         }
 
         boolean on = cfg.animationMode != AnimationMode.NONE;
-        rows.add(new HeaderRow("gambling", "Scatha Gambling", on, isOpen("gambling")));
+        rows.add(new HeaderRow("gambling", "Scatha - the cleaver", on, isOpen("gambling")));
         if (!isOpen("gambling")) return vanguardRows(rows, font, cfg);
 
         boolean cleaver = cfg.animationMode != AnimationMode.GUILLOTINE;
 
         rows.add(new SectionRow("The cutscene"));
-        rows.add(new ToggleRow("Scatha Gambling", on, () -> {
+        rows.add(new ToggleRow("The cleaver cutscene", on, () -> {
             if (cfg.animationMode == AnimationMode.NONE) {
                 cfg.animationMode = cfg.lastStyle == AnimationMode.NONE ? AnimationMode.SCOPE : cfg.lastStyle;
             } else {
@@ -357,11 +357,6 @@ public class ButcherMenuScreen extends Screen {
             rows.add(new NoticeRow("How often it ducks the last swing. Never on a pet.", font, rowsWidth()));
 
             rows.add(new SectionRow("The look"));
-            rows.add(new ToggleRow("Plain backdrop", cfg.plainBackdrop, () -> {
-                cfg.plainBackdrop = !cfg.plainBackdrop;
-                cfg.save();
-            }));
-            rows.add(new NoticeRow("Off brings back the painted cavern and the outcrops.", font, rowsWidth()));
             rows.add(new SliderRow("vig", "Vignette", cfg.vignetteStrength, 0, 100, 5,
                     v -> { cfg.vignetteStrength = v; }, v -> v + "%"));
             rows.add(new SliderRow("zoom", "Zoom per cut", cfg.zoomStrength, 0, 200, 10,
@@ -390,7 +385,7 @@ public class ButcherMenuScreen extends Screen {
      */
     private List<Row> vanguardRows(List<Row> rows, Font font, PatternConfig cfg) {
         rows.add(new HeaderRow("vanguard", "Vanguard Thaw", cfg.vanguardAnimation, isOpen("vanguard")));
-        if (!isOpen("vanguard")) return rows;
+        if (!isOpen("vanguard")) return dianaRows(rows, font, cfg);
         rows.add(new SectionRow("The cutscene"));
         rows.add(new ToggleRow("Vanguard Thaw", cfg.vanguardAnimation, () -> {
             cfg.vanguardAnimation = !cfg.vanguardAnimation;
@@ -405,6 +400,12 @@ public class ButcherMenuScreen extends Screen {
         rows.add(new SectionRow("Pacing"));
         rows.add(new SliderRow("vg_speed", "Speed", cfg.vanguardSpeed, 50, 200, 10,
                 v -> { cfg.vanguardSpeed = v; }, v -> v + "%"));
+        rows.add(new ToggleRow("Quick Thaw", cfg.vanguardQuick, () -> {
+            cfg.vanguardQuick = !cfg.vanguardQuick;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("A corpse with nothing above common skips to its last strike. Anything better plays in full - so a Thaw that keeps going is a good one.",
+                font, rowsWidth()));
         rows.add(new ToggleRow("Flare before each strike", cfg.vanguardFlare, () -> {
             cfg.vanguardFlare = !cfg.vanguardFlare;
             cfg.save();
@@ -423,13 +424,192 @@ public class ButcherMenuScreen extends Screen {
             cfg.vanguardProfit = !cfg.vanguardProfit;
             cfg.save();
         }));
-        rows.add(new ToggleRow("Live prices", cfg.livePrices, () -> {
-            cfg.livePrices = !cfg.livePrices;
+        return dianaRows(rows, font, cfg);
+    }
+
+    /**
+     * Diana's cutscene, "The Chopping Block": the switch, which creatures play it, how its endings
+     * look and sound. Detection waits on her real chat messages; the test command plays it now.
+     */
+    private List<Row> dianaRows(List<Row> rows, Font font, PatternConfig cfg) {
+        rows.add(new HeaderRow("diana", "Diana - The Chopping Block", cfg.dianaAnimation, isOpen("diana")));
+        // Each group is its own: a closed one must not hide the ones after it (it hid Fin and the slayers).
+        if (!isOpen("diana")) return fishingRows(rows, font, cfg);
+        rows.add(new SectionRow("The cutscene"));
+        rows.add(new ToggleRow("The Chopping Block", cfg.dianaAnimation, () -> {
+            cfg.dianaAnimation = !cfg.dianaAnimation;
             cfg.save();
         }));
-        rows.add(new NoticeRow("Bazaar prices from api.hypixel.net, auction prices from sky.coflnet.com, fetched when a corpse opens. Off hides the profit window.",
+        rows.add(new SliderRow("diana_hide", "Hide the HUD below", cfg.dianaHidePct, 0, 20, 1,
+                v -> { cfg.dianaHidePct = v; }, v -> v == 0 ? "Off" : v + "% HP"));
+        rows.add(new NoticeRow("The HUD and chat fade out when your creature (or one you're getting loot share on) gets this low, so nothing gives the drop away. Try the cutscene with /butcher test diana.",
                 font, rowsWidth()));
+
+        rows.add(new SectionRow("What plays it"));
+        rows.add(dianaToggle("Sphinx kills", cfg.dianaSphinx, () -> cfg.dianaSphinx = !cfg.dianaSphinx, cfg));
+        rows.add(dianaToggle("Minos Inquisitor kills", cfg.dianaInquisitor, () -> cfg.dianaInquisitor = !cfg.dianaInquisitor, cfg));
+        rows.add(dianaToggle("Manticore kills", cfg.dianaManticore, () -> cfg.dianaManticore = !cfg.dianaManticore, cfg));
+        rows.add(dianaToggle("King Minos kills", cfg.dianaKingMinos, () -> cfg.dianaKingMinos = !cfg.dianaKingMinos, cfg));
+        rows.add(dianaToggle("Minos Relic (from a Champion)", cfg.dianaChampion, () -> cfg.dianaChampion = !cfg.dianaChampion, cfg));
+        rows.add(dianaToggle("Mythological Dye (from anything)", cfg.dianaDye, () -> cfg.dianaDye = !cfg.dianaDye, cfg));
+
+        rows.add(new SectionRow("The endings"));
+        rows.add(dianaToggle("Every drop's own ending", cfg.dianaFullEndings, () -> cfg.dianaFullEndings = !cfg.dianaFullEndings, cfg));
+        rows.add(new NoticeRow("Off gives every drop the same short ending: it rises out of the split.", font, rowsWidth()));
+        rows.add(dianaToggle("RARE DROP! banner", cfg.dianaBanner, () -> cfg.dianaBanner = !cfg.dianaBanner, cfg));
+        rows.add(dianaToggle("Show the price", cfg.dianaPrice, () -> cfg.dianaPrice = !cfg.dianaPrice, cfg));
+        rows.add(new SliderRow("diana_size", "Size", cfg.dianaSize, 60, 140, 10,
+                v -> { cfg.dianaSize = v; }, v -> v + "%"));
+
+        rows.add(new SectionRow("Sound"));
+        rows.add(dianaToggle("Music on the big drops", cfg.dianaMusic, () -> cfg.dianaMusic = !cfg.dianaMusic, cfg));
+        rows.add(new SliderRow("diana_volume", "Volume", cfg.dianaVolume, 0, 150, 5,
+                v -> { cfg.dianaVolume = v; }, v -> v + "%"));
+        bustsRow(rows, font, cfg.dianaBusts, v -> cfg.dianaBusts = v, cfg);
+        tryRows(rows, "diana", names(com.butcher.anim.ChopTimeline.Verdict.values()), font);
+        return fishingRows(rows, font, cfg);
+    }
+
+    /** The slayers: one group, each boss its own sub-group under it. */
+    private List<Row> slayerRows(List<Row> rows, Font font, PatternConfig cfg) {
+        rows.add(new HeaderRow("slayers", "Slayers", null, isOpen("slayers")));
+        if (!isOpen("slayers")) return rows;
+        blazeRows(rows, font, cfg);
+        seraphRows(rows, font, cfg);
         return rows;
+    }
+
+    /** The blaze slayer: Hellion on every kill of your own tier IV Inferno Demonlord. */
+    private void blazeRows(List<Row> rows, Font font, PatternConfig cfg) {
+        rows.add(new HeaderRow("blaze", "Inferno Demonlord - Hellion", cfg.blazeAnimation, isOpen("blaze"), SUB_INDENT));
+        if (!isOpen("blaze")) return;
+        rows.add(new SectionRow("The cutscene"));
+        rows.add(dianaToggle("Hellion", cfg.blazeAnimation, () -> cfg.blazeAnimation = !cfg.blazeAnimation, cfg));
+        rows.add(new NoticeRow("Plays on every kill of your own tier IV Demonlord, the moment it dies; the drop decides the ending. Try it with /butcher test slayer blaze.",
+                font, rowsWidth()));
+        rows.add(new SliderRow("blaze_hide", "Hide the HUD below", cfg.blazeHidePct, 0, 30, 1,
+                v -> { cfg.blazeHidePct = v; }, v -> v == 0 ? "Off" : v + "% HP"));
+        rows.add(new NoticeRow("The HUD and chat fade out when your Demonlord gets this low, so nothing gives the drop away.",
+                font, rowsWidth()));
+        rows.add(new SectionRow("The endings"));
+        rows.add(dianaToggle("PRAY TO RNGESUS DROP! banner", cfg.blazeBanner, () -> cfg.blazeBanner = !cfg.blazeBanner, cfg));
+        rows.add(dianaToggle("Show the price", cfg.blazePrice, () -> cfg.blazePrice = !cfg.blazePrice, cfg));
+        rows.add(new SliderRow("blaze_volume", "Volume", cfg.blazeVolume, 0, 150, 5,
+                v -> { cfg.blazeVolume = v; }, v -> v + "%"));
+        bustsRow(rows, font, cfg.blazeBusts, v -> cfg.blazeBusts = v, cfg);
+        tryRows(rows, "blaze", names(com.butcher.anim.HellionTimeline.Drop.values()), font);
+    }
+
+    /** The enderman slayer: the Seraph's Glyph. Detection waits on real records; the test command plays it now. */
+    private void seraphRows(List<Row> rows, Font font, PatternConfig cfg) {
+        rows.add(new HeaderRow("seraph", "Voidgloom Seraph - The Seraph's Glyph", cfg.seraphAnimation, isOpen("seraph"), SUB_INDENT));
+        if (!isOpen("seraph")) return;
+        rows.add(new SectionRow("The cutscene"));
+        rows.add(dianaToggle("The Seraph's Glyph", cfg.seraphAnimation, () -> cfg.seraphAnimation = !cfg.seraphAnimation, cfg));
+        rows.add(new NoticeRow("Plays on every kill of your own tier IV Seraph (the one spawned by you), the moment it dies; the drop decides the ending. Try it with /butcher test slayer enderman.",
+                font, rowsWidth()));
+        rows.add(new SliderRow("seraph_hide", "Hide the HUD below", cfg.seraphHidePct, 0, 30, 1,
+                v -> { cfg.seraphHidePct = v; }, v -> v == 0 ? "Off" : v + "% HP"));
+        rows.add(new SectionRow("The endings"));
+        rows.add(dianaToggle("PRAY TO RNGESUS DROP! banner", cfg.seraphBanner, () -> cfg.seraphBanner = !cfg.seraphBanner, cfg));
+        rows.add(dianaToggle("Show the price", cfg.seraphPrice, () -> cfg.seraphPrice = !cfg.seraphPrice, cfg));
+        rows.add(new SliderRow("seraph_volume", "Volume", cfg.seraphVolume, 0, 150, 5,
+                v -> { cfg.seraphVolume = v; }, v -> v + "%"));
+        bustsRow(rows, font, cfg.seraphBusts, v -> cfg.seraphBusts = v, cfg);
+        tryRows(rows, "seraph", names(com.butcher.anim.SeraphTimeline.Drop.values()), font);
+    }
+
+    /** The Fishing Festival: one short pop-up for the Great White Shark's two big drops, and its bust. */
+    private List<Row> fishingRows(List<Row> rows, Font font, PatternConfig cfg) {
+        rows.add(new HeaderRow("fishing", "Fishing Festival - Fin", cfg.fishingAnnounce, isOpen("fishing")));
+        if (!isOpen("fishing")) return lavaRows(rows, font, cfg);
+        rows.add(new SectionRow("The pop-up"));
+        rows.add(dianaToggle("Announce a Megalodon or a Great White Shark Tooth", cfg.fishingAnnounce,
+                () -> cfg.fishingAnnounce = !cfg.fishingAnnounce, cfg));
+        rows.add(dianaToggle("The bust - a shark of yours dies with nothing", cfg.fishingBust,
+                () -> cfg.fishingBust = !cfg.fishingBust, cfg));
+        rows.add(dianaToggle("Show the price", cfg.fishingPrice, () -> cfg.fishingPrice = !cfg.fishingPrice, cfg));
+        rows.add(new NoticeRow("The pets show what George pays for them. A quick pop-up over the game - nothing is hidden. Try it with /butcher test shark.",
+                font, rowsWidth()));
+        rows.add(new SliderRow("fishing_volume", "Volume", cfg.fishingVolume, 0, 150, 5,
+                v -> { cfg.fishingVolume = v; }, v -> v + "%"));
+        List<String> fin = new ArrayList<>(names(com.butcher.detect.SharkDrops.Drop.values()));
+        fin.add(0, "BUST");
+        tryRows(rows, "shark", fin, font);
+        return lavaRows(rows, font, cfg);
+    }
+
+    /** Lava fishing: Eruption on the rare Crimson Isle creatures. Hands on to the slayers either way. */
+    private List<Row> lavaRows(List<Row> rows, Font font, PatternConfig cfg) {
+        rows.add(new HeaderRow("lava", "Lava Fishing - Eruption", cfg.lavaAnimation, isOpen("lava")));
+        if (!isOpen("lava")) return slayerRows(rows, font, cfg);
+        rows.add(new SectionRow("The cutscene"));
+        rows.add(dianaToggle("Eruption", cfg.lavaAnimation, () -> cfg.lavaAnimation = !cfg.lavaAnimation, cfg));
+        rows.add(new NoticeRow("Plays on every kill of your own Lord Jawbus, Thunder, Ragnarok or Fiery Scuttler, the moment it dies - the heat it lands on is the drop. Plhlegblast only plays for the Carmine Dye. Try it with /butcher test lava.",
+                font, rowsWidth()));
+        rows.add(dianaToggle("Lord Jawbus", cfg.lavaJawbus, () -> cfg.lavaJawbus = !cfg.lavaJawbus, cfg));
+        rows.add(dianaToggle("Thunder", cfg.lavaThunder, () -> cfg.lavaThunder = !cfg.lavaThunder, cfg));
+        rows.add(dianaToggle("Ragnarok", cfg.lavaRagnarok, () -> cfg.lavaRagnarok = !cfg.lavaRagnarok, cfg));
+        rows.add(dianaToggle("Fiery Scuttler", cfg.lavaScuttler, () -> cfg.lavaScuttler = !cfg.lavaScuttler, cfg));
+        rows.add(dianaToggle("Loot-shared kills", cfg.lavaLootShare, () -> cfg.lavaLootShare = !cfg.lavaLootShare, cfg));
+        rows.add(new SliderRow("lava_hide", "Hide the HUD below", cfg.lavaHidePct, 0, 20, 1,
+                v -> { cfg.lavaHidePct = v; }, v -> v == 0 ? "Off" : v + "% HP"));
+        rows.add(new NoticeRow("The HUD and chat fade out when your creature gets this low, so nothing gives the drop away.",
+                font, rowsWidth()));
+        rows.add(new SectionRow("The endings"));
+        rows.add(dianaToggle("RARE DROP! banner", cfg.lavaBanner, () -> cfg.lavaBanner = !cfg.lavaBanner, cfg));
+        rows.add(dianaToggle("Show the price", cfg.lavaPrice, () -> cfg.lavaPrice = !cfg.lavaPrice, cfg));
+        rows.add(new SliderRow("lava_volume", "Volume", cfg.lavaVolume, 0, 150, 5,
+                v -> { cfg.lavaVolume = v; }, v -> v + "%"));
+        bustsRow(rows, font, cfg.lavaBusts, v -> cfg.lavaBusts = v, cfg);
+        tryRows(rows, "lava", names(com.butcher.anim.EruptionTimeline.Drop.values()), font);
+        return slayerRows(rows, font, cfg);
+    }
+
+    /** "Busts": the whole cutscene, a short one (straight to the bust's ending), or none (wins only). */
+    private void bustsRow(List<Row> rows, Font font, int value, java.util.function.IntConsumer set, PatternConfig cfg) {
+        String[] styles = {"Whole cutscene", "Short", "None - wins only"};
+        int v = Math.max(0, Math.min(2, value));
+        rows.add(new ValueRow("Busts", styles[v], v != 0, () -> {
+            set.accept((v + 1) % 3);
+            cfg.save();
+        }));
+        if (v == 1) rows.add(new NoticeRow("A bust jumps to its own ending as soon as it is known - so one that keeps going is a win.", font, rowsWidth()));
+        if (v == 2) rows.add(new NoticeRow("A kill opens nothing; only a win plays, a moment later, when its drop line comes.", font, rowsWidth()));
+    }
+
+    /** Every constant's name, for the "Try it" picker. */
+    private static List<String> names(Enum<?>[] values) {
+        List<String> out = new ArrayList<>();
+        for (Enum<?> e : values) out.add(e.name());
+        return out;
+    }
+
+    /** What each group's "Try it" will play, by group. */
+    private static final java.util.Map<String, Integer> TRY = new java.util.HashMap<>();
+
+    /** "Try it": pick an outcome, then play it as /butcher test does - never counted (the review, M6). */
+    private void tryRows(List<Row> rows, String group, List<String> outcomes, Font font) {
+        rows.add(new SectionRow("Try it"));
+        int i = Math.floorMod(TRY.getOrDefault(group, 0), outcomes.size());
+        String pick = outcomes.get(i);
+        rows.add(new ValueRow("Outcome", pretty(pick), true, () -> TRY.put(group, i + 1)));
+        rows.add(new ValueRow("Play it", "\u25B6 " + pretty(pick), true, () -> {
+            if (minecraft != null) minecraft.gui.setScreen(null);
+            ButcherClient.playTest(group, pick);
+        }));
+    }
+
+    private static String pretty(String name) {
+        String s = name.replace('_', ' ').toLowerCase(java.util.Locale.ROOT);
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private ToggleRow dianaToggle(String label, boolean value, Runnable flip, PatternConfig cfg) {
+        return new ToggleRow(label, value, () -> {
+            flip.run();
+            cfg.save();
+        });
     }
 
     /**
@@ -456,7 +636,53 @@ public class ButcherMenuScreen extends Screen {
             resetRow(rows, font, "stats-vanguard", "Reset Vanguard stats", st::resetVanguard);
         }
 
+        rows.add(new HeaderRow("stats-diana", "Diana", null, isOpen("stats-diana")));
+        if (isOpen("stats-diana")) {
+            dianaStats(rows, st, font);
+            resetRow(rows, font, "stats-diana", "Reset Diana stats", st::resetDiana);
+        }
+
+        // The later sources (0.2.85): the same three things each - the dry streak, the drops, the kills.
+        sourceGroup(rows, st, font, "blaze", "Hellion - Inferno Demonlord IV", "Bosses killed",
+                titles(com.butcher.anim.HellionTimeline.Drop.values()));
+        sourceGroup(rows, st, font, "seraph", "The Seraph - Voidgloom Seraph IV", "Bosses killed",
+                titles(com.butcher.anim.SeraphTimeline.Drop.values()));
+        sourceGroup(rows, st, font, "lava", "Eruption - lava fishing", "Rare creatures killed",
+                titles(com.butcher.anim.EruptionTimeline.Drop.values()));
+        sourceGroup(rows, st, font, "shark", "Fin - Great White Sharks", "Sharks killed",
+                titles(com.butcher.detect.SharkDrops.Drop.values()));
+
         return rows;
+    }
+
+    /** Every drop's display name, rarest first as the enum lists them, the bust left out. */
+    private static String[] titles(Enum<?>[] drops) {
+        List<String> out = new ArrayList<>();
+        for (Enum<?> d : drops) {
+            try {
+                String t = (String) d.getClass().getField("title").get(d);
+                if (t != null && !t.isEmpty() && !out.contains(t)) out.add(t);
+            } catch (ReflectiveOperationException ignored) {
+            }
+        }
+        java.util.Collections.reverse(out);
+        return out.toArray(new String[0]);
+    }
+
+    private void sourceGroup(List<Row> rows, ButcherStats st, Font font, String key, String title, String killWord, String[] drops) {
+        String id = "stats-" + key;
+        rows.add(new HeaderRow(id, title, null, isOpen(id)));
+        if (!isOpen(id)) return;
+        ButcherStats.Source s = st.source(key);
+        rows.add(new SectionRow("The dry streak"));
+        rows.add(new StatRow("Kills since a drop", Integer.toString(s.dry), COL_GOLD));
+        rows.add(new StatRow("Worst it has been", Integer.toString(s.worstDry), COL_TEXT_DIM));
+        rows.add(new SectionRow("Drops"));
+        for (String d : drops) rows.add(new StatRow(d, Integer.toString(s.drops.getOrDefault(d, 0)), COL_TEXT));
+        rows.add(new SectionRow("Everything else"));
+        rows.add(new StatRow(killWord, String.format("%,d", s.kills), COL_TEXT_DIM));
+        if (s.kills == 0) rows.add(new NoticeRow("Nothing yet. Only real kills are counted; tests never are.", font, rowsWidth()));
+        resetRow(rows, font, id, "Reset these stats", () -> st.resetSource(key));
     }
 
     private void scathaStats(List<Row> rows, ButcherStats st) {
@@ -514,6 +740,36 @@ public class ButcherMenuScreen extends Screen {
         }
     }
 
+    /** Diana's own numbers: the dry streak, kills by creature, drops by name - most valuable first. */
+    private void dianaStats(List<Row> rows, ButcherStats st, Font font) {
+        rows.add(new SectionRow("The dry streak"));
+        rows.add(new StatRow("Kills since a drop", Integer.toString(st.dianaDryStreak), COL_GOLD));
+        rows.add(new StatRow("Worst it has been", Integer.toString(st.worstDianaDryStreak), COL_TEXT_DIM));
+
+        rows.add(new SectionRow("Drops"));
+        // Always shown, even at zero: most of these are one in hundreds.
+        String[][] drops = {
+                {"Shimmering Wool", "FFAA00"}, {"Manti-core", "FFAA00"}, {"Minos Relic", "AA00AA"}, {"Chimera I", "FF55FF"},
+                {"Mythological Dye", "FFAA00"}, {"Fateful Stinger", "FFAA00"}, {"Crown of Greed", "FFAA00"}, {"Brain Food", "AA00AA"}};
+        for (String[] d : drops) {
+            rows.add(new StatRow(d[0], Integer.toString(st.dianaDropCount(d[0])), 0xFF000000 | Integer.parseInt(d[1], 16)));
+        }
+
+        rows.add(new SectionRow("Kills"));
+        String[][] kills = {{"SPHINX", "Sphinxes"}, {"INQUISITOR", "Minos Inquisitors"}, {"MANTICORE", "Manticores"},
+                {"KING_MINOS", "King Minos"}, {"CHAMPION", "Minos Champions (Relic)"}};
+        int total = 0;
+        for (String[] k : kills) {
+            int n = st.dianaKillCount(k[0]);
+            total += n;
+            rows.add(new StatRow(k[1], String.format("%,d", n), COL_TEXT_DIM));
+        }
+        if (total == 0) {
+            rows.add(new NoticeRow("Nothing yet. Only real kills are counted; tests never are.",
+                    font, rowsWidth()));
+        }
+    }
+
     /**
      * Which reset is armed, and when it armed.
      *
@@ -565,6 +821,21 @@ public class ButcherMenuScreen extends Screen {
                 v -> { cfg.cutsceneVolume = v; }, v -> v + "%"));
         rows.add(new NoticeRow("On top of Minecraft's master volume.", font, rowsWidth()));
 
+        rows.add(new SectionRow("Each animation"));
+        rows.add(new SliderRow("snd_vanguard", "Vanguard Thaw (its endings)", cfg.vanguardFinaleVolume, 0, 150, 5,
+                v -> { cfg.vanguardFinaleVolume = v; }, v -> v + "%"));
+        rows.add(new SliderRow("snd_diana", "Diana - The Chopping Block", cfg.dianaVolume, 0, 150, 5,
+                v -> { cfg.dianaVolume = v; }, v -> v + "%"));
+        rows.add(new SliderRow("snd_lava", "Lava fishing - Eruption", cfg.lavaVolume, 0, 150, 5,
+                v -> { cfg.lavaVolume = v; }, v -> v + "%"));
+        rows.add(new SliderRow("snd_blaze", "Inferno Demonlord - Hellion", cfg.blazeVolume, 0, 150, 5,
+                v -> { cfg.blazeVolume = v; }, v -> v + "%"));
+        rows.add(new SliderRow("snd_seraph", "Voidgloom Seraph", cfg.seraphVolume, 0, 150, 5,
+                v -> { cfg.seraphVolume = v; }, v -> v + "%"));
+        rows.add(new SliderRow("snd_fishing", "Fishing Festival - Fin", cfg.fishingVolume, 0, 150, 5,
+                v -> { cfg.fishingVolume = v; }, v -> v + "%"));
+        rows.add(new NoticeRow("The same sliders as in each animation's own group. The Scatha plays at the cutscene volume above.", font, rowsWidth()));
+
         rows.add(new SectionRow("Switches"));
         rows.add(new ToggleRow("Cutscene sound", cfg.cutsceneAudio, () -> {
             cfg.cutsceneAudio = !cfg.cutsceneAudio;
@@ -594,7 +865,53 @@ public class ButcherMenuScreen extends Screen {
             cfg.hideHud = !cfg.hideHud;
             cfg.save();
         }));
-        rows.add(new NoticeRow("Hides the hotbar and chat outright once the veil is dark, and for the whole cutscene. Try it with /butcher test scatha hide.", font, rowsWidth()));
+        rows.add(new NoticeRow("Hides the HUD and chat just before any tracked kill - a Scatha, Diana's creatures, your slayer boss, your lava creature - and for the whole cutscene.", font, rowsWidth()));
+        rows.add(new ToggleRow("Keep health and hotbar", cfg.keepVitals, () -> {
+            cfg.keepVitals = !cfg.keepVitals;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("Your hotbar, hearts, hunger, armour and XP stay on screen, over the cutscene, so a fight is never blind.", font, rowsWidth()));
+        rows.add(new NoticeRow("Hold Backspace to skip a cutscene: a win jumps to its showcase, a bust ends. Rebind it in Controls, under Butcher.", font, rowsWidth()));
+
+        rows.add(new SectionRow("Effects"));
+        rows.add(new ToggleRow("Calmer effects", cfg.calmEffects, () -> {
+            cfg.calmEffects = !cfg.calmEffects;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("No screen shake and softer flashes, in every animation.", font, rowsWidth()));
+        rows.add(new ToggleRow("Chat summary", cfg.chatSummary, () -> {
+            cfg.chatSummary = !cfg.chatSummary;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("One line in chat as each cutscene ends: what dropped, its price, which one of yours it is.", font, rowsWidth()));
+
+        rows.add(new SectionRow("Prices"));
+        rows.add(new ToggleRow("Live prices", cfg.livePrices, () -> {
+            cfg.livePrices = !cfg.livePrices;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("Bazaar prices from api.hypixel.net, auction prices from sky.coflnet.com. Off hides every price and the Vanguard profit window.",
+                font, rowsWidth()));
+        long[] worth = PatternConfig.MIN_WORTH;
+        rows.add(new SliderRow("min_worth", "Only play drops worth at least", cfg.minWorth, 0, worth.length - 1, 1,
+                v -> { cfg.minWorth = v; }, v -> v == 0 ? "Any" : com.butcher.market.CorpseValue.coins(worth[v])));
+        rows.add(new NoticeRow("A win worth less plays as a bust - Diana, the slayers and lava fishing. A price not fetched yet always plays.", font, rowsWidth()));
+
+        rows.add(new SectionRow("Gameplay window"));
+        String[] corners = {"Off", "Top right", "Top left", "Bottom right", "Bottom left"};
+        int corner = Math.max(0, Math.min(4, cfg.gameplayCorner));
+        rows.add(new ValueRow("During a cutscene", corners[corner], corner != 0, () -> {
+            cfg.gameplayCorner = (cfg.gameplayCorner + 1) % corners.length;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("The game, live, in a corner while a cutscene plays - so you can see what is around you. Click to move it or turn it off.", font, rowsWidth()));
+
+        rows.add(new SectionRow("Drop records"));
+        rows.add(new ToggleRow("Record drop events", cfg.recordDrops, () -> {
+            cfg.recordDrops = !cfg.recordDrops;
+            cfg.save();
+        }));
+        rows.add(new NoticeRow("Writes every real kill, corpse and Diana chat line to config/butcher-drops.jsonl, so a rare drop that goes wrong can be replayed. Stays on your computer. /butcher records shows the count.", font, rowsWidth()));
 
         rows.add(new SectionRow("Art"));
         rows.add(new ToggleRow("Write art to config", cfg.writeGeneratedArt, () -> {
@@ -606,17 +923,29 @@ public class ButcherMenuScreen extends Screen {
         rows.add(new SectionRow("Skins and models"));
         rows.add(new NoticeRow("Drop head.png or body.png in config/butcher/skins/, or a .gltf in models/.", font, rowsWidth()));
         rows.add(new NoticeRow("/butcher log, skins, reload.", font, rowsWidth()));
+
+        resetRow(rows, font, "settings", "Reset all settings", ButcherClient::resetSettings);
+        rows.add(new NoticeRow("Every setting back to its default. Your stats stay.", font, rowsWidth()));
         return rows;
     }
 
     // ---------------------------------------------------------------- row kinds
 
     /** The collapsible bar. Its ON/OFF is a readout, not a switch - clicking anywhere opens it. */
+    /** How far a sub-group's header sits in from its parent's (the slayers' bosses). */
+    private static final int SUB_INDENT = 14;
+
     private static final class HeaderRow implements Row {
         private final String id, label; private final Boolean on; private final boolean open;
+        private final int indent;
         /** @param on ON/OFF readout, or null for a group that is not a feature toggle. */
         HeaderRow(String id, String label, Boolean on, boolean open) {
-            this.id = id; this.label = label; this.on = on; this.open = open;
+            this(id, label, on, open, 0);
+        }
+
+        /** A sub-group's header, set in by {@code indent}. */
+        HeaderRow(String id, String label, Boolean on, boolean open, int indent) {
+            this.id = id; this.label = label; this.on = on; this.open = open; this.indent = indent;
         }
         String id() { return id; }
 
@@ -624,6 +953,8 @@ public class ButcherMenuScreen extends Screen {
 
         @Override
         public void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY) {
+            x += indent;
+            w -= indent;
             boolean hover = within(mouseX, mouseY, x, y, x + w, y + height());
             g.fill(x, y, x + w, y + height(), open ? COL_SEL_FILL : (hover ? COL_ROW_HOVER : COL_ROW));
             if (open) g.outline(x, y, w, height(), COL_SEL_BORDER);
@@ -640,7 +971,7 @@ public class ButcherMenuScreen extends Screen {
 
         @Override
         public boolean click(double mx, double my, int x, int y, int w) {
-            return within(mx, my, x, y, x + w, y + height());
+            return within(mx, my, x + indent, y, x + w, y + height());
         }
     }
 

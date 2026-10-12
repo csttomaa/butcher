@@ -80,6 +80,95 @@ public final class ButcherStats {
     public int corpseDryStreak;
     public int worstCorpseDryStreak;
 
+    // ---------------------------------------------------------------- Diana
+    // Her own grind, counted apart again: kills of the four creatures that play the cutscene, and
+    // her drops by name - which also lets an ending say "your 3rd".
+
+    /** Kills that played the Chopping Block, by creature. Null in a file written before this existed. */
+    public java.util.Map<String, Integer> dianaKills = new java.util.HashMap<>();
+    /** Diana drops, by name. */
+    public java.util.Map<String, Integer> dianaDrops = new java.util.HashMap<>();
+    /** Kills since the last drop, and the worst that has ever got. */
+    public int dianaDryStreak;
+    public int worstDianaDryStreak;
+
+    /** One Chopping Block played for real: a kill of {@code creature}, and {@code drop} if something dropped. */
+    public void onDiana(String creature, String drop) {
+        if (dianaKills == null) dianaKills = new java.util.HashMap<>();
+        if (dianaDrops == null) dianaDrops = new java.util.HashMap<>();
+        if (creature != null) dianaKills.merge(creature, 1, Integer::sum);
+        if (drop != null) {
+            dianaDrops.merge(drop, 1, Integer::sum);
+            worstDianaDryStreak = Math.max(worstDianaDryStreak, dianaDryStreak);
+            dianaDryStreak = 0;
+        } else {
+            dianaDryStreak++;
+            worstDianaDryStreak = Math.max(worstDianaDryStreak, dianaDryStreak);
+        }
+        save();
+    }
+
+    public int dianaKillCount(String creature) {
+        return dianaKills == null ? 0 : dianaKills.getOrDefault(creature, 0);
+    }
+
+    /** How many of this drop the player has had, the current one included. */
+    public int dianaDropCount(String drop) {
+        return dianaDrops == null ? 0 : dianaDrops.getOrDefault(drop, 0);
+    }
+
+    /** Wipe only Diana's numbers. */
+    public void resetDiana() {
+        dianaKills = new java.util.HashMap<>();
+        dianaDrops = new java.util.HashMap<>();
+        dianaDryStreak = 0;
+        worstDianaDryStreak = 0;
+        save();
+    }
+
+    // ---------------------------------------------------------------- the later sources
+    // Hellion ("blaze"), the Seraph ("seraph"), Eruption ("lava") and Fin ("shark"): each counts its real runs,
+    // its drops by name and its dry streak, so every reveal can say "your Nth" (the review, A8).
+
+    public static final class Source {
+        public int kills;
+        public java.util.Map<String, Integer> drops = new java.util.HashMap<>();
+        public int dry, worstDry;
+    }
+
+    public java.util.Map<String, Source> sources = new java.util.HashMap<>();
+
+    public Source source(String key) {
+        if (sources == null) sources = new java.util.HashMap<>();
+        Source s = sources.computeIfAbsent(key, k -> new Source());
+        if (s.drops == null) s.drops = new java.util.HashMap<>();
+        return s;
+    }
+
+    /** One real run of {@code key}: {@code drop} the win's name, or null for a bust. */
+    public void onSource(String key, String drop) {
+        Source s = source(key);
+        s.kills++;
+        if (drop != null) {
+            s.drops.merge(drop, 1, Integer::sum);
+            s.worstDry = Math.max(s.worstDry, s.dry);
+            s.dry = 0;
+        } else {
+            s.dry++;
+            s.worstDry = Math.max(s.worstDry, s.dry);
+        }
+        save();
+    }
+
+    public int sourceDropCount(String key, String drop) {
+        return source(key).drops.getOrDefault(drop, 0);
+    }
+
+    public void resetSource(String key) {
+        if (sources != null) sources.remove(key);
+        save();
+    }
+
     private static ButcherStats instance;
 
     public static ButcherStats get() {
@@ -235,6 +324,10 @@ public final class ButcherStats {
         corpseItems = fresh.corpseItems;
         corpseDryStreak = fresh.corpseDryStreak;
         worstCorpseDryStreak = fresh.worstCorpseDryStreak;
+        dianaKills = fresh.dianaKills;
+        dianaDrops = fresh.dianaDrops;
+        dianaDryStreak = fresh.dianaDryStreak;
+        worstDianaDryStreak = fresh.worstDianaDryStreak;
         save();
     }
 

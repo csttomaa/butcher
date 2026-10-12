@@ -1,25 +1,25 @@
 # Diana — Mythological Ritual drop animation
 
-Add a drop cutscene for Diana's Mythological Ritual. One cutscene, "The Judgement",
-fired on Legendary-and-above mythological creatures. No per-burrow animation — a chain
-is 4–10 burrows back to back and anything that plays on every dig makes the event
-unplayable.
+Add a drop cutscene for Diana's Mythological Ritual. One cutscene, **"The Thread"**,
+fired on Legendary-and-above mythological creatures plus Minos Champion. No per-burrow
+animation — a chain is 4–10 burrows back to back and anything that plays on every dig
+makes the event unplayable.
 
 Read `CLAUDE.md` first, then `lavafishing.md` if it is in the repo. This is the third
 creature family, so the shared structure is now worth factoring — see §11.
 
-**Two things matter more than shipping fast:**
+**Three things matter more than shipping fast:**
 
-1. It has to *look* the way it is described here, not approximately like it. See §9.
-2. It has to say the *right thing*. A previous version of this mod played the wrong
+1. **The camera never moves.** One locked-off shot, start to finish. See §4.
+2. It has to *look* the way it is described here, not approximately like it. See §9.
+3. It has to say the *right thing*. A previous version of this mod played the wrong
    outcome on a real Scatha pet drop. See §10. **Build §10 first.**
 
 ---
 
 ## 1. The event
 
-Verify all of this in game and against the wiki before writing code against it. The
-creature roster in particular has grown over time and the sources disagree.
+Verify all of this in game and against the wiki before writing code against it.
 
 Diana is elected mayor (or Jerry with Perkpocalypse). With a Griffin pet equipped and a
 spade in hand, you dig **Griffin Burrows** in the Hub. Burrows come in chains:
@@ -34,42 +34,40 @@ spade in hand, you dig **Griffin Burrows** in the Hub. Burrows come in chains:
 Each burrow is **75% a mythological creature, 25% treasure**. The Griffin pet's rarity
 gates which creatures can appear.
 
-**The creatures**, by rarity tier, with their signature drop:
+**Only these creatures are in scope.** The Common through Rare tiers and the Minotaur
+are deliberately excluded — they are not worth a cutscene and they spawn constantly.
+Do not add them, do not write a table entry for them, do not fire on them.
 
-| creature | tier | signature drop | rate |
+| creature | tier | drop | rate |
 | --- | --- | --- | --- |
-| Minos Hunter | Common | Hilt of Revelations | 0.25–2% |
-| Siamese Lynxes | Common | Crochet Tiger Plushie | 0.05–0.4% |
-| Stranded Nymph | Uncommon | Washed-up Souvenir | 0.2–0.5% |
-| Cretan Bull | Uncommon | Cretan Urn | 0.2–0.5% |
-| Harpy | Rare | Antique Remedies | 0.35–0.6% |
-| Gaia Construct | Rare | Dwarf Turtle Shelmet | 0.35–0.6% |
-| Minotaur | Epic | Daedalus Stick | 0.04–0.08% |
 | Minos Champion | Epic | Minos Relic | 0.02–0.04% |
 | Sphinx | Legendary | Brain Food | 0.25–0.5% |
-| **Minos Inquisitor** | Legendary | Enchanted Book (Chimera I) | 1–1.25% |
-| Manticore | Mythic | Fateful Stinger / Manti-core | 0.5% / 0.2% |
-| King Minos | Mythic | Crown of Greed / Shimmering Wool | 2% / 0.2% |
+| Minos Inquisitor | Legendary | Enchanted Book (Chimera I) | 1–1.25% |
+| Minos Inquisitor | Legendary | Mythological Dye | 1 in 50,000 |
+| Manticore | Mythic | Fateful Stinger | 0.5% |
+| Manticore | Mythic | Manti-core | 0.2% |
+| King Minos | Mythic | Crown of Greed | 2% |
+| King Minos | Mythic | Shimmering Wool | 0.2% |
 
-Mythological Dye is 1 in 50,000. Every creature also drops Ancient Claws, Enchanted
-Gold Ingots and coins, guaranteed.
+Every one of them also drops Ancient Claws, Enchanted Gold Ingots and coins,
+guaranteed. Confirm whether Mythological Dye drops from creatures other than the
+Inquisitor — the sources are not clear and it changes one row.
 
 A Minos Inquisitor is ~1.30% of mobs (about 1 in 77) on a Legendary+ Griffin, with
 50,000,000 HP (80M on Mythic) and 50% magic damage resistance.
 
-**So the bust rate is 98%+ on every creature worth watching.** Same conclusion as
-Jawbus: the losing path is the common path, and it is the one that has to feel good.
+**So the bust rate is 97%+ on every creature here.** Same conclusion as Jawbus: the
+losing path is the common path, and it is the one that has to feel good.
 
 ---
 
 ## 2. When the cutscene fires
 
-**Legendary and above** — Sphinx, Minos Inquisitor, Manticore, King Minos — plus **any
-actual rare drop from any creature**, so a Minos Relic off a Champion still gets the
-full treatment.
+The eight rows above, and nothing else. Per-creature toggles in the menu, shipped on by
+default for all five creatures.
 
-Put per-creature toggles in the menu, shipped with that as the default. Nothing fires
-on Common through Epic kills unless the drop itself is rare.
+Minos Champion is in despite being Epic, purely because the Minos Relic is worth it.
+That is the only sub-Legendary exception — do not generalise it into "any Epic".
 
 ---
 
@@ -89,64 +87,74 @@ prefixes, so match on the creature name, not the prefix. Capture real strings be
 writing patterns against them (§10).
 
 That gives the creature identity up front, which is what decides whether the cutscene
-fires at all. For the kill itself and the drop, reuse what already exists: these mobs
-carry HP nametags, so `ScathaWormTracker`'s armour-stand scan works with a different
-name filter, and `HotbarDropWatcher` handles the inventory diff. **Reuse both, do not
-fork them.**
+fires at all. For the kill and the drop, reuse what exists: these mobs carry HP
+nametags, so `ScathaWormTracker`'s armour-stand scan works with a different name
+filter, and `HotbarDropWatcher` handles the inventory diff. **Reuse both, do not fork
+them.**
 
 Open the cutscene the instant the kill is detected with the outcome pending, as
 `openCutsceneOnKill` does now. Do not wait for the drop.
 
 Suppress the drop chat lines while the cutscene runs via the existing `ALLOW_CHAT` /
-`ALLOW_GAME` hooks. Seeing the drop in chat before the scales settle ruins it.
-
-The chain position is worth keeping even without a per-burrow animation: carve the
-current position into the chamber wall (§5) so the cutscene knows where in the run it
-is. Grace note, not a feature.
+`ALLOW_GAME` hooks. Seeing the drop in chat before the thread goes taut ruins it.
 
 ---
 
-## 4. The animation — "The Judgement"
+## 4. The animation — "The Thread"
 
-In the myth, King Minos is a judge of the dead. That is the whole idea: you are not
-opening a box, you are being judged, and the verdict is your drop.
+Ariadne's thread. You hold one end; something out in the dark has the other.
 
-The camera falls into the burrow. Underneath is a chamber. A colossal seated figure
-sits in shadow above, and a pair of bronze scales hangs in front of you. Your kill goes
-on the pan. The scales sway.
+**One fixed shot for the entire cutscene.** The camera never moves, never pans, never
+falls. Nothing in the projection animates. This is a hard constraint, not a preference —
+it is what makes the cutscene achievable and hard to get visibly wrong.
+
+### The shot
+
+- Bottom third: the ground at the burrow's edge, lit warm. A loose pile of thread.
+- Everything above: darkness, with the faintest suggestion of walls.
+- The thread runs from bottom-centre away to a vanishing point near the middle of frame.
+
+### The whole animation is two numbers
+
+- **`payout`** — how far along the thread the bead of light has travelled, 0→1
+- **`tension`** — 0 is a deep sag, 1 is dead straight
+
+A polyline whose sag is driven by `tension`, and a glow whose position along it is
+driven by `payout`. That is the entire cutscene. Do not add a third mechanism.
 
 ### Beats
 
 | ms | beat |
 | --- | --- |
-| 0–800 | **Fall.** Camera drops through the burrow. Earth walls rush past, light growing from below. Wind, then stone. |
-| 800–2000 | **The chamber.** It opens out. Braziers on the floor light everything from underneath. The seated figure is a silhouette above — never fully lit, just a knee, a hand, the edge of a jaw. The scales hang centre-frame, empty, barely moving. |
-| 2000–2600 | **The offering.** What the creature left drops onto the left pan. It sinks. The beam begins to turn. |
-| 2600–4200 | **The sway.** The pans swing, slow, and hover near balance. It rises toward the tipping point and falls back — more than once. **This is the tension.** Light rises from beneath the pans, colour-coded (§5). A low choral drone under stone. |
-| 4200–4350 | **The verdict.** The chamber light snaps out. Silence for a beat. |
-| 4350+ | **Branch** — below. |
+| 0–1000 | **Pay out.** Coils unspool from the pile. The bead of light runs away down the thread, shrinking, and disappears into the dark. `payout` 0→1, `tension` low. A dry whirring. |
+| 1000–2600 | **The wait.** The thread hangs slack, barely moving. **Two or three faint tugs** — the sag jumps and settles. Colour appears in the sag: this is the tell (§5). Room tone, a distant scrape. |
+| 2600–2900 | **It goes taut.** The sag pulls out fast, the thread snaps dead straight. `tension` → 1. One hard screen shake, white flash, then dark. |
+| 2900+ | **Branch** — below. |
 
-**Everything before 4350ms is byte-identical on every outcome.** The sway is a fixed,
-scripted sequence — same angles, same number of near-misses, same timings, win or lose.
-The blackout at the verdict is what conceals the branch, exactly as the bite does in
-`lavafishing.md`. If a win ever swings higher or hovers longer than a loss, the
-animation is dead the first time a player notices, so do not let anything
-outcome-dependent happen before 4350ms.
+**Everything before 2900ms is byte-identical on every outcome.** Same tug count, same
+tug timings, same sag depth, win or lose. The flash at the snap conceals the branch,
+exactly as the bite does in `lavafishing.md`. If a win ever tugs harder or waits longer
+than a loss, the animation is dead the first time a player notices.
 
-### Crash (~98%)
+The screen shake is a 2D offset applied at draw time. It is not a camera move and must
+not become one.
 
-- 4350–4600: light returns, dim. The pan is already down — it slammed while dark.
-- 4600–5200: the item slides off into shadow. Stone grinding, the beam creaking to rest.
-- 5200–5700: fade. The drone dies.
+### Crash (~97%)
 
-**Under 1.5 seconds from the verdict.** No consolation flourish, no sad sting. It ends.
+- 2900–3200: light returns. The thread is already lying slack on the ground — it went
+  loose while the screen was dark.
+- 3200–3800: the end comes into view, cut clean and frayed. Nothing on it.
+- 3800–4100: fade. The room tone dies.
 
-### Explode (~2%)
+**Under 1.2 seconds from the flash.** No consolation flourish, no sad sting. It ends.
 
-- 4350–4700: the pan tips **up**. Gold floods from beneath the scales and washes the
-  chamber. The figure above shifts for the first time.
-- 4700–6200: the item lifts off the pan, rising, and settles centre-frame, lit.
-- 6200–8000: it holds, glowing, name beneath it. Let it breathe.
+### Explode (~3%)
+
+- 2900–3200: light returns on a thread pulled tight and humming.
+- 3200–4600: something is sliding down the thread toward you out of the dark, growing as
+  it comes, gathering light. This is a sprite scaling up along the fixed thread path —
+  **not** a camera push.
+- 4600–6000: it arrives centre-frame, lit, name beneath it. Let it breathe.
 
 Fast losses, slow wins. The asymmetry is the point.
 
@@ -154,48 +162,51 @@ Fast losses, slow wins. The asymmetry is the point.
 
 ## 5. The tell — **agree this with me before building it**
 
-During the sway, light rises from beneath the pans. Its colour is what the player
-reads. Diana already has a proximity colour language in the burrow particles —
-**yellow → red → black** — and borrowing it makes the cutscene feel native to the event
-rather than bolted on.
+During the wait, colour appears in the sagging thread. Diana already has a proximity
+colour language in the burrow particles — **yellow → red → black** — and borrowing it
+makes the cutscene feel native to the event rather than bolted on.
 
 **Do not pick these yourself and ship them.** Come back to me with concrete proposals —
-hex values, and how each behaves (steady, pulsing, climbing, bleeding past the pans) —
-for the baseline and for each rare drop, and get my sign-off. Show swatches if you can.
-This is the part the player reads fastest and the part I most want a say in.
+hex values, and how each behaves (steady, pulsing, climbing the thread, bleeding off
+it) — for the baseline and for each of the eight drops above, and get my sign-off. Show
+swatches if you can. This is what the player reads fastest and the part I most want a
+say in.
 
 Two rules hold whatever we pick:
 
 **The "something is coming" colour must sometimes lie.** A percentage of losses have to
-show it and still bust, tuned so it is roughly a coin flip rather than a promise. Rate
-goes in config so I can move it.
+show it and still bust, tuned so it is roughly a coin flip rather than a promise. Put
+the rate in config so I can move it.
 
 **The rarest colours never fake.** Whatever we assign to Minos Relic, Crown of Greed and
-Mythological Dye only ever appears when that thing actually dropped.
+Mythological Dye appears only when that thing actually dropped.
 
-The light is a tint on the glow sprite — `blit`'s 11-arg ARGB overload does all of it.
-No per-colour textures.
+The colour is a tint on the thread and glow sprites — `blit`'s 11-arg ARGB overload does
+all of it. No per-colour textures.
 
 ---
 
 ## 6. Art
 
-Marble, bronze, dust, and torchlight from below. A completely different palette from
-the cave and the lava lake — cold stone lit warm from underneath, heavy shadow above.
+Warm stone and lamplight at the bottom of frame, cold dark above. Far less to draw than
+the other two cutscenes, which is the point.
 
-- **The scales** are the hero object. A beam on a central pivot, two pans on chains.
-  That is the same hinge maths as the Jawbus jaw — one rotation angle drives the beam,
-  and the pans hang plumb from their ends. Build it in the mesh pipeline; the
-  cel-shading and screen-space outline come free from `MeshRenderer`. Bronze, hammered,
-  slightly asymmetric — it should look made, not machined.
-- **The figure** is never resolved. A silhouette, and at most one lit edge. The moment
-  you draw its face it stops being a judge and starts being a monster. Keep it dark and
-  let the player's eye fill it in.
-- **The chamber** reuses the light-map technique from `gen_cave.py`, re-palettised:
-  bright at the braziers on the floor, steep falloff, everything above in shadow. Do not
+- **The thread** is the hero object and almost the only one. A catenary sag between two
+  fixed points, tessellated into a polyline, drawn with the tint. Give it slight
+  irregularity — a real thread is not a perfect curve — and a faint fuzz of fibres so it
+  does not read as a vector stroke.
+- **The coil pile** shrinks as `payout` climbs. A handful of overlapping loops; it does
+  not need to be simulated, only to look disturbed.
+- **The dark** is most of the frame. Use the light-map technique from `gen_cave.py`,
+  re-palettised: bright at the ground lamps, steep falloff, nothing lit above. Do not
   light it uniformly — that produced beige soup in the cave and it will produce grey
   soup here. Blur alpha only, as documented.
-- **Dust** in the light shafts. Cheap, and it sells the scale of the room.
+- **Dust** drifting in the lit band at the bottom. Cheap, and it stops the dark reading
+  as a flat fill.
+
+The mesh pipeline is **optional** here. If the thread is easier as a 2D path with the
+blit tint, do it that way — this cutscene was chosen specifically because it does not
+need rigged geometry.
 
 All art goes through a `tools/gen_*.py` script. Do not hand-paint a PNG. Route
 replaceable pieces through `ArtOverrides` like everything else.
@@ -206,23 +217,20 @@ replaceable pieces through `ArtOverrides` like everything else.
 
 Through the synthesiser in `audio/`:
 
-- Fall: wind, rising, cut off hard on landing.
-- Chamber: a low choral drone, barely moving.
-- Sway: chain creak and stone, tightening as the pans near balance. Identical on every
-  outcome.
-- Verdict: one beat of complete silence. The silence is the effect — do not fill it.
-- Crash: grinding, the beam settling, the drone dying.
-- Win: the flood. Bright, loud, clearly a different instrument from anything in the
-  build-up.
+- Pay out: a dry whirring, slowing as it runs out.
+- The wait: room tone, and a distant scrape for each tug. Identical on every outcome.
+- The snap: one hard crack, then silence. The silence is the effect — do not fill it.
+- Crash: the slack thread settling. Almost nothing.
+- Win: the hum of a tight line, then the flood as the item arrives — bright, loud, and
+  clearly a different instrument from anything in the build-up.
 
 ---
 
 ## 8. Integration
 
 - **Menu.** Add a **Diana** section to `/butcher` alongside Scatha Gambling and Lava
-  Fishing: on/off, duration slider, per-creature trigger toggles (default Legendary+).
-  Hand-drawn rows rebuilt from config every frame, as the menu already works. No vanilla
-  widgets.
+  Fishing: on/off, duration slider, per-creature toggles. Hand-drawn rows rebuilt from
+  config every frame, as the menu already works. No vanilla widgets.
 - **Config.** New fields on `PatternConfig`. Do not rename existing ones —
   `animationMode` is still `SCOPE` for the cleaver and renaming it breaks every config
   file on disk.
@@ -235,21 +243,21 @@ Through the synthesiser in `audio/`:
 
 ## 9. Making it look right
 
+`diana_storyboard.png` sits beside this file — six panels, one per beat. Match the
+staging: one locked-off frame throughout, the thread running to a vanishing point near
+centre, the lit band only at the bottom.
+
 §4 is a specification, not a mood board. Where a number is given, hit the number. Where
 one is not, propose one and show me before it is load-bearing.
 
 **Do not build this blind and hand it to me to look at.** Build a way to see it first:
 
 1. **A Python previewer.** The art is generated in Python already. Write
-   `tools/preview_diana.py` that composites the same sprites at the same timings and
-   transforms into a contact sheet and an animated GIF. Run it, **look at the output
-   yourself, and iterate there** before writing Java. Nearly every visual problem this
-   mod has had would have been obvious in a contact sheet and instead cost a round trip
-   through me.
-2. **The projection is deterministic.** Render the scales mesh to PNG from Python with
-   the same projection so the beam pivot, the plumb of the chains and the silhouette can
-   be checked without launching the game.
-3. **An in-game frame dump.** `/butcher dump diana <outcome>` writes every Nth frame to
+   `tools/preview_diana.py` that plots the thread from the same `payout` / `tension`
+   curves the Java will use and writes a contact sheet and an animated GIF. Because the
+   whole cutscene is two numbers, the previewer is nearly exact — **iterate there until
+   it looks right**, then port the curves. Do not write the Java first.
+2. **An in-game frame dump.** `/butcher dump diana <outcome>` writes every Nth frame to
    `screenshots/`. I will run it once per outcome and hand you the PNGs. That is the
    ground truth; the previewer is how you get close to it.
 
@@ -262,17 +270,17 @@ downscale, and repainting one frame of a set that shares a pivot.
 
 ## 10. Making it correct — **build this first**
 
-A real Scatha pet dropped in game and the cutscene played the wrong outcome. That is
-the worst failure this mod can have: the one moment the whole thing exists for, and it
-lied about it.
+A real Scatha pet dropped in game and the cutscene played the wrong outcome. That is the
+worst failure this mod can have: the one moment the whole thing exists for, and it lied
+about it.
 
 The cause is the shape of the detection, not a typo. The inventory diff is gated on a
 time window and the common outcome is reached **by elimination**, so anything the diff
-misses — a drop landing after the window, one absorbed by a sack, one in a slot the
-diff does not cover — does not produce an error. It produces a confident wrong answer.
+misses — a drop landing after the window, one absorbed by a sack, one in a slot the diff
+does not cover — does not produce an error. It produces a confident wrong answer.
 
 If the recorder and replay harness from `lavafishing.md` already exist, extend them to
-Diana and skip to §10.5. If they do not, build them now:
+Diana and skip to §10.5. If not, build them now:
 
 **1. Never infer by elimination.** If the chain cannot positively identify what dropped,
 it says so — an `UNKNOWN` outcome with a neutral ending. A neutral ending on a rare drop
@@ -290,9 +298,9 @@ detector and prints what it decides now and why, plus a JUnit test that replays 
 whole corpus against stored expectations. The next real Relic becomes a permanent
 regression test.
 
-**4. Synthesise the branches we have not seen.** Hand-write fixture records for every
-Diana outcome from the real message formats and run them through the same replay path,
-so every branch is tested on day one.
+**4. Synthesise the branches we have not seen.** Hand-write fixture records for all
+eight drops above from the real message formats and run them through the same replay
+path, so every branch is tested on day one.
 
 **5. Two test commands, kept separate.** `/butcher test ...` forces the animation and
 bypasses detection — that is for art. `/butcher simulate ...` injects at the
@@ -308,8 +316,9 @@ current chain position and the current verdict.
 **§10.5 — Diana specifics.** The creature identity comes from a chat line, so a missed
 or misparsed line means the cutscene fires on the wrong creature or not at all. Treat an
 unrecognised creature name as `UNKNOWN` and log the raw line — do not fall through to a
-default. Chains overlap with kills, so a burrow dug while a previous creature is still
-alive must not reassign the pending cutscene.
+default, and in particular do not fall through to one of the five tracked creatures.
+Chains overlap with kills, so a burrow dug while a previous creature is still alive must
+not reassign the pending cutscene.
 
 The honest limit on all of it: none of this proves Hypixel's messages are what we think.
 Capture real strings before matching them, and treat any pattern not confirmed against a
@@ -330,14 +339,16 @@ actually repeated twice:
   keyed by creature. Creatures become entries in a table, not hard-coded branches.
 - **Menu and config.** Each event gets a section of the same shape.
 
-What stays local: the scales, the chamber, the lava lake, the jaw, the cave, and every
-timing number. Do not abstract the art or the beats — they are not the same and
-pretending they are will flatten all three into one cutscene with different textures.
+What stays local: the thread, the lava lake, the jaw, the cave, and every timing number.
+Do not abstract the art or the beats — they are not the same, and pretending they are
+will flatten all three into one cutscene with different textures.
 
 ---
 
 ## 12. Do not break
 
+- **The camera never moves.** No pans, no pushes, no falls, no projection animation. If
+  a change adds one, the change is wrong.
 - The cutscene opens on kill with the outcome pending, and the watcher keeps ticking
   while it waits. Load-bearing.
 - `"defaultRequire": 1` in the mixins json. A mixin whose target does not resolve must
@@ -345,6 +356,6 @@ pretending they are will flatten all three into one cutscene with different text
 - Verify against the real mapped Minecraft jar before handing anything over, per
   `CLAUDE.md`. 26.2 is not 26.1.
 - The pre-branch segment is identical on every outcome. If a change makes a win
-  detectable before the verdict, the change is wrong.
+  detectable before the snap, the change is wrong.
 - No outcome is ever reached by elimination.
-- Nothing plays on an ordinary burrow dig. A chain is up to ten in a row.
+- Nothing plays on an ordinary burrow dig, or on any creature outside the five listed.

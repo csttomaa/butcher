@@ -1,4 +1,6 @@
 {
   "text.butcher.pet_secured": "PET SECURED",
-  "text.butcher.blocked": "BLOCKED"
+  "text.butcher.blocked": "BLOCKED",
+  "key.butcher.skip": "Skip the cutscene (hold)",
+  "key.category.butcher.main": "Butcher"
 }

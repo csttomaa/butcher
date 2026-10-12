@@ -3,7 +3,7 @@ package com.butcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.butcher.anim.AnimationManager;
 import com.butcher.anim.ButcherHudRenderer;
-import com.butcher.anim.PreKillHider;
+import com.butcher.config.ButcherStats;
 import com.butcher.config.PatternConfig;
 import com.butcher.config.PatternConfig.AnimationMode;
 import com.butcher.detect.DecisionLog;
@@ -26,7 +26,6 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -81,9 +80,55 @@ public class ButcherClient implements ClientModInitializer {
         client.execute(() -> client.gui.setScreen(screen));
     }
 
+    /** Diana's cutscene, "The Chopping Block", while it plays. */
+    private static com.butcher.gui.ChopScreen currentChop;
+
+    private static boolean chopActive() {
+        return currentChop != null && currentChop.isActive();
+    }
+
+    /**
+     * Opens "The Chopping Block" in the HUD (CutsceneHud).
+     *
+     * @param creature whose head goes on the block - the kill's; null picks the drop's own
+     *                 creature, or any of the four for a bust
+     */
+    public static void openChop(com.butcher.anim.ChopTimeline.Verdict verdict,
+                                com.butcher.anim.ChopTimeline.Creature creature, boolean test) {
+        if (!test) {
+            // The menu's Diana switches. Tests always play, whatever they say.
+            if (config != null && !dianaPlays(verdict, creature)) return;
+            // Counted before the screen is made, so its "your Nth" line includes this one. A kill
+            // (verdict still null) is counted when its drop is known - ChopScreen.resolve.
+            if (verdict != null) {
+                ButcherStats.get().onDiana(creature == null ? null : creature.name(),
+                        verdict.win() ? com.butcher.render.DianaItems.name(verdict) : null);
+            }
+        }
+        com.butcher.gui.ChopScreen screen = new com.butcher.gui.ChopScreen(verdict, creature, test);
+        currentChop = screen;
+        com.butcher.render.CutsceneHud.show(screen);
+    }
+
+    /** Whether the menu lets this kill or drop play the Chopping Block. */
+    private static boolean dianaPlays(com.butcher.anim.ChopTimeline.Verdict verdict, com.butcher.anim.ChopTimeline.Creature creature) {
+        if (!config.dianaAnimation) return false;
+        if (verdict == com.butcher.anim.ChopTimeline.Verdict.DYE) return config.dianaDye;
+        if (verdict == com.butcher.anim.ChopTimeline.Verdict.RELIC) return config.dianaChampion;
+        if (creature == null) return true;
+        return switch (creature) {
+            case SPHINX -> config.dianaSphinx;
+            case INQUISITOR -> config.dianaInquisitor;
+            case MANTICORE -> config.dianaManticore;
+            case KING_MINOS -> config.dianaKingMinos;
+            case CHAMPION -> config.dianaChampion;
+        };
+    }
+
     private static boolean thawActive() {
         return currentThaw != null && currentThaw.isActive();
     }
+
     /** The kill a cutscene has already been opened for, so one death opens one screen. */
     private static long lastOpenedKill = -1;
 
@@ -98,6 +143,221 @@ public class ButcherClient implements ClientModInitializer {
      * so when something comes out wrong this narration is the only evidence there is.
      */
     public static final DecisionLog decisions = new DecisionLog();
+
+    /** The player's own Great White Sharks: a kill with nothing worth announcing plays Fin's bust. */
+    private static final com.butcher.detect.SharkWatcher sharkWatcher = new com.butcher.detect.SharkWatcher(
+            decisions, () -> {
+                ButcherStats.get().onSource("shark", null);
+                if (config == null || config.fishingBust) com.butcher.render.FinPopup.showBust();
+                else decisions.note("§8Fishing: bust not shown - turned off in the menu");
+            });
+
+    /** Lava fishing's rare creatures: a kill of ours opens Eruption, its drop line fills it in. */
+    private static final com.butcher.detect.LavaWatcher lavaWatcher = new com.butcher.detect.LavaWatcher(
+            decisions, new com.butcher.detect.LavaWatcher.Listener() {
+        @Override
+        public void kill(com.butcher.anim.EruptionTimeline.Creature creature, String why) {
+            if (!lavaCreatureOn(creature)) {
+                decisions.note("§8Lava: " + creature.title + " is turned off in the menu");
+                return;
+            }
+            lastLavaKill = creature;
+            if (bustsOff("lava", "Lava: " + creature.title)) return;
+            if (isAnimationPlaying()) {
+                decisions.note("§8Lava: not opened for the kill - a cutscene is already playing (a win still plays when its drop comes)");
+                return;
+            }
+            openEruption(creature, null, false);
+        }
+
+        @Override
+        public void resolve(com.butcher.anim.EruptionTimeline.Drop drop, String line) {
+            if (drop.win() && underFloor(drop.id)) drop = com.butcher.anim.EruptionTimeline.Drop.BUST;
+            if (currentEruption != null && currentEruption.isActive() && currentEruption.pending() && !currentEruption.isTest()) {
+                currentEruption.resolve(drop);
+                decisions.note("§aLava: the kill's drop is " + (drop.win() ? drop.title : "nothing the animation plays - bust"));
+            } else if (drop.win() && lastLavaKill != null) {
+                // Its kill never opened (something else was playing, or it was skipped): the win plays now.
+                killKnown(lastLavaKill, drop, line);
+            }
+        }
+
+        @Override
+        public void killKnown(com.butcher.anim.EruptionTimeline.Creature creature, com.butcher.anim.EruptionTimeline.Drop drop, String line) {
+            if (drop != com.butcher.anim.EruptionTimeline.Drop.CARMINE && !lavaCreatureOn(creature)) {
+                decisions.note("§8Lava: " + creature.title + " is turned off in the menu");
+                return;
+            }
+            if (currentEruption != null && currentEruption.isActive() && currentEruption.pending() && !currentEruption.isTest()
+                    && currentEruption.creature() == creature) {
+                currentEruption.resolve(drop);
+                return;
+            }
+            com.butcher.anim.EruptionTimeline.Drop dr = drop.win() && underFloor(drop.id) ? com.butcher.anim.EruptionTimeline.Drop.BUST : drop;
+            if (!dr.win() && bustStyle("lava") == 2) {
+                decisions.note("§8Lava: " + creature.title + "'s bust not played - busts are off");
+                return;
+            }
+            Runnable open = () -> openEruption(creature, dr, false);
+            if (isAnimationPlaying()) {
+                if (!makeRoom(drop.win(), "Lava: " + drop.title)) waitForTurn(open, drop.win(), "Lava: " + (drop.win() ? drop.title : creature.title + "'s bust"));
+                else open.run();
+                return;
+            }
+            open.run();
+        }
+    });
+
+    /** The last lava creature of ours that died, opened or not: whose a late win is. */
+    private static com.butcher.anim.EruptionTimeline.Creature lastLavaKill;
+
+    private static boolean lavaCreatureOn(com.butcher.anim.EruptionTimeline.Creature c) {
+        if (config == null) return true;
+        return switch (c) {
+            case JAWBUS -> config.lavaJawbus;
+            case THUNDER -> config.lavaThunder;
+            case RAGNAROK -> config.lavaRagnarok;
+            case SCUTTLER -> config.lavaScuttler;
+            case PLHLEGBLAST -> true;
+        };
+    }
+
+    /** The player's own tier IV Voidgloom Seraph: its kill opens the Seraph's Glyph, its drop line fills it in. */
+    private static final com.butcher.detect.SeraphWatcher seraphWatcher = new com.butcher.detect.SeraphWatcher(
+            decisions, new com.butcher.detect.SeraphWatcher.Listener() {
+        @Override
+        public void kill() {
+            if (bustsOff("seraph", "Seraph: the kill")) return;
+            if (isAnimationPlaying()) {
+                decisions.note("§8Seraph: not opened for the kill - a cutscene is already playing");
+                return;
+            }
+            openSeraph(null, false);
+        }
+
+        @Override
+        public void resolve(com.butcher.anim.SeraphTimeline.Drop drop, String line) {
+            drop = seraphFloor(drop);
+            if (currentSeraph != null && currentSeraph.isActive() && currentSeraph.pending() && !currentSeraph.isTest()) {
+                currentSeraph.resolve(drop);
+                decisions.note("§aSeraph: the kill's drop is " + (drop.win() ? drop.title : "nothing the animation plays - bust"));
+            } else if (drop.win()) {
+                killKnown(drop, line);
+            }
+        }
+
+        @Override
+        public void killKnown(com.butcher.anim.SeraphTimeline.Drop drop, String line) {
+            com.butcher.anim.SeraphTimeline.Drop d = seraphFloor(drop);
+            if (!d.win() && bustStyle("seraph") == 2) return;
+            Runnable open = () -> openSeraph(d, false);
+            if (isAnimationPlaying()) {
+                if (!makeRoom(d.win(), "Seraph: " + d.title)) waitForTurn(open, d.win(), "Seraph: " + (d.win() ? d.title : "the bust"));
+                else open.run();
+                return;
+            }
+            open.run();
+        }
+
+        @Override
+        public void spawned() {
+            // The four small endings play only while their drop is worth 500k or more: have the prices in hand.
+            if (config != null && !config.livePrices) return;
+            com.butcher.market.Bazaar.request();
+            for (com.butcher.anim.SeraphTimeline.Drop d : com.butcher.anim.SeraphTimeline.Drop.values()) {
+                if (com.butcher.detect.SeraphDrops.floored(d)) com.butcher.market.LivePrice.request(d.priceId);
+            }
+        }
+    });
+
+    /** The 500k floor (the user's call): a floored drop worth less, or of unknown worth, plays as a bust. */
+    private static com.butcher.anim.SeraphTimeline.Drop seraphFloor(com.butcher.anim.SeraphTimeline.Drop d) {
+        if (d != null && d.win() && underFloor(d.priceId)) return com.butcher.anim.SeraphTimeline.Drop.BUST;
+        if (d == null || !com.butcher.detect.SeraphDrops.floored(d)) return d;
+        Double sell = com.butcher.market.Bazaar.sell(d.priceId);
+        Long bin = com.butcher.market.LivePrice.cached(d.priceId);
+        double worth = sell != null && sell > 0 ? sell : (bin != null ? bin : -1);
+        if (worth >= 500_000) return d;
+        decisions.note("§8Seraph: " + d.title + " is under the 500k floor (" + (worth < 0 ? "no price" : String.format("%,d", Math.round(worth))) + ") - bust");
+        return com.butcher.anim.SeraphTimeline.Drop.BUST;
+    }
+
+    /** The player's own tier IV Inferno Demonlord: its kill opens Hellion, its drop line fills it in. */
+    private static final com.butcher.detect.HellionWatcher hellionWatcher = new com.butcher.detect.HellionWatcher(
+            decisions, new com.butcher.detect.HellionWatcher.Listener() {
+        @Override
+        public void kill() {
+            if (bustsOff("blaze", "Blaze: the kill")) return;
+            if (isAnimationPlaying()) {
+                decisions.note("§8Blaze: not opened for the kill - a cutscene is already playing");
+                return;
+            }
+            // Opened the moment it dies, drop unknown; the drop line fills it in before the reveal.
+            openHellion(null, false);
+        }
+
+        @Override
+        public void resolve(com.butcher.anim.HellionTimeline.Drop drop, String line) {
+            if (drop.win() && underFloor(drop.id)) drop = com.butcher.anim.HellionTimeline.Drop.BUST;
+            if (currentHellion != null && currentHellion.isActive() && currentHellion.pending() && !currentHellion.isTest()) {
+                currentHellion.resolve(drop);
+                decisions.note("§aBlaze: the kill's drop is " + (drop.win() ? drop.title : "nothing the animation plays - bust"));
+            } else if (drop.win()) {
+                killKnown(drop, line);
+            }
+        }
+
+        @Override
+        public void killKnown(com.butcher.anim.HellionTimeline.Drop drop, String line) {
+            com.butcher.anim.HellionTimeline.Drop dr = drop.win() && underFloor(drop.id) ? com.butcher.anim.HellionTimeline.Drop.BUST : drop;
+            if (!dr.win() && bustStyle("blaze") == 2) return;
+            Runnable open = () -> openHellion(dr, false);
+            if (isAnimationPlaying()) {
+                if (!makeRoom(drop.win(), "Blaze: " + drop.title)) waitForTurn(open, drop.win(), "Blaze: " + (drop.win() ? drop.title : "the bust"));
+                else open.run();
+                return;
+            }
+            open.run();
+        }
+    });
+
+    /** Diana's kills (nametags) and drops (chat). */
+    private static final com.butcher.detect.DianaWatcher dianaWatcher = new com.butcher.detect.DianaWatcher(
+            decisions, new com.butcher.detect.DianaWatcher.Listener() {
+        @Override
+        public void kill(com.butcher.anim.ChopTimeline.Creature creature) {
+            if (bustsOff("diana", "Diana: the kill")) return;
+            if (isAnimationPlaying()) {
+                decisions.note("§8Diana: not opened for the kill - a cutscene is already playing");
+                return;
+            }
+            // Opened the moment it dies, drop unknown; the drop's chat line fills it in.
+            openChop(null, creature, false);
+        }
+
+        @Override
+        public void drop(com.butcher.anim.ChopTimeline.Verdict verdict0, String line) {
+            com.butcher.anim.ChopTimeline.Verdict verdict = verdict0.win() && underFloor(com.butcher.render.DianaItems.id(verdict0))
+                    ? com.butcher.anim.ChopTimeline.Verdict.BUST : verdict0;
+            if (!verdict.win() && bustStyle("diana") == 2 && !(currentChop != null && currentChop.pending())) return;
+            if (currentChop != null && currentChop.pending() && !currentChop.isTest()) {
+                currentChop.resolve(verdict);
+                decisions.note("§aDiana: the kill's drop is " + com.butcher.render.DianaItems.name(verdict));
+                return;
+            }
+            // A drop with no kill waiting: the Relic, the Dye, a loot-shared drop, or a drop whose
+            // line beat the kill's nametag. Its own creature's head, or any for the Dye.
+            Runnable open = () -> openChop(verdict, verdict == com.butcher.anim.ChopTimeline.Verdict.DYE ? null
+                    : com.butcher.anim.ChopTimeline.Creature.of(verdict, 0), false);
+            String what = "Diana: " + com.butcher.render.DianaItems.name(verdict);
+            if (isAnimationPlaying()) {
+                if (!makeRoom(verdict.win(), what)) waitForTurn(open, verdict.win(), what);
+                else open.run();
+                return;
+            }
+            open.run();
+        }
+    });
 
     private static final ScathaWormTracker wormTracker = new ScathaWormTracker(decisions);
     private static final HotbarDropWatcher dropWatcher = new HotbarDropWatcher(decisions);
@@ -170,6 +430,9 @@ public class ButcherClient implements ClientModInitializer {
         adoptOldConfig();
         config = PatternConfig.loadOrCreate();
         LOGGER.info("Butcher loaded, animation mode: {}", config.animationMode);
+        skipKey = net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping(new net.minecraft.client.KeyMapping(
+                "key.butcher.skip", com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM, org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE,
+                net.minecraft.client.KeyMapping.Category.register(net.minecraft.resources.Identifier.fromNamespaceAndPath(MOD_ID, "main"))));
 
         // Placeholders only. The Scatha's real texture belongs to Hypixel and lives on the
         // mob itself, so ScathaSkins lifts it off a live worm the first time one is seen and
@@ -213,6 +476,44 @@ public class ButcherClient implements ClientModInitializer {
         TextureBank.register(com.butcher.render.art.ThawArt.TEX_RAY, com.butcher.render.art.ThawArt::ray);
         TextureBank.register(com.butcher.render.art.ThawArt.TEX_SHARD, com.butcher.render.art.ThawArt::shard);
         TextureBank.register(com.butcher.render.art.ThawArt.TEX_AURA, com.butcher.render.art.ThawArt::aura);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_SHEET, com.butcher.render.art.ChopArt::sheet);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_GLOW, com.butcher.render.art.ChopArt::glow);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_RAYS, com.butcher.render.art.ChopArt::rays);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_RING, com.butcher.render.art.ChopArt::ring);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_SPLAT, com.butcher.render.art.ChopArt::splat);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_DROP, com.butcher.render.art.ChopArt::drop);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_VIGNETTE, com.butcher.render.art.ChopArt::vignette);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_YARN, com.butcher.render.art.ChopArt::yarn);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_WING, com.butcher.render.art.ChopArt::wing);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_PIXDROP, com.butcher.render.art.ChopArt::pixDrop);
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_PIXSPLAT, com.butcher.render.art.ChopArt::pixSplat);
+        // The glint, from the game's own texture, read here at runtime - never bundled.
+        TextureBank.register(com.butcher.render.art.ChopArt.TEX_GLINT, () -> {
+            try (java.io.InputStream in = Minecraft.getInstance().getResourceManager()
+                    .open(net.minecraft.resources.Identifier.withDefaultNamespace("textures/misc/enchanted_glint_item.png"))) {
+                return com.butcher.render.art.ChopArt.glint(javax.imageio.ImageIO.read(in));
+            } catch (Exception e) {
+                LOGGER.warn("[Butcher] could not read the game's glint texture; drawing one instead", e);
+                return com.butcher.render.art.ChopArt.glint(null);
+            }
+        });
+        // Hellion's fire: the game's own animated strip, read at runtime (a resource pack's if there is
+        // one) - adopting it by name gives only its first frame. Never bundled.
+        // Eruption's lava: the game's animated strip, read at runtime (a pack's too), normalised to 20 frames of 16.
+        TextureBank.register(com.butcher.render.EruptionScene.TEX_MAGMA, () -> com.butcher.render.art.LavaArt.strip(readGameTexture("textures/block/magma.png"), 3));
+        TextureBank.register(com.butcher.render.EruptionScene.TEX_CRACKS, () -> com.butcher.render.art.LavaArt.crackMask(
+                com.butcher.render.art.LavaArt.strip(readGameTexture("textures/block/magma.png"), 3)));
+        TextureBank.register(com.butcher.render.EruptionScene.TEX_LAVA_GREY, () -> com.butcher.render.art.LavaArt.greyLava(
+                com.butcher.render.art.LavaArt.strip(readGameTexture("textures/block/lava_still.png"), 20)));
+        TextureBank.register(com.butcher.render.EruptionScene.TEX_LAVA, () -> com.butcher.render.art.LavaArt.strip(readGameTexture("textures/block/lava_still.png"), 20));
+        TextureBank.register(com.butcher.render.HellionScene.TEX_FIRE, () -> com.butcher.render.art.HellionArt.fireStrip(readGameTexture("textures/block/fire_0.png")));
+        TextureBank.register(com.butcher.render.HellionScene.TEX_FIRE_GREY, () -> com.butcher.render.art.HellionArt.greyFire(
+                com.butcher.render.art.HellionArt.fireStrip(readGameTexture("textures/block/fire_0.png"))));
+        TextureBank.register(com.butcher.render.SeraphScene.TEX_WHITE, () -> {
+            java.awt.image.BufferedImage white = new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) white.setRGB(x, y, 0xFFFFFFFF);
+            return white;
+        });
         TextureBank.register(com.butcher.render.VanguardItems.TEX_GLACITE_POWDER,
                 com.butcher.render.art.ThawArt::glacitePowder);
         TextureBank.register(com.butcher.render.art.ThawArt.TEX_COIN, com.butcher.render.art.ThawArt::coin);
@@ -226,15 +527,9 @@ public class ButcherClient implements ClientModInitializer {
         // Draw the cutscene on top of everything else every frame. Using
         // addLast() so it renders after (i.e. visually on top of) chat and
         // every other vanilla HUD element.
-        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(MOD_ID, "cutscene"),
-                (graphics, tickCounter) -> ButcherHudRenderer.render(graphics, 0f));
-
-        // Darkness closing in over the hotbar and chat the moment a Scatha's HP is
-        // nearly gone, right up until the cutscene takes over - which opens from
-        // black, so the two run together. Called every frame rather than only while
-        // active, so the hider can run its own fade in and reset itself.
-        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(MOD_ID, "prekill_hide"),
-                (graphics, tickCounter) -> PreKillHider.render(graphics, shouldHidePreKill()));
+        // The cutscenes are not HUD elements any more: mixin/GuiFadeMixin draws them itself, on
+        // a stratum of their own, once the HUD pass and its fade are over (drawOwnHud). Inside
+        // the pass, 0.2.37 played the sounds and drew nothing.
 
         // Advance the animation clock, and boot the player out of the chat
         // input box if they try to open it mid-animation. Also true for the
@@ -275,12 +570,31 @@ public class ButcherClient implements ClientModInitializer {
             // out even if the player went away mid-message.
             vanguardWatcher.tick();
 
+            if (client.player != null && config.dianaAnimation) dianaWatcher.tick(client.player, config.dianaHidePct);
+            if (client.player != null && config.fishingAnnounce) sharkWatcher.tick(client.player);
+            if (client.player != null && config.blazeAnimation) hellionWatcher.tick(client.player, config.blazeHidePct);
+            if (client.player != null && config.seraphAnimation) seraphWatcher.tick(client.player, config.seraphHidePct);
+            if (client.player != null && config.lavaAnimation) {
+                lavaWatcher.lootShare = config.lavaLootShare;
+                lavaWatcher.tick(client.player, config.lavaHidePct);
+            }
+            // Slayer bosses' nametags, recorded for detection to be written against (no animation yet).
+            if (client.player != null && config.recordDrops) com.butcher.detect.SlayerRecorder.tick(client.player);
             if (client.player != null) {
                 // Start every Vanguard item's skin download the first time there is a player,
                 // so the heads are ready long before anyone opens a corpse.
                 com.butcher.render.VanguardItems.prewarm();
+                com.butcher.render.HeadSkins.FISHING.prewarm();
+                com.butcher.render.HeadSkins.SLAYER.prewarm();
+                com.butcher.render.HeadSkins.LAVA.prewarmPixels();
+                // A head we could not find in any repo, taken from whatever menu shows it (the bazaar).
+                com.butcher.detect.HeadCapture.tick(client);
             }
+            skipTick();
+            floorPrices();
             if (currentThaw != null && !currentThaw.isActive()) currentThaw = null;
+            clearFinished();
+            runWaiting();
             if (!ChatHold.isEmpty() && !chatHeld()) ChatHold.release();
             if (currentThaw == null && !thawQueue.isEmpty() && !isAnimationPlaying() && !profitShowing()) {
                 PendingThaw next = thawQueue.poll();
@@ -291,9 +605,15 @@ public class ButcherClient implements ClientModInitializer {
         // Chat still gets hidden while an animation is playing (that's the
         // whole point of the cutscene), even though it's no longer what
         // triggers the animation in the first place.
-        ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
+        // In a phase of our own, ahead of every other mod's: Fabric stops at the first listener that vetoes a
+        // line, and Feesh vetoes Hypixel's sea creature catch lines (replacing them with its own local line),
+        // so after it we never saw them. Our listener only hides what it always hid.
+        net.minecraft.resources.Identifier first = net.minecraft.resources.Identifier.fromNamespaceAndPath(MOD_ID, "first");
+        ClientReceiveMessageEvents.ALLOW_CHAT.addPhaseOrdering(first, net.fabricmc.fabric.api.event.Event.DEFAULT_PHASE);
+        ClientReceiveMessageEvents.ALLOW_GAME.addPhaseOrdering(first, net.fabricmc.fabric.api.event.Event.DEFAULT_PHASE);
+        ClientReceiveMessageEvents.ALLOW_CHAT.register(first, (message, signedMessage, sender, params, receptionTimestamp) ->
                 allowChatLine(message, true, false));
-        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> allowChatLine(message, false, overlay));
+        ClientReceiveMessageEvents.ALLOW_GAME.register(first, (message, overlay) -> allowChatLine(message, false, overlay));
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             // Two branches, one per drop source, and every level on its own lists what is
@@ -335,7 +655,7 @@ public class ButcherClient implements ClientModInitializer {
                         ctx.getSource().sendFeedback(Component.literal(
                                 "§6[Butcher] §7running the pre-kill hide for 4 seconds"
                                         + (config.hideHud
-                                        ? " §8(veil, then the HUD goes)" : " §8(veil only)")));
+                                        ? " §8(the HUD goes)" : " §8(HUD hiding is off)")));
                         return 1;
                     }))
                     .then(ClientCommands.literal("firework").executes(ctx -> {
@@ -372,12 +692,167 @@ public class ButcherClient implements ClientModInitializer {
                     .then(ClientCommands.literal("locket").executes(ctx -> testThaw(ctx, VanguardLoot.Tier.LEGENDARY, "Shattered Locket")))
                     .then(ClientCommands.literal("dye").executes(ctx -> testThaw(ctx, VanguardLoot.Tier.SPECIAL)));
 
+            LiteralArgumentBuilder<FabricClientCommandSource> dianaNode = ClientCommands.literal("diana")
+                    .executes(ctx -> options(ctx, "test diana",
+                            "bust", "nothing inside",
+                            "relic", "Minos Relic (moonstone)",
+                            "brainfood", "Brain Food (wisteria)",
+                            "chimera", "Chimera I (thulian pink)",
+                            "dye", "Mythological Dye (olive)",
+                            "stinger", "Fateful Stinger (viridian)",
+                            "manticore", "Manti-core (viridian)",
+                            "crown", "Crown of Greed (carmine)",
+                            "wool", "Shimmering Wool (carmine)",
+                            "unknown", "the neutral ending, when a drop cannot be identified"));
+            for (com.butcher.anim.ChopTimeline.Verdict v : com.butcher.anim.ChopTimeline.Verdict.values()) {
+                String word = switch (v) {
+                    case BRAIN_FOOD -> "brainfood";
+                    case FATEFUL_STINGER -> "stinger";
+                    case MANTI_CORE -> "manticore";
+                    case CROWN_OF_GREED -> "crown";
+                    case SHIMMERING_WOOL -> "wool";
+                    default -> v.name().toLowerCase(java.util.Locale.ROOT);
+                };
+                dianaNode.then(ClientCommands.literal(word).executes(ctx -> {
+                    testChop(v);
+                    return 1;
+                }));
+            }
+
+            LiteralArgumentBuilder<FabricClientCommandSource> blazeNode = ClientCommands.literal("blaze")
+                    .executes(ctx -> options(ctx, "test slayer blaze",
+                            "bust", "burns out to ash",
+                            "duplex", "Duplex I (Spirit)",
+                            "crystal", "Scorched Power Crystal (Spirit)",
+                            "subzero", "Subzero Inverter (Spirit)",
+                            "wilsons", "Wilson's Engineering Plans (Spirit)",
+                            "paragon", "Paragon Shard (Crystal)",
+                            "dice", "Archfiend Dice (Auric)",
+                            "highclass", "High Class Archfiend Dice (Auric)",
+                            "flamedye", "Flame Dye (Auric)"));
+            for (com.butcher.anim.HellionTimeline.Drop d : com.butcher.anim.HellionTimeline.Drop.values()) {
+                String word = switch (d) {
+                    case SCORCHED_CRYSTAL -> "crystal";
+                    case ARCHFIEND_DICE -> "dice";
+                    case HIGH_CLASS_DICE -> "highclass";
+                    case FLAME_DYE -> "flamedye";
+                    default -> d.name().toLowerCase(java.util.Locale.ROOT);
+                };
+                blazeNode.then(ClientCommands.literal(word).executes(ctx -> {
+                    Minecraft.getInstance().execute(() -> openHellion(d, true));
+                    return 1;
+                }));
+            }
+            LiteralArgumentBuilder<FabricClientCommandSource> endermanNode = ClientCommands.literal("enderman")
+                    .executes(ctx -> options(ctx, "test slayer enderman",
+                            "bust", "a black beam - nothing worth it",
+                            "merger", "Etherwarp Merger (white)",
+                            "eye", "Summoning Eye (light blue)",
+                            "paragon", "Paragon Shard (light blue)",
+                            "rune", "Enchant Rune I (light blue)",
+                            "chalice", "Handy Blood Chalice (its own ending)",
+                            "espresso", "Pocket Espresso Machine (its own ending)",
+                            "dice", "Sinful Dice (its own ending)",
+                            "skin", "Void Conqueror Enderman Skin (its own ending)",
+                            "upgrade", "Exceedingly Rare Ender Artifact Upgrade (the jackpot)",
+                            "idol", "End Stone Idol (the jackpot)",
+                            "core", "Judgement Core (the judgement)",
+                            "dye", "Byzantium Dye (the judgement)"));
+            for (com.butcher.anim.SeraphTimeline.Drop d : com.butcher.anim.SeraphTimeline.Drop.values()) {
+                String word = switch (d) {
+                    case ETHERWARP_MERGER -> "merger";
+                    case SUMMONING_EYE -> "eye";
+                    case ENCHANT_RUNE -> "rune";
+                    case BLOOD_CHALICE -> "chalice";
+                    case SINFUL_DICE -> "dice";
+                    case VOID_SKIN -> "skin";
+                    case ARTIFACT_UPGRADE -> "upgrade";
+                    case END_STONE_IDOL -> "idol";
+                    case JUDGEMENT_CORE -> "core";
+                    case BYZANTIUM_DYE -> "dye";
+                    default -> d.name().toLowerCase(java.util.Locale.ROOT);
+                };
+                endermanNode.then(ClientCommands.literal(word).executes(ctx -> {
+                    Minecraft.getInstance().execute(() -> openSeraph(d, true));
+                    return 1;
+                }));
+            }
+            LiteralArgumentBuilder<FabricClientCommandSource> slayerNode = ClientCommands.literal("slayer")
+                    .executes(ctx -> options(ctx, "test slayer",
+                            "blaze", "Hellion - the Inferno Demonlord",
+                            "enderman", "The Seraph's Glyph - the Voidgloom Seraph"))
+                    .then(blazeNode)
+                    .then(endermanNode);
+
+            LiteralArgumentBuilder<FabricClientCommandSource> sharkNode = ClientCommands.literal("shark")
+                    .executes(ctx -> options(ctx, "test shark",
+                            "megalodon", "an epic Megalodon pet",
+                            "legendary", "a legendary Megalodon pet",
+                            "tooth", "a Great White Shark Tooth",
+                            "bust", "a Great White Shark that dropped neither"))
+                    .then(ClientCommands.literal("megalodon").executes(ctx -> {
+                        com.butcher.render.FinPopup.show(com.butcher.detect.SharkDrops.Drop.MEGALODON_EPIC);
+                        return 1;
+                    }))
+                    .then(ClientCommands.literal("legendary").executes(ctx -> {
+                        com.butcher.render.FinPopup.show(com.butcher.detect.SharkDrops.Drop.MEGALODON_LEGENDARY);
+                        return 1;
+                    }))
+                    .then(ClientCommands.literal("tooth").executes(ctx -> {
+                        com.butcher.render.FinPopup.show(com.butcher.detect.SharkDrops.Drop.TOOTH);
+                        return 1;
+                    }))
+                    .then(ClientCommands.literal("bust").executes(ctx -> {
+                        com.butcher.render.FinPopup.showBust();
+                        return 1;
+                    }));
+
+            LiteralArgumentBuilder<FabricClientCommandSource> lavaNode = ClientCommands.literal("lava")
+                    .executes(ctx -> options(ctx, "test lava",
+                            "bust", "it cools to black (add a creature: jawbus, thunder, ragnarok, scuttler)",
+                            "chain", "Chain of the End Times (red, Ragnarok)",
+                            "pincer", "Severed Pincer (red, Fiery Scuttler)",
+                            "flash", "Flash I (orange, Thunder)",
+                            "brimstone", "Brimstone Handle (orange, Ragnarok)",
+                            "vial", "Radioactive Vial (yellow, Lord Jawbus)",
+                            "shell", "Scuttler Shell (yellow, Fiery Scuttler)",
+                            "texts", "Burnt Texts (white, Ragnarok - the End Times)",
+                            "carmine", "Carmine Dye (white - Kuudra; add a creature)"));
+            for (com.butcher.anim.EruptionTimeline.Drop d : com.butcher.anim.EruptionTimeline.Drop.values()) {
+                String word = d == com.butcher.anim.EruptionTimeline.Drop.BURNT_TEXTS ? "texts" : d.name().toLowerCase(java.util.Locale.ROOT);
+                com.butcher.anim.EruptionTimeline.Creature own = d.from != null ? d.from
+                        : (d == com.butcher.anim.EruptionTimeline.Drop.CARMINE ? com.butcher.anim.EruptionTimeline.Creature.THUNDER
+                        : com.butcher.anim.EruptionTimeline.Creature.JAWBUS);
+                LiteralArgumentBuilder<FabricClientCommandSource> dropNode = ClientCommands.literal(word).executes(ctx -> {
+                    Minecraft.getInstance().execute(() -> openEruption(own, d, true));
+                    return 1;
+                });
+                if (d.from == null) {
+                    for (com.butcher.anim.EruptionTimeline.Creature c : com.butcher.anim.EruptionTimeline.Creature.values()) {
+                        if (d == com.butcher.anim.EruptionTimeline.Drop.BUST && c == com.butcher.anim.EruptionTimeline.Creature.PLHLEGBLAST) continue;
+                        dropNode.then(ClientCommands.literal(c.name().toLowerCase(java.util.Locale.ROOT)).executes(ctx -> {
+                            Minecraft.getInstance().execute(() -> openEruption(c, d, true));
+                            return 1;
+                        }));
+                    }
+                }
+                lavaNode.then(dropNode);
+            }
+
             LiteralArgumentBuilder<FabricClientCommandSource> testNode = ClientCommands.literal("test")
                     .executes(ctx -> options(ctx, "test",
                             "scatha", "the cleaver cutscene",
-                            "vanguard", "the Thaw"))
+                            "vanguard", "the Thaw",
+                            "diana", "the Chopping Block",
+                            "shark", "Fin, the Fishing Festival pop-up",
+                            "slayer", "the slayer bosses",
+                            "lava", "Eruption, lava fishing"))
                     .then(scathaNode)
-                    .then(vanguardNode);
+                    .then(vanguardNode)
+                    .then(dianaNode)
+                    .then(sharkNode)
+                    .then(slayerNode)
+                    .then(lavaNode);
 
             dispatcher.register(ClientCommands.literal("butcher")
                     .executes(ctx -> {
@@ -398,6 +873,14 @@ public class ButcherClient implements ClientModInitializer {
                     // the cutscene shows the wrong thing this narration is the only
                     // record of why. Printed to chat rather than only the log file so
                     // it can be read the moment it goes wrong, without alt-tabbing.
+                    .then(ClientCommands.literal("records").executes(ctx -> {
+                        int[] n = com.butcher.detect.DropRecorder.counts();
+                        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7" + n[0]
+                                + " drop record(s), " + n[1] + " Diana line(s) captured, in §f"
+                                + com.butcher.detect.DropRecorder.file()
+                                + (config.recordDrops ? "" : " §c(recording is off)")));
+                        return 1;
+                    }))
                     .then(ClientCommands.literal("log").executes(ctx -> {
                         java.util.List<String> lines = decisions.recent();
                         if (lines.isEmpty()) {
@@ -551,8 +1034,228 @@ public class ButcherClient implements ClientModInitializer {
         return DropResult.gemstone();
     }
 
+    /** A source's busts setting: 0 the whole cutscene, 1 short, 2 none. */
+    public static int bustStyle(String source) {
+        if (config == null) return 0;
+        return switch (source) {
+            case "diana" -> config.dianaBusts;
+            case "blaze" -> config.blazeBusts;
+            case "seraph" -> config.seraphBusts;
+            case "lava" -> config.lavaBusts;
+            default -> 0;
+        };
+    }
+
+    /** "Busts: none": a kill opens nothing, and only its win (its drop line) plays. */
+    private static boolean bustsOff(String source, String what) {
+        if (bustStyle(source) != 2) return false;
+        decisions.note("§8" + what + " - busts are off; it plays only if its drop is a win");
+        return true;
+    }
+
+    /**
+     * "Only play drops worth at least" (the menu): a win whose known price is under it plays as a bust. A price not
+     * fetched yet lets the win play - a missing price never costs anyone a reveal.
+     */
+    public static boolean underFloor(String priceId) {
+        if (config == null || config.minWorth <= 0 || priceId == null) return false;
+        long floor = PatternConfig.MIN_WORTH[Math.min(config.minWorth, PatternConfig.MIN_WORTH.length - 1)];
+        Double sell = com.butcher.market.Bazaar.sell(priceId);
+        Long bin = com.butcher.market.LivePrice.cached(priceId);
+        double worth = sell != null && sell > 0 ? sell : (bin != null && bin > 0 ? bin : -1);
+        if (worth < 0 || worth >= floor) return false;
+        decisions.note("§8" + priceId + " is worth " + String.format("%,d", Math.round(worth)) + ", under your floor - played as a bust");
+        return true;
+    }
+
+    /** Asks for every animated drop's price, so the floor can judge a win the moment it lands. */
+    private static long floorPricesAt;
+
+    private static void floorPrices() {
+        if (config == null || config.minWorth <= 0 || !config.livePrices) return;
+        long now = System.currentTimeMillis();
+        if (now - floorPricesAt < 10 * 60_000) return;
+        floorPricesAt = now;
+        com.butcher.market.Bazaar.request();
+        for (var d : com.butcher.anim.HellionTimeline.Drop.values()) if (d.id != null) com.butcher.market.LivePrice.request(d.id);
+        for (var d : com.butcher.anim.SeraphTimeline.Drop.values()) if (d.priceId != null) com.butcher.market.LivePrice.request(d.priceId);
+        for (var d : com.butcher.anim.EruptionTimeline.Drop.values()) if (d.id != null) com.butcher.market.LivePrice.request(d.id);
+        for (var v : com.butcher.anim.ChopTimeline.Verdict.values()) {
+            String id = com.butcher.render.DianaItems.id(v);
+            if (id != null) com.butcher.market.LivePrice.request(id);
+        }
+    }
+
+    /** "Chat summary": one line in chat when a cutscene ends (held with the rest of chat until it is gone). */
+    public static void summary(String line) {
+        if (config != null && !config.chatSummary) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        mc.player.sendSystemMessage(Component.literal("§6[Butcher] §f" + line));
+    }
+
+    /** The menu's "Try it": plays an outcome as /butcher test does (never counted), over whatever was playing. */
+    public static void playTest(String group, String name) {
+        com.butcher.gui.Cutscene c = currentCutscene();
+        if (c != null) c.interrupt();
+        clearFinished();
+        switch (group) {
+            case "diana" -> openChop(com.butcher.anim.ChopTimeline.Verdict.valueOf(name), null, true);
+            case "blaze" -> openHellion(com.butcher.anim.HellionTimeline.Drop.valueOf(name), true);
+            case "seraph" -> openSeraph(com.butcher.anim.SeraphTimeline.Drop.valueOf(name), true);
+            case "lava" -> {
+                com.butcher.anim.EruptionTimeline.Drop d = com.butcher.anim.EruptionTimeline.Drop.valueOf(name);
+                com.butcher.anim.EruptionTimeline.Creature who = com.butcher.anim.EruptionTimeline.Creature.JAWBUS;
+                for (var k : com.butcher.anim.EruptionTimeline.Creature.values()) {
+                    if (k != com.butcher.anim.EruptionTimeline.Creature.PLHLEGBLAST && d.from(k)) {
+                        who = k;
+                        break;
+                    }
+                }
+                openEruption(who, d, true);
+            }
+            case "shark" -> {
+                if (name.equals("BUST")) com.butcher.render.FinPopup.showBust();
+                else com.butcher.render.FinPopup.show(com.butcher.detect.SharkDrops.Drop.valueOf(name));
+            }
+            default -> { }
+        }
+    }
+
+    /** "Reset all settings": the defaults back, stats untouched. */
+    public static void resetSettings() {
+        PatternConfig fresh = new PatternConfig();
+        fresh.hidesInPercent = true;
+        fresh.dianaSizeRaised = true;
+        config = fresh;
+        fresh.save();
+        decisions.note("§7Settings reset to the defaults");
+    }
+
+    /** The newer cutscene playing now, if one is: the ones that can be skipped and cut into. */
+    private static com.butcher.gui.Cutscene currentCutscene() {
+        if (chopActive()) return currentChop;
+        if (hellionActive()) return currentHellion;
+        if (seraphActive()) return currentSeraph;
+        if (eruptionActive()) return currentEruption;
+        return null;
+    }
+
+    /**
+     * A known outcome wants the screen while something plays. A win cuts in over a bust, or over a kill still waiting
+     * for its drop (nearly always a bust): that one ends now. Nothing cuts into a win, a Thaw or the Scatha.
+     *
+     * @return whether the screen is free now
+     */
+    private static boolean makeRoom(boolean win, String what) {
+        if (!isAnimationPlaying()) return true;
+        com.butcher.gui.Cutscene c = currentCutscene();
+        if (!win || c == null || c.showsWin()) return false;
+        decisions.note("§a" + what + " - cutting in over the cutscene playing");
+        c.interrupt();
+        clearFinished();
+        return !isAnimationPlaying();
+    }
+
+    /** Known outcomes that came while another cutscene played: run, oldest first, when the screen is free. */
+    private static final java.util.ArrayDeque<Object[]> waiting = new java.util.ArrayDeque<>();
+    /** A bust that waits longer than this is no longer worth showing; a win always waits its turn. */
+    private static final long BUST_WAIT_MS = 5_000;
+
+    private static void waitForTurn(Runnable open, boolean win, String what) {
+        waiting.add(new Object[]{open, System.currentTimeMillis(), win, what});
+        decisions.note("§7" + what + " - waiting for the cutscene playing to end");
+    }
+
+    private static void runWaiting() {
+        while (!waiting.isEmpty() && !isAnimationPlaying() && !profitShowing()) {
+            Object[] w = waiting.poll();
+            if (!(boolean) w[2] && System.currentTimeMillis() - (long) w[1] > BUST_WAIT_MS) {
+                decisions.note("§8" + w[3] + " - waited too long, dropped");
+                continue;
+            }
+            ((Runnable) w[0]).run();
+        }
+    }
+
+    private static void clearFinished() {
+        if (currentChop != null && !currentChop.isActive()) currentChop = null;
+        if (currentHellion != null && !currentHellion.isActive()) currentHellion = null;
+        if (currentSeraph != null && !currentSeraph.isActive()) currentSeraph = null;
+        if (currentEruption != null && !currentEruption.isActive()) currentEruption = null;
+    }
+
+    /** The skip key (default Backspace): held this long, so a stray press cannot eat a reveal. */
+    private static final long SKIP_HOLD_MS = 400;
+    private static net.minecraft.client.KeyMapping skipKey;
+    private static long skipHeldSince = -1;
+    private static boolean skipFired;
+
+    private static void skipTick() {
+        if (skipKey == null || !skipKey.isDown()) {
+            skipHeldSince = -1;
+            skipFired = false;
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (skipHeldSince < 0) skipHeldSince = now;
+        if (skipFired || now - skipHeldSince < SKIP_HOLD_MS) return;
+        skipFired = true;
+        com.butcher.gui.Cutscene c = currentCutscene();
+        if (c != null) {
+            c.skip();
+        } else if (currentScope != null && currentScope.isActive()) {
+            currentScope.onClose();
+        } else if (thawActive()) {
+            currentThaw.onClose();
+        }
+    }
+
     private static boolean isAnimationPlaying() {
-        return animationManager.isPlaying() || (currentScope != null && currentScope.isActive()) || thawActive();
+        return animationManager.isPlaying() || (currentScope != null && currentScope.isActive()) || thawActive()
+                || chopActive() || hellionActive() || seraphActive() || eruptionActive();
+    }
+
+    /** "Eruption", lava fishing's animation, while it plays. */
+    private static com.butcher.gui.EruptionScreen currentEruption;
+
+    private static boolean eruptionActive() {
+        return currentEruption != null && currentEruption.isActive();
+    }
+
+    /** Opens Eruption in the HUD (CutsceneHud); {@code drop} null for a real kill whose drop is still to come. */
+    public static void openEruption(com.butcher.anim.EruptionTimeline.Creature creature, com.butcher.anim.EruptionTimeline.Drop drop, boolean test) {
+        com.butcher.gui.EruptionScreen screen = new com.butcher.gui.EruptionScreen(creature, drop, test);
+        currentEruption = screen;
+        com.butcher.render.CutsceneHud.show(screen);
+    }
+
+    /** "Hellion", the Inferno Demonlord's animation (tier IV), while it plays. */
+    private static com.butcher.gui.HellionScreen currentHellion;
+
+    private static boolean hellionActive() {
+        return currentHellion != null && currentHellion.isActive();
+    }
+
+    /** "The Seraph's Glyph", the Voidgloom Seraph's animation (tier IV), while it plays. */
+    private static com.butcher.gui.SeraphScreen currentSeraph;
+
+    private static boolean seraphActive() {
+        return currentSeraph != null && currentSeraph.isActive();
+    }
+
+    /** Opens the Seraph's Glyph in the HUD (CutsceneHud); {@code drop} null for a real kill whose drop is still to come. */
+    public static void openSeraph(com.butcher.anim.SeraphTimeline.Drop drop, boolean test) {
+        com.butcher.gui.SeraphScreen screen = new com.butcher.gui.SeraphScreen(drop, test);
+        currentSeraph = screen;
+        com.butcher.render.CutsceneHud.show(screen);
+    }
+
+    /** Opens Hellion in the HUD (CutsceneHud); {@code drop} null for a real kill whose drop is still to come. */
+    public static void openHellion(com.butcher.anim.HellionTimeline.Drop drop, boolean test) {
+        com.butcher.gui.HellionScreen screen = new com.butcher.gui.HellionScreen(drop, test);
+        currentHellion = screen;
+        com.butcher.render.CutsceneHud.show(screen);
     }
 
     /**
@@ -562,7 +1265,7 @@ public class ButcherClient implements ClientModInitializer {
      * submits, so it must stay cheap and must never throw - a mixin at the head of
      * SoundEngine.play is on the hot path for the whole game, not just for us.
      *
-     * Covers the pre-kill veil as well as the cutscene proper. The veil exists precisely
+     * Covers the pre-kill hide as well as the cutscene proper. The hide exists precisely
      * because the seconds before the kill are when a drop can be spoiled, and a sound cue
      * gives it away exactly the same way a chat line does.
      */
@@ -581,6 +1284,10 @@ public class ButcherClient implements ClientModInitializer {
      */
     public static Screen activeCutscene() {
         if (currentScope != null && currentScope.isActive()) return currentScope;
+        if (chopActive()) return currentChop;
+        if (hellionActive()) return currentHellion;
+        if (seraphActive()) return currentSeraph;
+        if (eruptionActive()) return currentEruption;
         return thawActive() ? currentThaw : null;
     }
 
@@ -594,30 +1301,100 @@ public class ButcherClient implements ClientModInitializer {
      * still running.
      */
     public static boolean cutsceneOwnsScreen() {
-        return (currentScope != null && currentScope.isActive()) || thawActive();
+        return (currentScope != null && currentScope.isActive()) || thawActive() || chopActive() || hellionActive() || seraphActive() || eruptionActive();
     }
 
     /**
      * Whether the vanilla HUD should be off the screen this frame.
      *
-     * Read once per frame by {@link com.butcher.mixin.HudMixin}, which answers it by not
-     * building the HUD at all. Returns false unless the feature is on AND something is
-     * actually happening, so it costs one comparison in ordinary play.
+     * Read by {@code mixin/HudFadeMixin} for the whole HUD pass - every mod's elements, not only
+     * vanilla's. Returns false unless the feature is on AND something is actually happening, so it
+     * costs one comparison in ordinary play.
      *
-     * During the cutscene the answer is simply yes: the cutscene is a Screen, the Screen
-     * is drawn over the HUD, and its backdrop is a dim rather than a blackout, so the
-     * hotbar reads straight through it.
+     * During the cutscene the answer is simply yes: the cutscene is drawn over the HUD, and
+     * its backdrop can be a dim rather than a blackout, so the hotbar would read through it.
      *
-     * Before the kill it waits for {@link PreKillHider#closed()}. The veil is already
-     * fading in over that second, and letting it get dark first means the hotbar is
-     * covered at the moment it disappears rather than blinking out under a half-lit
-     * screen.
+     * Before a Scatha's kill it is yes the moment the pre-kill hide is up - the HUD just goes,
+     * as it does for Diana. There used to be a dark veil growing over the screen first
+     * ({@code PreKillHider}); the user asked for it gone.
      */
     public static boolean shouldHideHud() {
         PatternConfig c = config;
         if (c == null || !c.hideHud) return false;
-        if (isAnimationPlaying()) return true;
-        return shouldHidePreKill() && PreKillHider.closed();
+        return isAnimationPlaying() || shouldHidePreKill();
+    }
+
+    /**
+     * Our cutscenes, drawn by mixin/GuiFadeMixin after the HUD pass and its fade - never inside
+     * it - on a fresh stratum, so nothing the HUD did can cover or fade them. Before screens, so a
+     * menu still opens over a cutscene that keeps playing underneath.
+     */
+    public static void drawOwnHud(net.minecraft.client.gui.GuiGraphicsExtractor graphics,
+                                  net.minecraft.client.DeltaTracker delta) {
+        net.minecraft.client.gui.screens.Screen cutscene = com.butcher.render.CutsceneHud.shown();
+        boolean fin = com.butcher.render.FinPopup.active();
+        boolean vitals = keepVitals();
+        if (cutscene == null && !animationManager.isPlaying() && !fin) {
+            if (vitals) drawVitals(graphics, delta);
+            return;
+        }
+        graphics.nextStratum();
+        if (fin) com.butcher.render.FinPopup.draw(graphics);
+        int before = com.butcher.render.HudFade.added;
+        ButcherHudRenderer.render(graphics, 0f);
+        com.butcher.render.CutsceneHud.draw(graphics, delta);
+        // Sounds without a picture was the 0.2.37 bug: say so if it ever happens again.
+        if (cutscene != null && com.butcher.render.HudFade.added == before && cutscene != silentCutscene) {
+            silentCutscene = cutscene;
+            decisions.note("§cA cutscene drew nothing this frame - please send /butcher log");
+        }
+        if (vitals) drawVitals(graphics, delta);
+    }
+
+    /** Whether the hotbar and the health bars are drawn again, over whatever hides them (config "Keep health and hotbar"). */
+    private static boolean keepVitals() {
+        Minecraft mc = Minecraft.getInstance();
+        if (config == null || !config.keepVitals || mc.player == null
+                || ((com.butcher.mixin.HudInvoker) mc.gui.hud).butcher$f1()) return false;
+        return shouldHideHud() && hudAlpha() < 1f;
+    }
+
+    /** Vanilla's own hotbar and decorations, on a stratum over the cutscene, unfaded. */
+    private static void drawVitals(net.minecraft.client.gui.GuiGraphicsExtractor graphics, net.minecraft.client.DeltaTracker delta) {
+        graphics.nextStratum();
+        ((com.butcher.mixin.HudInvoker) Minecraft.getInstance().gui.hud).butcher$hotbarAndDecorations(graphics, delta);
+    }
+
+    /** The last cutscene reported as drawing nothing, so it is reported once. */
+    private static net.minecraft.client.gui.screens.Screen silentCutscene;
+
+    /** How long the HUD takes to fade out (SkyMaxx: 0.35 s). */
+    private static final float HUD_FADE_SECONDS = 0.35f;
+    /** When the HUD started going, or 0 while it is shown. */
+    private static long hudHiddenSince = 0;
+
+    /**
+     * How much of the vanilla HUD is drawn, 1 to 0: faded out over {@link #HUD_FADE_SECONDS} once
+     * {@link #shouldHideHud()} holds, eased - SkyMaxx's {@code hudAlphaWhileOwned}. It comes back
+     * at once when the hide ends; the cutscene has already faded out by then.
+     */
+    public static float hudAlpha() {
+        if (!shouldHideHud()) {
+            hudHiddenSince = 0;
+            return 1f;
+        }
+        long now = System.nanoTime();
+        if (hudHiddenSince == 0) hudHiddenSince = now;
+        float t = Math.min(1f, (now - hudHiddenSince) / 1e9f / HUD_FADE_SECONDS);
+        return 1f - t * t * (3f - 2f * t);
+    }
+
+    /**
+     * Whether the chat box must stay shut: a cutscene playing, or the Scatha's pre-kill hide up.
+     * Opening chat would show its history, which is where a drop gives itself away.
+     */
+    public static boolean chatShut() {
+        return isAnimationPlaying() || shouldHidePreKill();
     }
 
     // ------------------------------------------------------------------ Vanguard
@@ -634,7 +1411,43 @@ public class ButcherClient implements ClientModInitializer {
      * reveal - it lists the whole haul before the animation has drawn anything, so leaving
      * it in chat is handing over the answer.
      */
+    /** One of the game's own textures as an image, through the resource manager; null if it cannot be read. */
+    public static java.awt.image.BufferedImage readGameTexture(String path) {
+        try (java.io.InputStream in = Minecraft.getInstance().getResourceManager()
+                .open(net.minecraft.resources.Identifier.withDefaultNamespace(path))) {
+            return javax.imageio.ImageIO.read(in);
+        } catch (Exception e) {
+            LOGGER.warn("[Butcher] could not read the game's {}", path, e);
+            return null;
+        }
+    }
+
     private static boolean allowChatLine(Component message, boolean player, boolean overlay) {
+        // Our own lines (the chat summary, test notes) are never evidence of anything: not recorded, not detected.
+        if (message.getString().replaceAll("§.", "").startsWith("[Butcher]")) return true;
+        if (!overlay) com.butcher.detect.DropRecorder.chatLine(message.getString());
+        // Game lines only: a player typing "RARE DROP! Chimera" is not a drop.
+        if (!overlay && !player && config != null && config.dianaAnimation) {
+            dianaWatcher.onChatLine(message.getString());
+        }
+        if (!overlay && !player && config != null && config.lavaAnimation) {
+            lavaWatcher.onChatLine(message.getString());
+        }
+        if (!overlay && !player && config != null && config.seraphAnimation) {
+            seraphWatcher.onChatLine(message.getString());
+        }
+        if (!overlay && !player && config != null && config.blazeAnimation) {
+            hellionWatcher.onChatLine(message.getString());
+        }
+        if (!overlay && !player && config != null && config.fishingAnnounce) {
+            sharkWatcher.onChatLine(message.getString());
+            com.butcher.detect.SharkDrops.Drop shark = com.butcher.detect.SharkDrops.of(message.getString());
+            if (shark != null) {
+                decisions.note("§7Fishing: " + shark.title + " - \"" + message.getString() + "\"");
+                ButcherStats.get().onSource("shark", shark.title);
+                com.butcher.render.FinPopup.show(shark);
+            }
+        }
         if (config != null && config.vanguardAnimation && vanguardWatcher.onChatLine(message.getString())) {
             return !config.vanguardHideChat;
         }
@@ -704,6 +1517,22 @@ public class ButcherClient implements ClientModInitializer {
         // Every price asked for now, while the strikes are still to play: the profit window
         // and the Locket's counter need them in ten seconds or so, and by then they are back.
         com.butcher.market.CorpseValue.request(haul);
+        if (!testingCorpse) {
+            com.google.gson.JsonObject rec = new com.google.gson.JsonObject();
+            com.google.gson.JsonArray drops = new com.google.gson.JsonArray();
+            for (CorpseHaul.Drop drop : haul.drops()) {
+                com.google.gson.JsonObject d = new com.google.gson.JsonObject();
+                d.addProperty("name", drop.name());
+                d.addProperty("amount", drop.amount());
+                d.addProperty("tier", drop.tier().name());
+                if (drop.unknown()) d.addProperty("unknown", true);
+                drops.add(d);
+            }
+            rec.add("drops", drops);
+            rec.add("chat", com.butcher.detect.DropRecorder.chatSince(10_000));
+            rec.add("decisions", com.butcher.detect.DropRecorder.decisions(10));
+            com.butcher.detect.DropRecorder.record("vanguard_corpse", rec);
+        }
 
         Minecraft client = Minecraft.getInstance();
         if (config == null || !config.vanguardAnimation) {
@@ -727,7 +1556,7 @@ public class ButcherClient implements ClientModInitializer {
     private static void openThaw(Minecraft client, CorpseHaul haul, int streakBefore) {
         com.butcher.gui.ThawScreen screen = new com.butcher.gui.ThawScreen(haul, streakBefore);
         currentThaw = screen;
-        client.execute(() -> client.gui.setScreen(screen));
+        com.butcher.render.CutsceneHud.show(screen);
     }
 
     /**
@@ -789,6 +1618,14 @@ public class ButcherClient implements ClientModInitializer {
      *
      * @param tier the ending to show; COMMON for an all-commons corpse
      */
+    /**
+     * /butcher test diana: the cutscene alone. The drop is drawn as its real SkyBlock item (see
+     * DianaItems), so a test looks exactly as the real thing will.
+     */
+    private static void testChop(com.butcher.anim.ChopTimeline.Verdict v) {
+        openChop(v, null, true);
+    }
+
     private static int testThaw(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> ctx,
                                 VanguardLoot.Tier tier) {
         return testThaw(ctx, tier, null);
@@ -880,7 +1717,7 @@ public class ButcherClient implements ClientModInitializer {
      *     <p>
      *     The kill path must NOT defer: it is already inside the client tick (which does its
      *     own setScreen calls a few lines up), and deferring would leave one frame where the
-     *     pre-kill veil has let go - it keys off {@link #isAnimationPlaying()} - but the
+     *     pre-kill hide has let go - it keys off {@link #isAnimationPlaying()} - but the
      *     cutscene is not on screen yet, flashing the hotbar at the worst possible moment.
      *     <p>
      *     Either way the screen is constructed and claimed as {@link #currentScope} right
@@ -897,11 +1734,9 @@ public class ButcherClient implements ClientModInitializer {
     private static void openScope(Minecraft client, DropResult result, boolean deferSetScreen, boolean test) {
         ScopeMinigameScreen screen = new ScopeMinigameScreen(result, test);
         currentScope = screen;
-        if (deferSetScreen) {
-            client.execute(() -> client.gui.setScreen(screen));
-        } else {
-            client.gui.setScreen(screen);
-        }
+        // Drawn in the HUD (CutsceneHud), never opened as a screen, so the player keeps
+        // control - and so nothing can stomp it either, which is what deferring was for.
+        com.butcher.render.CutsceneHud.show(screen);
     }
 
     /** True while the hotbar/chat/held-item should be hidden: a tracked Scatha is nearly dead, or its
@@ -921,8 +1756,27 @@ public class ButcherClient implements ClientModInitializer {
         forceHideUntil = System.currentTimeMillis() + ms;
     }
 
+    /**
+     * Whether dropped items go undrawn (mixin/DroppedItemHideMixin): from a slayer boss's pre-kill hide to the end of
+     * its cutscene, so its drop on the floor cannot give the reveal away. Asked per item per frame, so it only reads.
+     */
+    public static boolean hideDroppedItems() {
+        PatternConfig c = config;
+        if (c == null) return false;
+        if (c.blazeAnimation && (hellionActive() || hellionWatcher.armed())) return true;
+        return c.seraphAnimation && (seraphActive() || seraphWatcher.armed());
+    }
+
     public static boolean shouldHidePreKill() {
-        if (config.animationMode == AnimationMode.NONE || isAnimationPlaying()) return false;
+        if (isAnimationPlaying()) return false;
+        // Diana: a creature that may be ours is nearly dead (DianaWatcher.armed, SkyMaxx's way).
+        if (config.dianaAnimation && dianaWatcher.armed()) return true;
+        // Hellion: your Demonlord is nearly dead (HellionWatcher.armed, the same rule).
+        if (config.blazeAnimation && hellionWatcher.armed()) return true;
+        if (config.seraphAnimation && seraphWatcher.armed()) return true;
+        // Eruption: a lava creature of yours is nearly dead.
+        if (config.lavaAnimation && lavaWatcher.armed()) return true;
+        if (config.animationMode == AnimationMode.NONE) return false;
         if (System.currentTimeMillis() < forceHideUntil) return true;
         int threshold = config.hideBelowHp > 0 ? config.hideBelowHp : DEFAULT_HIDE_HP;
         return wormTracker.lowHealthScathaNearby(threshold) || wormTracker.killedRecently(HotbarDropWatcher.KILL_WINDOW_MS);
@@ -945,6 +1799,14 @@ public class ButcherClient implements ClientModInitializer {
 
     private static void trigger(DropResult result, boolean test) {
         Minecraft client = Minecraft.getInstance();
+        if (!test && result != null) {
+            com.google.gson.JsonObject rec = new com.google.gson.JsonObject();
+            rec.addProperty("outcome", result.outcome.name());
+            if (result.rarity != null) rec.addProperty("rarity", result.rarity);
+            rec.add("chat", com.butcher.detect.DropRecorder.chatSince(15_000));
+            rec.add("decisions", com.butcher.detect.DropRecorder.decisions(25));
+            com.butcher.detect.DropRecorder.record("scatha_kill", rec);
+        }
         // A cutscene opened by the kill is already on screen waiting to be told what
         // fell - hand it the answer rather than starting a second one over the top.
         if (awaitingDrop()) {

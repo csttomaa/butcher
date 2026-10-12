@@ -112,9 +112,14 @@ public final class TextureBank {
      * by a stable name alongside the textures we do generate. Cheap and idempotent.
      */
     public static void adopt(String name, Identifier id) {
+        adopt(name, id, ADOPTED_SIZE, ADOPTED_SIZE);
+    }
+
+    /** {@link #adopt} for a texture that is not 64 x 64 - the game's armour layers are 64 x 32. */
+    public static void adopt(String name, Identifier id, int width, int height) {
         Entry existing = UPLOADED.get(name);
         if (existing != null && existing.id().equals(id)) return;
-        UPLOADED.put(name, new Entry(null, id, ADOPTED_SIZE, ADOPTED_SIZE));
+        UPLOADED.put(name, new Entry(null, id, width, height));
     }
 
     /** Player skins are 64x64; adopted textures are assumed to be too. */

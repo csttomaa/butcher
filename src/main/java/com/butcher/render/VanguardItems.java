@@ -7,28 +7,16 @@ import com.butcher.render.model.CrystalMesh;
 import com.butcher.render.model.Mesh;
 import com.butcher.render.model.ModelProjection;
 import com.butcher.render.model.PlayerHeadMesh;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.mojang.authlib.GameProfile;
-import com.mojang.authlib.properties.Property;
-import com.mojang.authlib.properties.PropertyMap;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.joml.Matrix3x2fStack;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
-import java.util.function.Supplier;
 
 /**
  * Draws the things that come out of a Vanguard corpse, as the game itself would.
@@ -53,7 +41,8 @@ import java.util.function.Supplier;
  * possible look, so an unfinished lookup is drawn as a crystal in the item's own colour
  * instead, and the real head takes over on the first frame it is ready. {@link #prewarm}
  * starts every lookup when the player first joins a world, and the skins are in the local
- * cache anyway, so in practice the crystal is only ever seen if something is wrong.
+ * cache anyway, so in practice the crystal is only ever seen if something is wrong. The
+ * skins are loaded by {@link HeadSkins}, shared with Diana's drops.
  */
 public final class VanguardItems {
     private VanguardItems() {}
@@ -85,76 +74,18 @@ public final class VanguardItems {
 
     // ------------------------------------------------------------------ heads
 
-    private static Map<String, String> blobs;
-    private static final Map<String, Supplier<PlayerSkin>> lookups = new HashMap<>();
-    private static final Map<String, String> bankNames = new HashMap<>();
-    private static boolean prewarmed;
-
-    private static Map<String, String> blobs() {
-        if (blobs != null) return blobs;
-        blobs = new HashMap<>();
-        try (InputStream in = VanguardItems.class.getResourceAsStream("/assets/butcher/vanguard_heads.json")) {
-            if (in == null) {
-                ButcherClient.LOGGER.warn("[Butcher] vanguard_heads.json is missing from the jar");
-                return blobs;
-            }
-            JsonObject o = JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
-            for (String name : o.keySet()) blobs.put(name, o.get(name).getAsString());
-        } catch (Exception e) {
-            ButcherClient.LOGGER.warn("[Butcher] could not read vanguard_heads.json", e);
-        }
-        return blobs;
-    }
-
-    /** Starts every head's skin lookup. Cheap, idempotent; call once there is a player. */
-    public static void prewarm() {
-        if (prewarmed) return;
-        prewarmed = true;
-        for (String name : blobs().keySet()) lookup(name);
-    }
-
-    private static Supplier<PlayerSkin> lookup(String name) {
-        Supplier<PlayerSkin> existing = lookups.get(name);
-        if (existing != null) return existing;
-        String blob = blobs().get(name);
-        if (blob == null) return null;
-        try {
-            PropertyMap props = new PropertyMap(com.google.common.collect.ImmutableMultimap.of(
-                    "textures", new Property("textures", blob)));
-            GameProfile profile = new GameProfile(
-                    UUID.nameUUIDFromBytes(blob.getBytes(StandardCharsets.UTF_8)), "VanguardLoot", props);
-            Supplier<PlayerSkin> made = Minecraft.getInstance().getSkinManager().createLookup(profile, false);
-            lookups.put(name, made);
-            return made;
-        } catch (Throwable t) {
-            ButcherClient.LOGGER.warn("[Butcher] could not start a skin lookup for {}", name, t);
-            return null;
-        }
-    }
-
     /**
-     * The bank name of this item's real skin, or null if it is not a head or not ready yet.
-     *
-     * Polled, never cached as "ready": the lookup is asked every time, because the whole
-     * point of the supplier is that its answer changes when the download lands.
+     * Starts every head's skin lookup - the Vanguard's and Diana's. Cheap, idempotent; call
+     * once there is a player. The skins themselves are {@link HeadSkins}.
      */
+    public static void prewarm() {
+        HeadSkins.VANGUARD.prewarm();
+        HeadSkins.DIANA.prewarm();
+        HeadSkins.CREATURES.prewarm();
+    }
+
     private static String headTexture(String name) {
-        Supplier<PlayerSkin> lookup = lookup(name);
-        if (lookup == null) return null;
-        try {
-            PlayerSkin skin = lookup.get();
-            if (skin == null) return null;
-            Identifier id = skin.body().texturePath();
-            // Downloaded skins live under "skins/"; the defaults under "entity/player/".
-            // Anything that is not a download is Steve, and Steve is exactly what this
-            // class exists to never draw.
-            if (!id.getPath().startsWith("skins/")) return null;
-            String bank = bankNames.computeIfAbsent(name, n -> "vg_head_" + Integer.toHexString(n.hashCode()));
-            TextureBank.adopt(bank, id);
-            return bank;
-        } catch (Throwable t) {
-            return null;
-        }
+        return HeadSkins.VANGUARD.texture(name);
     }
 
     // ------------------------------------------------------------------ vanilla items

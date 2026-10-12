@@ -120,7 +120,9 @@ public class ThawScreen extends Screen {
     private final int variant;
     /** Corpses since the last legendary, as it stood before this one was counted. */
     private final int streakBefore;
-    private final long openedAt = System.currentTimeMillis();
+    /** Not final: "Quick Thaw" moves it back, so a bust's strikes are skipped. */
+    private long openedAt = System.currentTimeMillis();
+    private boolean quicked;
     private final Random rng;
     private final MeshRenderer meshes = new MeshRenderer();
 
@@ -197,6 +199,14 @@ public class ThawScreen extends Screen {
 
     // ================================================================== frame
 
+    /** When this screen opened, for the gameplay window's slide in. */
+    private final long pipOpened = System.currentTimeMillis();
+
+    /** The gameplay window slides in over the first 400 ms. */
+    private float pipFade() {
+        return Math.min(1f, (System.currentTimeMillis() - pipOpened) / 400f);
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(g, mouseX, mouseY, partialTick);
@@ -206,6 +216,20 @@ public class ThawScreen extends Screen {
             return;
         }
         int sw = this.width, sh = this.height;
+        // "Quick Thaw" (the menu; the review, T5): a corpse with nothing above common skips from the end of the intro
+        // to its last strike, the strikes between run silently. Wins play whole - so a Thaw that keeps going is one.
+        if (!quicked && ButcherClient.config != null && ButcherClient.config.vanguardQuick && tl.finale() == Finale.CRASH
+                && t >= tl.intro()) {
+            quicked = true;
+            long target = tl.finaleStart() - 1500;
+            if (t < target) {
+                openedAt -= target - t;
+                t = target;
+                long at = target;
+                ButcherAudio.silence();
+                ButcherAudio.muted(() -> fireEvents(at, sw, sh));
+            }
+        }
         fireEvents(t, sw, sh);
 
         // The veil and every element fade up together at the start and out together at the
@@ -240,6 +264,7 @@ public class ThawScreen extends Screen {
         drawIce(g, sw, sh, t, master);
         drawShards(g, v, master);
         drawPick(g, sw, sh, v, master);
+        drawFrost(g, sw, sh, t, master);
 
         drawTray(g, sw, sh, t, master);
         drawFlights(g, sw, sh, t, master);
@@ -249,6 +274,8 @@ public class ThawScreen extends Screen {
         drawLetterbox(g, sw, sh, t, master);
 
         if (moved) pose.popMatrix();
+        // The game itself, live, in a corner (SkyMaxx's gameplay view) - drawn last, over everything.
+        com.butcher.render.GameplayView.draw(g, pipFade(), 0xFF8FB8D8);
     }
 
     /**
@@ -271,6 +298,59 @@ public class ThawScreen extends Screen {
             else if (d > tl.specialDrain()) v += d - tl.specialDrain();
         }
         return tl.finaleStart() + Math.round(v);
+    }
+
+    // ================================================================== the screen freezing
+
+    /** Frost in from the corners and edges, a step per strike (render/ThawFrost). */
+    private final com.butcher.render.ThawFrost frost = new com.butcher.render.ThawFrost(openedAt);
+    /** Drawn as one image, not a rectangle per cell - see PixelLayer. */
+    private static final com.butcher.render.PixelLayer FROST_LAYER = new com.butcher.render.PixelLayer("thaw_frost");
+
+    /**
+     * The screen freezing (the user, 2026-10-02). It grows a little through the intro, then a step at
+     * every strike - the strikes land at the same moments whatever the haul, so it gives nothing away -
+     * and the newest frost catches that strike's flare. At the landing it melts on a crash, cracks on a
+     * reveal, and shatters on a legendary, the Locket (in its slow motion) or the Dye (when the paint
+     * bursts).
+     */
+    private void drawFrost(GuiGraphicsExtractor g, int sw, int sh, long t, float master) {
+        if (n == 0) return;
+        float growth = 0.12f * ease(clamp01(t / (float) Math.max(1L, tl.intro())));
+        long lastLand = -1;
+        int glintRgb = FLARE_BLUE;
+        for (Strike s : strikes) {
+            if (t < s.lands()) break;
+            growth += 0.88f * ease(clamp01((t - s.lands()) / 260f)) / n;
+            lastLand = s.lands();
+            glintRgb = flareColour(s.lands() - 1);
+        }
+        float glint = lastLand < 0 ? 0f : (float) Math.exp(-(t - lastLand) / 450.0);
+
+        com.butcher.render.ThawFrost.End end = com.butcher.render.ThawFrost.End.NONE;
+        float endT = 0f;
+        long landed = strikes.get(n - 1).lands();
+        if (t >= landed) {
+            Finale f = tl.finale();
+            end = switch (f) {
+                case CRASH -> com.butcher.render.ThawFrost.End.MELT;
+                case REVEAL -> com.butcher.render.ThawFrost.End.CRACK;
+                default -> com.butcher.render.ThawFrost.End.SHATTER;
+            };
+            long start = f == Finale.SPECIAL ? tl.finaleStart() + tl.specialDrain() : landed + 80;
+            long length = switch (f) {
+                case CRASH -> 1200;
+                case REVEAL -> 900;
+                default -> 1100;
+            };
+            // The Locket's breaks in its slow motion.
+            long clock = f == Finale.LOCKET ? vt(t) : t;
+            endT = clamp01((clock - start) / (float) length);
+            if (clock < start) end = com.butcher.render.ThawFrost.End.NONE;
+        }
+        FROST_LAYER.begin(sw, sh, com.butcher.render.ThawFrost.unitFor(sh));
+        frost.draw(FROST_LAYER, sw, sh, Math.min(1f, growth), glintRgb, glint, end, endT, master);
+        FROST_LAYER.end(g);
     }
 
     // ================================================================== events
@@ -1459,18 +1539,19 @@ public class ThawScreen extends Screen {
     // ================================================================== leaving
 
     private void close() {
+        com.butcher.render.GameplayView.release();
         if (!active) return;
         active = false;
         ButcherAudio.letRing();
         announce();
-        Minecraft client = Minecraft.getInstance();
-        client.execute(() -> {
-            if (client.gui.screen() == this) client.gui.setScreen(null);
-        });
+        // Drawn in the HUD, not opened (CutsceneHud): taking it off is all closing is.
+        com.butcher.render.CutsceneHud.hide(this);
     }
 
     @Override
     public void onClose() {
+        com.butcher.render.CutsceneHud.hide(this);
+        com.butcher.render.GameplayView.release();
         // Escape, or something else taking the screen. The sound is orphaned if the run
         // did not finish, so it stops - but the haul is still announced: the loot message
         // was hidden for this cutscene, and skipping the cutscene must not lose it.

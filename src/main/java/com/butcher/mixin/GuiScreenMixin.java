@@ -2,6 +2,7 @@ package com.butcher.mixin;
 
 import com.butcher.ButcherClient;
 import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -9,49 +10,24 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Refuses to swap the screen out from under a cutscene.
+ * Keeps the chat box shut while a cutscene plays or the Scatha's pre-kill hide is up - opening it
+ * would show the chat history, which is where a drop gives itself away. SkyMaxx does the same
+ * ({@code chatShut}).
  *
- * <h2>What this replaces</h2>
+ * This used to refuse every screen while a cutscene owned the screen, because the cutscenes were
+ * Screens and anything opening over them replaced them. They are drawn in the HUD now
+ * ({@link com.butcher.render.CutsceneHud}), so the pause menu, the inventory, a server's chest -
+ * all open over a cutscene that simply keeps playing underneath. Unlike SkyMaxx, opening the
+ * pause menu does not skip it: the game opens that menu by itself when the window loses focus,
+ * and alt-tabbing is not asking to skip.
  *
- * The cutscene is a {@link Screen}, and the game will happily replace it: Escape opens
- * the pause menu, E the inventory, T the chat box. The old answer was to notice
- * afterwards and put it back, from the end-of-tick handler - which works, but only ever
- * after the fact. For up to a tick the pause menu is genuinely open and the cutscene is
- * genuinely gone, and the player sees the flicker. Worse, "put it back" fights anything
- * with a legitimate reason to change the screen, and the last writer each tick wins.
- *
- * Refusing the change in the first place has neither problem. Nothing ever opens, so
- * there is nothing to undo and nothing to flicker, and the cutscene stops being in a
- * tug-of-war with the rest of the game.
- *
- * <h2>Two things this must not do</h2>
- *
- * <ul>
- *   <li><b>It must not block closing.</b> A null screen is the cutscene ending - that is
- *       how {@code ScopeMinigameScreen.close} hands control back - so cancelling it
- *       would trap the player behind a cutscene that has finished. Setting the SAME
- *       screen again is likewise let through, since it changes nothing.
- *   <li><b>It must not outlive the cutscene.</b> The guard is
- *       {@code currentScope.isActive()}, which is false the instant the screen finishes,
- *       rather than anything this mixin holds itself. A flag here could get stuck on and
- *       lock the player out of their own game, which is about the worst bug this mod
- *       could have.
- * </ul>
- *
- * <h2>It is Gui.setScreen on 26.2, not Minecraft.setScreen</h2>
- *
- * The reference mod targets {@code Minecraft.setScreen}. That method does not exist in
- * 26.2 - screen ownership moved to {@link Gui}, and what is left on {@code Minecraft} is
- * {@code setScreenAndShow}. Checked with {@code javap} before writing this, which is
- * what CLAUDE.md asks for and exactly the kind of rename that otherwise fails silently.
+ * <b>It is {@code Gui.setScreen} on 26.2, not {@code Minecraft.setScreen}</b> - see CLAUDE.md.
  */
 @Mixin(Gui.class)
 public class GuiScreenMixin {
 
     @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
-    private void butcher$keepCutscene(Screen screen, CallbackInfo ci) {
-        if (screen == null) return;                       // the cutscene closing
-        if (screen == ButcherClient.activeCutscene()) return;   // no change
-        if (ButcherClient.cutsceneOwnsScreen()) ci.cancel();
+    private void butcher$keepChatShut(Screen screen, CallbackInfo ci) {
+        if (screen instanceof ChatScreen && ButcherClient.chatShut()) ci.cancel();
     }
 }

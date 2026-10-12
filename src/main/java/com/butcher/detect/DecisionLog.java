@@ -1,6 +1,5 @@
 package com.butcher.detect;
 
-import com.butcher.ButcherClient;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -31,6 +30,10 @@ public final class DecisionLog {
     private static final int KEEP = 40;
 
     private final Deque<String> lines = new ArrayDeque<>();
+    /** Its own logger, not ButcherClient's, so the offline replays can use a DecisionLog without the game. */
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("butcher");
+    /** When set, sees every decision as it is made (tools/HellionReplay prints them). */
+    public static java.util.function.Consumer<String> tap;
 
     /** Records one decision. {@code text} may contain § colour codes. */
     public void note(String text) {
@@ -40,7 +43,8 @@ public final class DecisionLog {
                 lines.removeFirst();
             }
         }
-        ButcherClient.LOGGER.info("[Butcher] {}", strip(text));
+        LOG.info("[Butcher] {}", strip(text));
+        if (tap != null) tap.accept(strip(text));
     }
 
     /** Oldest first. */

@@ -74,10 +74,16 @@ public final class PlayerHeadMesh {
         mesh.quad(-h,  h,  h,   2 * h, 0, 0,    0, -2 * h, 0,   0, 0,  1,   u + s,     v + s, s, s);
         // back: -Z
         mesh.quad( h,  h, -h,  -2 * h, 0, 0,    0, -2 * h, 0,   0, 0, -1,   u + 3 * s, v + s, s, s);
-        // right: +X
-        mesh.quad( h,  h,  h,   0, 0, -2 * h,   0, -2 * h, 0,   1, 0,  0,   u,         v + s, s, s);
-        // left: -X
-        mesh.quad(-h,  h, -h,   0, 0, 2 * h,    0, -2 * h, 0,  -1, 0,  0,   u + 2 * s, v + s, s, s);
+        // The sides. The unwrap is "right | front | left | back" wrapped round the head, so the
+        // head's own RIGHT side - the slot left of the front - sits on the viewer's LEFT (-X) when
+        // the face looks at the camera, and its left side on +X. These were swapped until 0.2.53:
+        // invisible on a symmetric skin, but the Megalodon's mouth wraps round the front corners
+        // and came out broken at them (the user, 2026-10-02). ChopScene's own head boxes already had
+        // it this way round. Each side's u runs so its edge meets the front's edge at the corner.
+        // head's left side: +X
+        mesh.quad( h,  h,  h,   0, 0, -2 * h,   0, -2 * h, 0,   1, 0,  0,   u + 2 * s, v + s, s, s);
+        // head's right side: -X
+        mesh.quad(-h,  h, -h,   0, 0, 2 * h,    0, -2 * h, 0,  -1, 0,  0,   u,         v + s, s, s);
         // top: +Y. In the unwrap the top slot sits directly above the front slot and shares
         // an edge with it, so v runs toward the front of the head.
         mesh.quad(-h,  h, -h,   2 * h, 0, 0,    0, 0, 2 * h,    0, 1,  0,   u + s,     v,     s, s);

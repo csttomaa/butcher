@@ -7,9 +7,17 @@
 		"ItemInHandRendererMixin",
 		"SoundEngineMixin",
 		"GuiScreenMixin",
-		"HudMixin",
 		"ChatComponentMixin",
-		"ChatComponentInvoker"
+		"ChatComponentInvoker",
+		"GameRendererMixin",
+		"GuiRenderStateFadeMixin",
+		"GuiTextRenderStateAccessor",
+		"HudFadeMixin",
+		"GuiFadeMixin",
+		"HudHiddenMixin",
+		"DroppedItemHideMixin",
+		"PickupHideMixin",
+		"HudInvoker"
 	],
 	"injectors": {
 		"defaultRequire": 1
