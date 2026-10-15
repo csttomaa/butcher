@@ -21,6 +21,7 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   when it comes back.
 
 ### Added
+- **A new icon**: a gold pixel-art B with its corner chopped off. The menu shows it pixel-sharp beside the title.
 - **A Speed setting for every animation** (50-200%): the Chopping Block, Hellion, Eruption, Fin and Wisp join the
   Thaw's Speed and the Scatha's Full run. The whole animation - picture, sound cues, skip target - runs on one clock
   at that pace; what it shows never changes.

@@ -4,7 +4,8 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
-/** The mod icon for the menu's title, scaled down with averaging so it stays smooth at 24 GUI pixels. */
+/** The mod icon for the menu's title, scaled down in halving steps. The icon is 32 x 32 pixel art blown up 8x, so
+ *  each halving averages blocks of one colour and the result is the art's own pixels, exactly. */
 public final class MenuIcon {
     private MenuIcon() {}
 

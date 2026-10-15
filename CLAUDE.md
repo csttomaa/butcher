@@ -257,7 +257,8 @@ or the next regeneration wipes the change:
 | `gen_sparks.py` | `butcher/spark_0..5.png` | yes, the impact sparks |
 | `gen_veil.py` | `prekill_veil.png` | no - the pre-kill veil was removed (0.2.31) |
 | `gen_misc.py` | `spark.png` (+ dormant placeholder art) | yes |
-| `IconGen.java` | `icon.png` | yes - the mod icon |
+| `gen_icon.py` | `icon.png` | yes - the mod icon (since 2026-10-15) |
+| `IconGen.java` | `icon.png` | no - the old rendered cleaver; running it overwrites the current icon |
 | `gen_cave.py` | `cave/cave_wide.png` | no — `CaveArt.backdrop()` replaced it |
 | `gen_gems.py` | `cave/gem_*`, `rock_*`, `rock_glow_*`, `sparkle.png` | no — `CaveArt` replaced them |
 | `gen_cleaver.py` | `butcher/cleaver_00..13.png` | no — the cleaver is a real mesh now |
@@ -265,6 +266,12 @@ or the next regeneration wipes the change:
 The three superseded scripts are kept because they are the only copy of that art's
 source; their outputs have been removed from `src/main/resources/`, so re-running one
 puts files back that nothing loads.
+
+**The icon (2026-10-15)** is `gen_icon.py`: 32 x 32 pixel art written 8x up - a gold B on a dark badge, its
+top-left corner chopped off along x + y = const (the cut keeps clear of the counters, so the B always reads), the
+piece pushed a pixel up-left, both cut faces white-hot, sparks along the line. The user picked it from a sheet; a cut
+through the middle split both counters and read as "F3". The menu draws it at its native 32 GUI pixels
+(`MenuView.ICON_SIZE`; `MenuIcon` halves 256 -> 32 exactly), beside "BUTCHER" with the subtitle under the name.
 
 `IconGen.java` is the odd one out: it is Java, not Python, because it renders the icon
 from the **real** `CleaverMesh` through the **real** `ModelProjection` with the **real**
@@ -898,8 +905,8 @@ real menu can be rendered offline: a Java2D `Draw` with the game font's characte
 `FabricLoader`, Gson and `ButcherClient.LOGGER` (the session's scratchpad `menu/` held one). Keep `MenuView` free of
 Minecraft, Fabric (beyond config/stats) and the market classes, or that stops working.
 
-The look: embers rising over a vignette; the title with the mod icon (`TEX_ICON`, the icon averaged down to 96 px by
-`MenuIcon`, registered in `ButcherClient`); a gradient panel with a gold trim and a glint along its top, as tall as its
+The look: embers rising over a vignette; the title with the mod icon (`TEX_ICON`, the 32 px pixel art at its own size,
+registered in `ButcherClient`); a gradient panel with a gold trim and a glint along its top, as tall as its
 content (`shownH` eases); tabs with 7x7 pixel icons and a sliding gold underline; each animation a card in its own
 colour (`SCATHA`, `VANGUARD`, `DIANA`...) with a vanilla item icon, a subtitle (what it plays on; on the Stats tab the
 live dry streak), and its **on/off switch on the card itself** (`HeaderRow.onSwitch`) - so the in-card master toggles

@@ -60,6 +60,8 @@ public final class MenuView {
     // ------------------------------------------------------------------ layout
 
     private static final int PANEL_W = 360, PANEL_H_MAX = 340;
+    /** The icon is 32 x 32 pixel art: drawn at 32 GUI pixels, every art pixel lands on whole screen pixels. */
+    public static final int ICON_SIZE = 32;
     private static final int TITLE_H = 40, TAB_H = 26, FOOTER_H = 16, PAD = 10;
     private static final int GAP = 3;
     private static final int SCROLLBAR_W = 3, SCROLLBAR_GRAB = 6;
@@ -223,21 +225,23 @@ public final class MenuView {
         }
     }
 
+    /** The lockup: the icon at its own pixel size (one art pixel a GUI pixel, so it stays crisp at any GUI scale),
+     *  the name beside it and the line under the name. */
     private void title(Draw d, int px, int py, int pw) {
-        String name = "BUTCHER";
-        int tw = d.width(name, true) * 2;
-        int icon = 24, gap = 6;
-        int total = icon + gap + tw;
-        int x = px + (pw - total) / 2, y = py - TITLE_H + 2;
+        String name = "BUTCHER", sub = "Rare-drop cutscenes for SkyBlock";
+        int tw = d.width(name, true) * 2, sw = d.width(sub, false);
+        int icon = ICON_SIZE, gap = 7;
+        int total = icon + gap + Math.max(tw, sw);
+        int x = px + (pw - total) / 2, y = py - TITLE_H + 3;
         d.modIcon(x, y, icon);
+        int tx = x + icon + gap;
         d.push();
-        d.translate(x + icon + gap, y + 5);
+        d.translate(tx, y + 3);
         d.scale(2f);
         d.text(name, 1, 1, 0xFF3A2408, true, false);
         d.text(name, 0, 0, GOLD, true, false);
         d.pop();
-        String sub = "Rare-drop cutscenes for SkyBlock";
-        d.text(sub, px + (pw - d.width(sub, false)) / 2, y + icon + 4, DIM, false, true);
+        d.text(sub, tx + 1, y + 22, DIM, false, true);
     }
 
     private void panel(Draw d, int px, int py, int pw, int ph) {

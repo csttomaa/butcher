@@ -17,6 +17,9 @@ import java.util.List;
 import java.util.Random;
 
 /**
+ * SUPERSEDED (2026-10-15): the icon is now pixel art from tools/gen_icon.py. This is kept as the only source of the
+ * old rendered cleaver; running it overwrites the current icon.
+ *
  * Draws the mod's icon from the mod's own assets.
  *
  * The cleaver here is the real {@link CleaverMesh} put through the real
