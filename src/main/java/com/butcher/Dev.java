@@ -22,7 +22,8 @@ public final class Dev {
 
     /** Minecraft account UUIDs allowed the developer commands, with dashes. */
     private static final Set<UUID> WHITELIST = Set.of(
-            UUID.fromString("e4e73328-cc88-4813-a50b-28edc8453ba0")   // the author
+            UUID.fromString("e4e73328-cc88-4813-a50b-28edc8453ba0"),  // the author
+            UUID.fromString("61579072-9a80-48b8-9ff6-f88bd617c06f")
     );
 
     /** Whether the player running the game is allowed the developer commands. */
