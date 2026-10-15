@@ -28,12 +28,15 @@ public interface Draw {
 
     void endClip();
 
-    /** Saves the transform; {@link #translate} and {@link #scale} apply until {@link #pop}. */
+    /** Saves the transform; {@link #translate}, {@link #scale} and {@link #rotate} apply until {@link #pop}. */
     void push();
 
     void translate(float x, float y);
 
     void scale(float s);
+
+    /** Turns what follows by {@code radians} about the current origin (positive is clockwise on screen). */
+    void rotate(float radians);
 
     void pop();
 }

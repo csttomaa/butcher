@@ -669,7 +669,7 @@ public class ButcherClient implements ClientModInitializer {
             if (client.player != null && config.dianaAnimation) dianaWatcher.tick(client.player, config.dianaHidePct);
             if (client.player != null && config.fishingAnnounce) sharkWatcher.tick(client.player);
             if (client.player != null && config.blazeAnimation) hellionWatcher.tick(client.player, config.blazeHidePct);
-            if (client.player != null && config.seraphAnimation) seraphWatcher.tick(client.player, config.seraphHidePct);
+            if (client.player != null && seraphOn()) seraphWatcher.tick(client.player, config.seraphHidePct);
             if (client.player != null && config.lavaAnimation) {
                 lavaWatcher.lootShare = config.lavaLootShare;
                 lavaWatcher.tick(client.player, config.lavaHidePct);
@@ -1230,7 +1230,10 @@ public class ButcherClient implements ClientModInitializer {
         switch (group) {
             case "diana" -> openChop(com.butcher.anim.ChopTimeline.Verdict.valueOf(name), null, true);
             case "blaze" -> openHellion(com.butcher.anim.HellionTimeline.Drop.valueOf(name), true);
-            case "seraph" -> openSeraph(com.butcher.anim.SeraphTimeline.Drop.valueOf(name), true);
+            case "seraph" -> {
+                // Under maintenance: only the developers may see it, from the menu or the commands.
+                if (!Maintenance.SERAPH || Dev.allowed()) openSeraph(com.butcher.anim.SeraphTimeline.Drop.valueOf(name), true);
+            }
             case "lava" -> {
                 com.butcher.anim.EruptionTimeline.Drop d = com.butcher.anim.EruptionTimeline.Drop.valueOf(name);
                 com.butcher.anim.EruptionTimeline.Creature who = com.butcher.anim.EruptionTimeline.Creature.JAWBUS;
@@ -1609,7 +1612,7 @@ public class ButcherClient implements ClientModInitializer {
         if (!overlay && !player && config != null && config.lavaAnimation) {
             lavaWatcher.onChatLine(message.getString());
         }
-        if (!overlay && !player && config != null && config.seraphAnimation) {
+        if (!overlay && !player && config != null && seraphOn()) {
             seraphWatcher.onChatLine(message.getString());
         }
         if (!overlay && !player && config != null && config.blazeAnimation) {
@@ -1935,6 +1938,13 @@ public class ButcherClient implements ClientModInitializer {
         forceHideUntil = System.currentTimeMillis() + ms;
     }
 
+    /** Whether the Seraph's Glyph runs at all: its own switch, and not while it is under maintenance
+     *  ({@link Maintenance#SERAPH}) - then nothing of it is detected, hidden or played for players. */
+    static boolean seraphOn() {
+        PatternConfig c = config;
+        return c != null && c.seraphAnimation && !Maintenance.SERAPH;
+    }
+
     /**
      * Whether dropped items go undrawn (mixin/DroppedItemHideMixin): from a slayer boss's pre-kill hide to the end of
      * its cutscene, so its drop on the floor cannot give the reveal away. Asked per item per frame, so it only reads.
@@ -1943,7 +1953,7 @@ public class ButcherClient implements ClientModInitializer {
         PatternConfig c = config;
         if (c == null) return false;
         if (c.blazeAnimation && (hellionActive() || hellionWatcher.armed())) return true;
-        return c.seraphAnimation && (seraphActive() || seraphWatcher.armed());
+        return seraphOn() && (seraphActive() || seraphWatcher.armed());
     }
 
     /** True while the hotbar/chat/held-item should be hidden: a tracked creature is nearly dead, or the Scatha's
@@ -1955,7 +1965,7 @@ public class ButcherClient implements ClientModInitializer {
         if (config.dianaAnimation && dianaWatcher.armed()) return true;
         // Hellion: your Demonlord is nearly dead (HellionWatcher.armed, the same rule).
         if (config.blazeAnimation && hellionWatcher.armed()) return true;
-        if (config.seraphAnimation && seraphWatcher.armed()) return true;
+        if (seraphOn() && seraphWatcher.armed()) return true;
         // Eruption: a lava creature of yours is nearly dead.
         if (config.lavaAnimation && lavaWatcher.armed()) return true;
         if (System.currentTimeMillis() < forceHideUntil) return true;

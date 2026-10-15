@@ -70,6 +70,14 @@ jar {
 	from("LICENSE") {
 		rename { "${it}_${project.archives_base_name}" }
 	}
+	// Mod Menu's two API interfaces are compile-time copies (src/main/java/com/terraformersmc): with Mod Menu
+	// installed its own are used, and without it the "modmenu" entrypoint is never loaded. Shipping them would
+	// put a second copy of another mod's classes in the game.
+	exclude("com/terraformersmc/**")
+}
+
+sourcesJar {
+	exclude("com/terraformersmc/**")
 }
 
 // Auto-incrementing build number: mod_version lives in

@@ -36,6 +36,8 @@ public class ButcherMenuScreen extends Screen {
             ButcherClient.playTest(group, name);
         }
 
+        @Override public boolean canTry() { return minecraft != null && minecraft.level != null && minecraft.player != null; }
+
         @Override public void resetSettings() { ButcherClient.resetSettings(); }
 
         @Override
@@ -82,11 +84,25 @@ public class ButcherMenuScreen extends Screen {
         @Override public void push() { g.pose().pushMatrix(); }
         @Override public void translate(float x, float y) { g.pose().translate(x, y); }
         @Override public void scale(float s) { g.pose().scale(s, s); }
+        @Override public void rotate(float radians) { g.pose().rotate(radians); }
         @Override public void pop() { g.pose().popMatrix(); }
     };
 
+    /** Where Esc goes back to: Mod Menu's list when opened from there, otherwise nothing (back to the game). */
+    private final Screen parent;
+
     public ButcherMenuScreen() {
+        this(null);
+    }
+
+    public ButcherMenuScreen(Screen parent) {
         super(Component.literal("Butcher"));
+        this.parent = parent;
+    }
+
+    @Override
+    public void onClose() {
+        if (minecraft != null) minecraft.gui.setScreen(parent);
     }
 
     private static Component component(String s, boolean bold) {

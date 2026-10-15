@@ -14,6 +14,16 @@ every build, so the gaps between entries are builds nobody ran - not missing not
 - The Stats tab shows each dry streak on its card, and large inside it.
 - The panel fits its content, scrolling is smooth, and the menu reopens on the tab and cards you left open.
 
+### The Seraph's Glyph is under maintenance
+- The Voidgloom Seraph's animation is **switched off for this release** while it is reworked. Its card in the menu is
+  taped over ("UNDER MAINTENANCE") and cannot be opened or switched on; its volume slider and stats card are hidden.
+  Nothing of it runs: no detection, no pre-kill hide, no hidden floor loot, no cutscene. A saved setting is kept for
+  when it comes back.
+
+### Added
+- **Mod Menu support** (optional): its Configure button opens the Butcher menu, and Esc goes back to the mod list.
+  Opened from the title screen, "Try it" says to join a world first instead of playing into nothing.
+
 ### Changed
 - **`/butcher test` and `/butcher debug` are developer-only.** They exist only for the accounts in `Dev.java` (and
   in a development run). For everyone else they are gone, tab completion included. Players use the menu instead.

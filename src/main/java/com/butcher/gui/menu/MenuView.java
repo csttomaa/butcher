@@ -40,6 +40,9 @@ public final class MenuView {
         /** Closes the menu and plays an outcome as "Try it" does. */
         void playTest(String group, String name);
 
+        /** Whether "Try it" can play: cutscenes draw over the game, so not from the title screen (Mod Menu). */
+        default boolean canTry() { return true; }
+
         void resetSettings();
 
         /** A Diana verdict's drop name ("Minos Relic"), or "" for none. */
@@ -571,7 +574,7 @@ public final class MenuView {
 
     /** The slayers: one card, each boss its own card inside it. */
     private void slayerRows(List<Row> rows, PatternConfig cfg) {
-        if (!group(rows, "slayers", "Slayers", "Hellion and the Seraph's Glyph", "diamond_sword", SLAYERS, null, null)) return;
+        if (!group(rows, "slayers", "Slayers", com.butcher.Maintenance.SERAPH ? "Hellion (the Seraph's Glyph is on its way)" : "Hellion and the Seraph's Glyph", "diamond_sword", SLAYERS, null, null)) return;
         curIndent = 0;
         int outer = curIndent;
         curIndent = outer + 9;
@@ -590,7 +593,13 @@ public final class MenuView {
             tryRows(rows, "blaze", names(com.butcher.anim.HellionTimeline.Drop.values()),
                     n -> com.butcher.anim.HellionTimeline.Drop.valueOf(n).title);
         }
-        if (group(rows, "seraph", "Voidgloom Seraph - The Seraph's Glyph", "Every kill of your own tier IV Seraph", "ender_pearl", SERAPH, cfg.seraphAnimation,
+        if (com.butcher.Maintenance.SERAPH) {
+            // Being reworked: the card is taped shut and none of it runs (ButcherClient.seraphOn).
+            curAccent = SERAPH;
+            curGrouped = false;
+            curGroup = "seraph";
+            rows.add(new TapedRow("Voidgloom Seraph - The Seraph's Glyph", "Back soon - still being sharpened", "ender_pearl"));
+        } else if (group(rows, "seraph", "Voidgloom Seraph - The Seraph's Glyph", "Every kill of your own tier IV Seraph", "ender_pearl", SERAPH, cfg.seraphAnimation,
                 () -> { cfg.seraphAnimation = !cfg.seraphAnimation; cfg.save(); })) {
             rows.add(new NoticeRow("Plays on every kill of your own tier IV Seraph (the one spawned by you), the moment it dies; the drop decides the ending."));
             rows.add(new SectionRow("Hiding the drop"));
@@ -625,7 +634,11 @@ public final class MenuView {
         String pick = outcomes.get(i);
         String name = outcomeName(pick, title);
         rows.add(new ValueRow("Outcome", name, true, () -> TRY.put(group, i + 1), () -> TRY.put(group, i - 1)));
-        rows.add(new ButtonRow("▶  Play " + name, curAccent, () -> host.playTest(group, pick)));
+        if (host.canTry()) {
+            rows.add(new ButtonRow("▶  Play " + name, curAccent, () -> host.playTest(group, pick)));
+        } else {
+            rows.add(new NoticeRow("Join a world to try it - the cutscenes play over the game."));
+        }
     }
 
     private static String outcomeName(String pick, Function<String, String> title) {
@@ -696,7 +709,9 @@ public final class MenuView {
         soundSlider(rows, "snd_diana", "Diana - The Chopping Block", DIANA, cfg.dianaVolume, v -> cfg.dianaVolume = v);
         soundSlider(rows, "snd_lava", "Lava fishing - Eruption", LAVA, cfg.lavaVolume, v -> cfg.lavaVolume = v);
         soundSlider(rows, "snd_blaze", "Inferno Demonlord - Hellion", BLAZE, cfg.blazeVolume, v -> cfg.blazeVolume = v);
-        soundSlider(rows, "snd_seraph", "Voidgloom Seraph", SERAPH, cfg.seraphVolume, v -> cfg.seraphVolume = v);
+        if (!com.butcher.Maintenance.SERAPH) {
+            soundSlider(rows, "snd_seraph", "Voidgloom Seraph", SERAPH, cfg.seraphVolume, v -> cfg.seraphVolume = v);
+        }
         soundSlider(rows, "snd_fishing", "Fishing Festival - Fin", FIN, cfg.fishingVolume, v -> cfg.fishingVolume = v);
         soundSlider(rows, "snd_ghost", "Dwarven Mines Ghosts - Wisp", WISP, cfg.ghostVolume, v -> cfg.ghostVolume = v);
         rows.add(new NoticeRow("The same sliders as in each animation's own card."));
@@ -830,8 +845,10 @@ public final class MenuView {
         }
         sourceGroup(rows, st, "blaze", "Hellion - Inferno Demonlord IV", "blaze_rod", BLAZE, "kill", "Bosses killed",
                 titles(com.butcher.anim.HellionTimeline.Drop.values()));
-        sourceGroup(rows, st, "seraph", "The Seraph - Voidgloom Seraph IV", "ender_pearl", SERAPH, "kill", "Bosses killed",
-                titles(com.butcher.anim.SeraphTimeline.Drop.values()));
+        if (!com.butcher.Maintenance.SERAPH) {
+            sourceGroup(rows, st, "seraph", "The Seraph - Voidgloom Seraph IV", "ender_pearl", SERAPH, "kill", "Bosses killed",
+                    titles(com.butcher.anim.SeraphTimeline.Drop.values()));
+        }
         sourceGroup(rows, st, "lava", "Eruption - lava fishing", "magma_cream", LAVA, "kill", "Rare creatures killed",
                 titles(com.butcher.anim.EruptionTimeline.Drop.values()));
         sourceGroup(rows, st, "shark", "Fin - Great White Sharks", "tropical_fish", FIN, "shark", "Sharks killed",
@@ -965,6 +982,61 @@ public final class MenuView {
         @Override
         boolean click(double mx, double my, int x, int y, int w) {
             return within(mx, my, x, y, x + w, y + height());
+        }
+    }
+
+    /**
+     * A card that is shut for now: drawn faded, with hazard tape across it reading "UNDER MAINTENANCE". It has no
+     * switch and does not open. The tape sways a little while the mouse is on it.
+     */
+    private final class TapedRow extends Row {
+        static final int TAPE = 0xFFF2C21B, INK = 0xFF16161A;
+        final String title, sub, icon;
+
+        TapedRow(String title, String sub, String icon) { this.title = title; this.sub = sub; this.icon = icon; }
+
+        @Override int height() { return 30; }
+
+        @Override
+        void draw(Draw d, int x, int y, int w, int mx, int my) {
+            int h = height();
+            boolean hover = within(mx, my, x, y, x + w, y + h);
+            // The card underneath, faded as a switched-off one is.
+            d.fill(x, y, x + w, y + h, 0x0CFFFFFF);
+            outline(d, x, y, w, h, 0x18FFFFFF);
+            d.fill(x, y, x + 3, y + h, withAlpha(accent, 0x50));
+            d.fill(x + 7, y + 6, x + 27, y + 24, withAlpha(accent, 0x20));
+            d.item(icon, x + 9, y + 7);
+            d.fill(x + 7, y + 6, x + 27, y + 24, 0xA0101216);
+            int tx = x + 33, maxW = x + w - 12 - tx;
+            d.text(fit(d, title, maxW), tx, y + 6, FAINT, false, true);
+            d.text(fit(d, sub, maxW), tx, y + 17, withAlpha(FAINT, 0xB0), false, false);
+
+            // The tape: a band a little longer than the card, turned a few degrees, slanted black stripes on yellow.
+            float sway = approach("tape:" + title, hover ? 1f : 0f)
+                    * (float) Math.sin(System.currentTimeMillis() / 140.0) * 0.012f;
+            int half = w / 2 + 4, top = -6, bottom = 7, period = 12;
+            d.push();
+            d.translate(x + w / 2f, y + h / 2f + 1);
+            d.rotate(-0.04f + sway);
+            d.fill(-half + 1, top + 2, half + 1, bottom + 2, 0x70000000);   // its shadow on the card
+            d.fill(-half, top, half, bottom, TAPE);
+            for (int r = top; r < bottom; r++) {
+                int shift = bottom - r;                                     // each row a pixel along: "/" stripes
+                for (int sx = -half - period; sx < half; sx += period) {
+                    int a = Math.max(-half, sx + shift), b = Math.min(half, sx + shift + period / 2);
+                    if (a < b) d.fill(a, r, b, r + 1, INK);
+                }
+            }
+            d.fill(-half, top, half, top + 1, 0x40FFFFFF);                  // a sheen along its top edge
+            // The words on a plate of their own, so the stripes do not run through them.
+            String label = "UNDER MAINTENANCE";
+            int lw = d.width(label, true), px = lw / 2 + 6;
+            d.fill(-px, top + 1, px, bottom - 1, TAPE);
+            d.fill(-px, top + 1, -px + 1, bottom - 1, INK);
+            d.fill(px - 1, top + 1, px, bottom - 1, INK);
+            d.text(label, -lw / 2, top + 3, INK, true, false);
+            d.pop();
         }
     }
 

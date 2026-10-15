@@ -855,6 +855,26 @@ so the words clear the bottom; the Dye's `showScale` is 1.3 (at 1.45 with the 13
   Hellion's pillar tag is clamped to the edges. Only Brain Food's pi ring leaves the screen, as it fades out.
 - `tools/ChopPreview` takes `-Dw` / `-Dh` (default 640 x 360), used by the other previews too.
 
+## Under maintenance: the Seraph (2026-10-15)
+
+The user is reworking the Seraph's Glyph before players see it. `Maintenance.SERAPH` (pure, no Minecraft) is the
+switch. While it is true, `ButcherClient.seraphOn()` is false whatever `seraphAnimation` says, and every Seraph path
+goes through it: the watcher's tick and chat lines, the pre-kill hide, `hideDroppedItems`. "Try it" for "seraph" only
+plays for `Dev.allowed()`, and `/butcher test slayer enderman ...` (developer-only already) still plays it. The menu
+draws a `TapedRow` in place of its card (hazard tape across, "UNDER MAINTENANCE", no switch, does not open), drops
+the Sound tab's slider and the Stats card, and the Slayers subtitle says it is on its way. `Draw.rotate` exists for
+the tape. To bring it back, set `SERAPH` to false; the README's table and fabric.mod.json's description name it as
+coming, and need the same edit.
+
+## Mod Menu
+
+`gui/ModMenuIntegration` (the "modmenu" entrypoint, `suggests` in fabric.mod.json) returns `ButcherMenuScreen::new`
+with Mod Menu's screen as `parent`; `onClose` goes back to it. Mod Menu's maven is not used:
+`src/main/java/com/terraformersmc/modmenu/api/` holds compile-time copies of `ModMenuApi` and `ConfigScreenFactory`
+(signatures read from SkyMaxx's compiled integration: `create(Screen)Screen` erased), and `build.gradle` excludes
+`com/terraformersmc/**` from the jar and the sources jar, so the real ones are always Mod Menu's own. Without a world
+(the title screen) `Host.canTry()` is false and the Try-it rows say to join one.
+
 ## The menu (redesigned 2026-10-15)
 
 `gui/menu/MenuView` is the whole menu - rows, layout, drawing, mouse - with **no Minecraft in it**: it draws through
