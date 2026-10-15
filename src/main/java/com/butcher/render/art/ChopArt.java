@@ -113,10 +113,13 @@ public final class ChopArt {
 
     /** Cut flesh: dark plum meat, glistening, a lighter rim - Mythos ichor rather than red. */
     private static void flesh(BufferedImage img, int[] r, Random rng) {
+        // Meat: a dark red with fibre streaks running across it, and a pale rim a texel wide where the skin meets the
+        // flesh. The plum with pink dots read as cake with sprinkles (the review, D5).
         for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) {
             boolean rim = x == 0 || y == 0 || x == 15 || y == 15;
-            int c = rim ? 0xB0507A : ((x * 5 + y * 3) % 7 == 0 ? 0xE08AB0 : 0x7A2A52);
-            put(img, r, x, y, jitter(c, rng, 10));
+            int fibre = (x + y / 3) % 4;
+            int c = rim ? 0xE2BBA8 : fibre == 0 ? 0xB0302E : fibre == 2 && (x + y) % 3 == 0 ? 0x5C1012 : 0x861C1E;
+            put(img, r, x, y, jitter(c, rng, 8));
         }
     }
 

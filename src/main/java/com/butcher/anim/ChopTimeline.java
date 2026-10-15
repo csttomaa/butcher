@@ -81,7 +81,8 @@ public final class ChopTimeline {
     private final long seed;
     private final java.util.Random rng;
     /** Where each blow lands along the head's width, and how deep it bites. */
-    private final float[] strikeX = new float[4], bite = {1.2f, 2.4f, 3.6f, 8.4f};
+    // The first bite a little deeper: at 1.2 the blade lay on the head and read as resting (the review, D3).
+    private final float[] strikeX = new float[4], bite = {1.8f, 2.8f, 3.8f, 8.4f};
     private final float headYaw;
     private final int side;
 
@@ -94,7 +95,7 @@ public final class ChopTimeline {
         strikeX[3] = (rng.nextFloat() - 0.5f) * 0.8f;
         headYaw = (rng.nextFloat() - 0.5f) * 0.5f;
         side = rng.nextBoolean() ? 1 : -1;
-        this.lines = defaultLines(verdict, creature);
+        this.lines = merged(defaultLines(verdict, creature));
         this.sting = new StingEnding(this);
         this.hunt = new HuntEnding(this);
         this.fleece = new FleeceEnding(this);
@@ -284,6 +285,11 @@ public final class ChopTimeline {
         }
         if (t >= LAND && t < LAND + 300) a = Math.max(a, 2.2f * (float) Math.exp(-(t - LAND) / 80.0));
         float sx = a * (float) Math.sin(t * 0.33), sy = a * (float) Math.cos(t * 0.41);
+        // A kick down on each blow, the way the blade drives: shake alone has no direction (the review, D3).
+        for (int k = 0; k < 4; k++) {
+            long at = blowTime(k);
+            if (t >= at && t < at + 220) sy += 2f * (float) Math.exp(-(t - at) / 55.0);
+        }
         if (ending() == Ending.STING && t >= SPLIT) {
             float[] e = sting.shake(real);
             sx += e[0];
@@ -777,7 +783,7 @@ public final class ChopTimeline {
     /** How big the drop is shown, by its worth: see ChopScene.showScale. */
     public float showScale() {
         if (!verdict.win()) return 1f;
-        if (verdict == Verdict.DYE) return 1.45f;
+        if (verdict == Verdict.DYE) return 1.3f;
         return cheap() ? 1f : 1.25f;
     }
 
@@ -810,6 +816,15 @@ public final class ChopTimeline {
             }, "Your 1st Mythological Dye"};
             default -> new String[0];
         };
+    }
+
+    /**
+     * The odds and the count on one line, "1 in ~80 Minos Inquisitors · your 1st": six lines stacked under a
+     * small icon was a wall of text (the review, D9).
+     */
+    private static String[] merged(String[] two) {
+        if (two.length < 2) return two;
+        return new String[]{two[0] + " \u00b7 your 1st"};
     }
 
     public void lines(String... lines) { this.lines = lines; }

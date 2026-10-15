@@ -15,16 +15,18 @@ import org.joml.Matrix3x2fStack;
  * "Fin" - the Fishing Festival announcement: a Megalodon pet or a Great White Shark Tooth dropped.
  *
  * Deliberately small and quick, the user's brief: no dim, no HUD hiding, no kill animation, about
- * 2.5 s, in the lower middle of the screen. A fin rises out of a strip of water, the Butcher's
- * cleaver drops on it, the water splashes and the drop pops out with its name and price.
+ * 2.5 s, in the lower middle of the screen. A fin rises out of a strip of water, a fishing hook on its line
+ * drops in beside it, the fin goes for it and dives - and the hook is yanked up out of a splash, the drop
+ * coming up under it with its name and price. (Until 0.3.0 the Scatha's cleaver chopped the fin; the cleaver is
+ * the Scatha's, so the shark got its own verb - the review, T7.)
  *
  * Every shape is pixel art drawn as squares (the rule since 0.2.29); only the drop itself is a
  * real item - the Megalodon's NEU skin on a 3D head, the tooth's own vanilla icon (a ghast tear),
  * adopted from the game at runtime, never bundled.
  *
  * <b>The bust</b> (0.2.59): one of the player's own Great White Sharks died with neither
- * (SharkWatcher). The fin rises, the cleaver comes down - and the fin ducks under at the last moment,
- * the blade splashes into empty water, a few bubbles come up. About 1.6 s; no text.
+ * (SharkWatcher). The fin rises, the hook goes in - and the fin turns away and ducks under, the hook is
+ * yanked up empty and dangles, a few bubbles come up. About 1.6 s; no text.
  *
  * <b>The pets' price is George's</b> (the user, 0.2.59): what the pet sells to George for, fixed -
  * {@link #GEORGE_LEGENDARY} and {@link #GEORGE_EPIC} - not the auction house.
@@ -104,9 +106,9 @@ public final class FinPopup {
         if (bust) {
             water(g, cx, waterY, t, alpha);
             if (t < CHOP) fin(g, cx, waterY, t, alpha);
-            missedCleaver(g, cx, waterY, t, alpha);
+            hook(g, cx, waterY, t, alpha);
             if (t >= CHOP) {
-                splash(g, cx, waterY, t, alpha);
+                splash(g, cx + HOOK_DX, waterY, t, alpha);
                 bubbles(g, cx, waterY, t, alpha);
             }
             return;
@@ -114,10 +116,9 @@ public final class FinPopup {
 
         water(g, cx, waterY, t, alpha);
         if (t < CHOP) fin(g, cx, waterY, t, alpha);
-        else halves(g, cx, waterY, t, alpha);
-        cleaver(g, cx, waterY, t, alpha);
-        if (t >= CHOP) splash(g, cx, waterY, t, alpha);
-        if (t >= POP) item(g, cx, waterY, t, alpha);
+        if (t >= CHOP) splash(g, cx + HOOK_DX, waterY, t, alpha);
+        if (t >= POP) item(g, cx + HOOK_DX, waterY, t, alpha);
+        hook(g, cx, waterY, t, alpha);
     }
 
     // ================================================================== art
@@ -148,77 +149,80 @@ public final class FinPopup {
     /** The fin rising out of the water, with a wobble; nothing below the water line is drawn. */
     private static void fin(GuiGraphicsExtractor g, int cx, int waterY, long t, int alpha) {
         float r = ease(Math.min(1f, t / (float) RISE));
-        // The bust: it sees the blade coming and is gone under the water before it lands.
-        if (bust && t > DUCK) r *= 1f - ease(Math.min(1f, (t - DUCK) / 110f));
+        // It noses over to the hook; a catch dives on it just before the yank, the bust turns away and ducks.
+        float toward = ease(Math.max(0f, Math.min(1f, (t - 520) / 300f)));
+        int shift;
+        if (bust) {
+            if (t > DUCK) r *= 1f - ease(Math.min(1f, (t - DUCK) / 110f));
+            shift = FIN_FROM + Math.round(4f * toward - 5f * ease(Math.max(0f, Math.min(1f, (t - DUCK) / 140f)))) * P;
+        } else {
+            if (t > CHOP - 110) r *= 1f - ease(Math.min(1f, (t - (CHOP - 110)) / 110f));
+            shift = FIN_FROM + Math.round(7f * toward) * P;
+        }
         int sink = Math.round((1f - r) * FIN.length) * P;
         int wobble = Math.round((float) Math.sin(t / 55.0) * (t < CHOP - 60 ? 1 : 0)) * P;
-        int left = cx - 4 * P + wobble, top = waterY - FIN.length * P + sink;
+        int left = cx - 4 * P + wobble + shift, top = waterY - FIN.length * P + sink;
         sprite(g, FIN, left, top, waterY, alpha, 0, FIN[0].length());
     }
 
-    /** Cut down the middle: the two halves fall apart and sink. */
-    private static void halves(GuiGraphicsExtractor g, int cx, int waterY, long t, int alpha) {
-        float k = Math.min(1f, (t - CHOP) / 260f);
-        if (k >= 1f) return;
-        int apart = Math.round(k * 6) * P, drop = Math.round(k * k * FIN.length) * P;
-        int top = waterY - FIN.length * P + drop;
-        int a = Math.round(alpha * (1f - k));
-        sprite(g, FIN, cx - 4 * P - apart, top, waterY, a, 0, 4);
-        sprite(g, FIN, cx - 4 * P + apart, top, waterY, a, 4, 8);
-    }
-
-    private static final String[] CLEAVER = {
-            "########....",
-            "#LLLLLL#....",
-            "#LLLLLL#oooo",
-            "#LLLLLL#hhhh",
-            "#LLLLLL#oooo",
-            "EEEEEEEE....",
+    /** A fishing hook: a J with its barb, the eye on top where the line ties on (column 4). */
+    private static final String[] HOOK = {
+            "...oo",
+            "...o#",
+            "....#",
+            "....#",
+            "....#",
+            "....#",
+            "+...#",
+            "#+..#",
+            "#...#",
+            ".#..#",
+            "..##.",
     };
 
-    /** The cleaver drops straight down onto the fin, rests a moment, then lifts away. */
-    private static void cleaver(GuiGraphicsExtractor g, int cx, int waterY, long t, int alpha) {
-        if (t < FALL - 120 || t > CHOP + 150) return;
-        int rest = waterY - 5 * P - CLEAVER.length * P;
-        int y;
-        int a = alpha;
-        if (t < CHOP) {
-            float k = (t - (FALL - 120)) / (float) (CHOP - (FALL - 120));
-            y = Math.round(rest - 46 + 46 * k * k);
-            a = Math.round(alpha * Math.min(1f, k * 3f));
-        } else if (t < CHOP + 50) {
-            y = rest;
-        } else {
-            // Up and gone before the drop comes out of the water under it.
-            float k = (t - CHOP - 50) / 100f;
-            y = Math.round(rest - 24 * k);
-            a = Math.round(alpha * (1f - k));
-        }
-        sprite(g, CLEAVER, cx - 4 * P, y, Integer.MAX_VALUE, a, 0, CLEAVER[0].length());
-    }
+    /** Where the hook hangs: the middle, the drop coming up under it. The fin swims over to it from the left. */
+    static final int HOOK_DX = 0;
+    static final int FIN_FROM = -9 * P;
+    static final long HOOK_IN = 380, HOOK_UNDER = 700, YANKED = CHOP + 110, LET_GO = CHOP + 260, HOOK_GONE = CHOP + 420;
 
     /**
-     * The bust's cleaver: the same fall, but nothing stops it - it goes on into the water (cut off at the
-     * surface), rests a beat half under, and lifts away.
+     * The hook on its line: dropped in beside the fin, bobbing a little under the surface, then yanked up out of
+     * the water at the chop - over the drop as it pops out, or empty and swinging on a bust - and lifted away.
      */
-    private static void missedCleaver(GuiGraphicsExtractor g, int cx, int waterY, long t, int alpha) {
-        if (t < FALL - 120 || t > CHOP + 330) return;
-        int rest = waterY - 5 * P - CLEAVER.length * P;
-        int under = waterY - 4 * P;
-        int y;
-        int a = alpha;
-        if (t < CHOP) {
-            float k = (t - (FALL - 120)) / (float) (CHOP - (FALL - 120));
-            y = Math.round(rest - 46 + (under - rest + 46) * k * k);
+    private static void hook(GuiGraphicsExtractor g, int cx, int waterY, long t, int alpha) {
+        if (t < HOOK_IN || t > HOOK_GONE) return;
+        int high = waterY - 76, under = waterY - 4 * P;
+        float y;
+        int a = alpha, dx = 0;
+        if (t < HOOK_UNDER) {
+            float k = (t - HOOK_IN) / (float) (HOOK_UNDER - HOOK_IN);
+            y = high + (under - high) * ease(k);
             a = Math.round(alpha * Math.min(1f, k * 3f));
-        } else if (t < CHOP + 180) {
-            y = under;
+        } else if (t < CHOP) {
+            // The bait bobbing, and the tug as the shark takes it.
+            y = under + (float) Math.sin((t - HOOK_UNDER) / 70.0) * P + (!bust && t > CHOP - 110 ? 2 * P : 0);
+        } else if (t < YANKED) {
+            float k = (t - CHOP) / (float) (YANKED - CHOP);
+            y = under + (high - under) * (1f - (1f - k) * (1f - k));
         } else {
-            float k = (t - CHOP - 180) / 150f;
-            y = Math.round(under - 30 * k);
-            a = Math.round(alpha * (1f - k));
+            y = high;
+            // Empty, it swings on the line; then up and away.
+            if (bust) dx = Math.round((float) Math.sin((t - YANKED) / 45.0) * 3f * (1f - (t - YANKED) / 310f)) * P;
+            if (t > LET_GO) {
+                float k = (t - LET_GO) / (float) (HOOK_GONE - LET_GO);
+                y = high - 40f * k * k;
+                a = Math.round(alpha * (1f - k));
+            }
         }
-        sprite(g, CLEAVER, cx - 4 * P, y, waterY, a, 0, CLEAVER[0].length());
+        int left = cx + HOOK_DX - 4 * P + dx, top = Math.round(y / P) * P;
+        // The line, straight up from the eye, thinning into the air at its top.
+        int lineX = left + 4 * P, lineTop = waterY - 120;
+        for (int ly = lineTop; ly < top; ly += P) {
+            float fadeIn = Math.min(1f, (ly - lineTop) / 24f);
+            int la = Math.round(a * 0.8f * fadeIn);
+            if (la >= 6) g.fill(lineX + P / 2, ly, lineX + P / 2 + 1, ly + P, (la << 24) | 0xE8E8E0);
+        }
+        sprite(g, HOOK, left, top, t < CHOP ? waterY : Integer.MAX_VALUE, a, 0, HOOK[0].length());
     }
 
     /** A few bubbles coming up where the shark went down, popping at the surface. */
@@ -362,11 +366,9 @@ public final class FinPopup {
     private static int colour(char ch) {
         return switch (ch) {
             case '+' -> 0x9DB2C2;   // the fin's lit edge
-            case '#' -> 0x55687A;   // the fin, or the cleaver's rim
-            case 'L' -> 0xC9D1D9;   // steel
-            case 'E' -> 0xF2F6FA;   // the edge
-            case 'h' -> 0x7A4E2C;   // handle
-            case 'o' -> 0x4A2E18;   // handle, shaded
+            case '#' -> 0x55687A;   // the fin, or the hook's steel
+            case 'o' -> 0xB0BCC6;   // the hook's eye
+
             default -> 0xFF00FF;
         };
     }

@@ -3,6 +3,76 @@
 One entry per jar that was actually handed out for testing. The version number bumps on
 every build, so the gaps between entries are builds nobody ran - not missing notes.
 
+## 0.3.2-alpha — 2026-10-12
+
+### Fixed
+- **Hellion**: a boss with the Shuriken's ✯ mark is no longer taken for yours. 0.3.1 did that, and anyone can put
+  the mark on any boss.
+
+## 0.3.1-alpha — 2026-10-12
+
+### Fixed
+- **Hellion now plays for every Demonlord you kill.** Checked against a friend's 131 tier IV kills:
+  - A boss that spawns together with the quest (no "SLAYER BOSS!" message, e.g. auto-slayer) was never picked
+    up, so 22 of those kills played nothing - an Archfiend Dice among them.
+  - A boss that first appears a little further away is picked up too.
+  - Another player's boss next to yours could be mistaken for yours coming back from a demon phase, and play a
+    bust when it died. Your own boss walking out of range and back is still yours.
+  - If your own drop comes and your boss was never picked up, the drop still plays.
+- **Diana's showcases stay on screen**: the Mythological Dye was so big its name and price ran off the bottom.
+  Every drop is now at most a quarter of the screen high and lifted so its words fit.
+- **Diana's rising specks** go behind the drop and its words instead of across them.
+- **Diana's win rays** are finer and no longer draw as big see-through squares.
+
+### Removed
+- **Eruption**: the lava drips down the vent.
+
+## 0.3.0-alpha — 2026-10-12
+
+The polish pass: the last tier of the animation review.
+
+### Changed
+- **Eruption**
+  - The sea creature is bigger, and its name floats over it for the first second.
+  - Where it sinks, rings and bubbles run out over the lava. The crust then spreads out from that spot behind
+    a glowing front, instead of the whole floor going dark at once.
+  - The vent glows as lava in the heat's own colour; white heat is pale yellow with an orange rim, not sand.
+  - At yellow and white heat the whole vent glows, not only its cracks. Its foot is rounder, and two drips of
+    lava run down from the crater.
+  - After an eruption a ring of broken stumps is left, and the pool darkens towards its edge.
+  - The basalt pillars are lighter, so their stripes show. Lone blocks sit awash instead of floating. Every
+    cluster stays clear of the screen's edges.
+  - The smoke drifts as round puffs, not dotted lines.
+  - A bust ends on a beat (the crater block slumps in with a puff of steam) and is a second shorter.
+  - Flash I: a thicker lightning bolt, the vent flashing white as it strikes, and sparks crawling round the book.
+  - The End Times' glowing cracks are straight, branching cracks, not worms.
+- **The Seraph**: smaller End Crystals that stay on screen, and their beams are solid two-cell beams instead of
+  dotted noise.
+- **Hellion**
+  - The four sigils are one set of runes.
+  - Grey and white pillar fire keeps a warm base, so it reads as fire, not smoke.
+  - The countdown ends in tenths (0.9 to 0.0, red), landing on 0.0 as the shield lands.
+  - The hit counter only flashes red as a hit comes off.
+  - On a bust the pillar fires go out one after the other, each with a puff of smoke.
+- **Diana**
+  - The board pops in solid with a puff of dust, instead of fading in see-through.
+  - Each blow smears on the way down and kicks the camera down; the first blow bites deeper.
+  - Blows throw spinning wood splinters, few on the first and more on each one after.
+  - The cut face is meat with a pale rim, not plum cake.
+  - The win's light comes out as eight wedge rays, not a grid of thin lines.
+  - The odds and your count share one line ("1 in ~80 Minos Inquisitors · your 1st").
+- **Fin**: the cleaver is gone. A fishing hook drops in, the shark goes for it, and the hook is yanked up with the
+  drop under it. On a bust it comes up empty and swings.
+
+## 0.2.90-beta — 2026-10-12
+
+### Added
+- **Wisp - Dwarven Mines Ghosts**: when a Ghost drops **Sorrow** or **Plasma**, a quick pop-up like Fin's.
+  A Ghost (a pale charged creeper, its charge crawling round it) rises out of a strip of mist, comes
+  apart into wisps with a crackle, and the drop pops out with its name and bazaar price. Nothing is
+  hidden. Menu: "Dwarven Mines Ghosts - Wisp" (on/off, price, volume, Try it); `/butcher test ghost`.
+  Drop records keep every Ghost line, so the real drop message can be checked.
+
 ## 0.2.89-beta — 2026-10-12
 
 ### Changed

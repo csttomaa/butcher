@@ -143,7 +143,7 @@ public final class EruptionTimeline {
     /** The creature is fully up; it starts to sink. */
     public static final long SINK_FROM = 350, SINK_TO = 1700;
     /** The crust closes over the pool from the edges. */
-    public static final long CRUST_FROM = 1000, CRUST_TO = 2300;
+    public static final long CRUST_FROM = 1450, CRUST_TO = 2150;
     /** The vent pushes up through the crust. */
     public static final long VENT_FROM = 1800, VENT_TO = 2500;
     /** The breathing: one heat step each, shorter each time. */
@@ -219,6 +219,15 @@ public final class EruptionTimeline {
             K_RESUME = R + 2400, K_SWELL = R + 2400, K_SWELL_TO = R + 3600, K_TENTACLES = R + 3200,
             K_TENTACLES_TO = R + 4800, K_EYE = R + 5000, K_EYE_TO = R + 5800, K_RISE = R + 6000, K_RISE_TO = R + 7400;
 
+    /** A bust's last beat: the crater block slumps into the vent with a puff of steam (the review, E9). */
+    public static final long SLUMP = R + 520;
+
+    /** The slump, 0..1 over 220 ms; 0 on a win. */
+    public float slump(long t) {
+        if (drop.win()) return 0f;
+        return ease((t - SLUMP) / 220f);
+    }
+
     /** When the drop is shown: name, odds and price follow it. */
     public long arrive() {
         return switch (drop.ending) {
@@ -236,7 +245,8 @@ public final class EruptionTimeline {
 
     public long total() {
         return switch (drop.ending) {
-            case BUST -> guaranteed(creature) != null ? R + 2600 : R + 1400;
+            // A second shorter than it was: it sat for 2.5 s after the vent went dark (the review, E9).
+            case BUST -> guaranteed(creature) != null ? R + 1800 : R + 1100;
             case PLAIN, PINCER -> arrive() + 3200;
             case FLASH -> arrive() + 3500;
             case FORGE -> arrive() + 3800;

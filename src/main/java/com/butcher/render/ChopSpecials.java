@@ -70,6 +70,20 @@ final class ChopSpecials {
         if (tl.ending() == ChopTimeline.Ending.HEART) beatRings(tl, t, c);
     }
 
+    /**
+     * Keeps a showcase on the screen: the drop at most a quarter of the screen high, lifted so its name, lines and
+     * price clear the bottom edge. The Dye at 1.45x on a short window ran its words off the screen (the user, 0.3.0).
+     * {y, size}.
+     */
+    static float[] fit(float y, float size) {
+        int h = ChopScene.screenH;
+        float ts = textScale();
+        size = Math.min(size, h * 0.26f);
+        float bottom = y + size * 0.62f + 6f * ts + 74f * ts;
+        if (bottom > h - 6f) y -= bottom - (h - 6f);
+        return new float[]{y, size};
+    }
+
     static void draw(ChopTimeline tl, long t, int w, int h, ChopScene.Canvas c) {
         if (t < ChopTimeline.SPLIT) return;
         switch (tl.ending()) {
@@ -153,6 +167,7 @@ final class ChopSpecials {
                         size * 0.9f, size * 0.9f, 0f, alpha(0.8f * ga * sceneAlpha) | GLYPH_TINTS[k % 4]);
             }
             float itemSize = Math.max(24f, 10f * size) * ChopScene.showScale;
+            { float[] fitted = fit(cyp, itemSize); cyp = fitted[0]; itemSize = fitted[1]; }
             float grow = easeOutBackLocal((t - GlintEnding.CONVERGE) / 350f);
             ChopScene.showItem(c, cxp, cyp, itemSize * grow, sceneAlpha, 0f);
             specialText(tl, t, cxp, cyp + itemSize * 0.62f + 6f * textScale(), ChopTimeline.ENCHANT_PINK, 0xF0C8DA, c);
@@ -281,6 +296,7 @@ final class ChopSpecials {
             rain(tl, t, w, h, c);
             glow(c, hx, hy, 15f * size, MidasEnding.GOLD, 0.4f);
             float itemSize = Math.max(24f, 10f * size) * ChopScene.showScale;
+            { float[] fitted = fit(hy, itemSize); hy = fitted[0]; itemSize = fitted[1]; }
             float grow = easeOutBackLocal((t - tl.arrive()) / 350f);
             ChopScene.showItem(c, hx, hy, itemSize * grow, sceneAlpha, 0f);
             specialText(tl, t, hx, hy + itemSize * 0.62f + 6f * textScale(), 0xFFD86A, 0xF2E2B0, c);
@@ -434,6 +450,7 @@ final class ChopSpecials {
             }
             glow(c, ix, iy, 15f * size, core, 0.45f);
             float itemSize = Math.max(24f, 10f * size) * ChopScene.showScale;
+            { float[] fitted = fit(iy, itemSize); iy = fitted[0]; itemSize = fitted[1]; }
             float grow = easeOutBackLocal((t - tl.arrive()) / 350f);
             ChopScene.showItem(c, ix, iy, itemSize * grow, sceneAlpha, 32f + (t - tl.arrive()) / 1000f * 40f);
             specialText(tl, t, ix, iy + itemSize * 0.62f + 6f * textScale(), mix(ChopTimeline.VIRIDIAN, 0xFFFFFF, 0.5f), 0xBFE8D2, c);
@@ -590,6 +607,7 @@ final class ChopSpecials {
                 c.sprite(ChopArt.TEX_RAYS, ix, iy, 16f * size * rays, 16f * size * rays, -spin * 1.6f, alpha(0.35f * rays * sceneAlpha) | FleeceEnding.GOLD_LIGHT);
             }
             float itemSize = Math.max(24f, 9f * size) * ChopScene.showScale;
+            { float[] fitted = fit(iy, itemSize); iy = fitted[0]; itemSize = fitted[1]; }
             // Shafts of light falling on it from above.
             float shafts = e.shafts(t);
             if (shafts > 0.01f) {
@@ -896,6 +914,7 @@ final class ChopSpecials {
             project(0f, it[0], 0f);
             float ix = P[0], iy = P[1];
             float itemSize = Math.max(24f, 10f * size) * ChopScene.showScale;
+            { float[] fitted = fit(iy, itemSize); iy = fitted[0]; itemSize = fitted[1]; }
             glow(c, ix, iy, 16f * size, HuntEnding.GLOW, 0.45f * it[1]);
             float burst = tl.arrivalBurst(t);
             if (burst > 0.01f) {
@@ -1075,6 +1094,7 @@ final class ChopSpecials {
             }
             glow(c, ix, iy, 13f * size, venom, 0.45f * becomes);
             float itemSize = Math.max(24f, 9f * size) * ChopScene.showScale;
+            { float[] fitted = fit(iy, itemSize); iy = fitted[0]; itemSize = fitted[1]; }
             ChopScene.showItem(c, ix, iy, itemSize * (0.6f + 0.4f * becomes), becomes * sceneAlpha, 32f + (t - StingEnding.TURN) / 1000f * 40f);
             specialText(tl, t, ix, iy + itemSize * 0.62f + 6f * textScale(), mix(ChopTimeline.VIRIDIAN, 0xFFFFFF, 0.5f), 0xBFE8D2, c);
         }

@@ -807,6 +807,19 @@ public class ButcherClient implements ClientModInitializer {
                         return 1;
                     }));
 
+            LiteralArgumentBuilder<FabricClientCommandSource> ghostNode = ClientCommands.literal("ghost")
+                    .executes(ctx -> options(ctx, "test ghost",
+                            "sorrow", "a Ghost drops Sorrow",
+                            "plasma", "a Ghost drops Plasma"))
+                    .then(ClientCommands.literal("sorrow").executes(ctx -> {
+                        com.butcher.render.GhostPopup.show(com.butcher.detect.GhostDrops.Drop.SORROW);
+                        return 1;
+                    }))
+                    .then(ClientCommands.literal("plasma").executes(ctx -> {
+                        com.butcher.render.GhostPopup.show(com.butcher.detect.GhostDrops.Drop.PLASMA);
+                        return 1;
+                    }));
+
             LiteralArgumentBuilder<FabricClientCommandSource> lavaNode = ClientCommands.literal("lava")
                     .executes(ctx -> options(ctx, "test lava",
                             "bust", "it cools to black (add a creature: jawbus, thunder, ragnarok, scuttler)",
@@ -845,12 +858,14 @@ public class ButcherClient implements ClientModInitializer {
                             "vanguard", "the Thaw",
                             "diana", "the Chopping Block",
                             "shark", "Fin, the Fishing Festival pop-up",
+                            "ghost", "Wisp, a Ghost's Sorrow or Plasma",
                             "slayer", "the slayer bosses",
                             "lava", "Eruption, lava fishing"))
                     .then(scathaNode)
                     .then(vanguardNode)
                     .then(dianaNode)
                     .then(sharkNode)
+                    .then(ghostNode)
                     .then(slayerNode)
                     .then(lavaNode);
 
@@ -1114,6 +1129,7 @@ public class ButcherClient implements ClientModInitializer {
                 }
                 openEruption(who, d, true);
             }
+            case "ghost" -> com.butcher.render.GhostPopup.show(com.butcher.detect.GhostDrops.Drop.valueOf(name));
             case "shark" -> {
                 if (name.equals("BUST")) com.butcher.render.FinPopup.showBust();
                 else com.butcher.render.FinPopup.show(com.butcher.detect.SharkDrops.Drop.valueOf(name));
@@ -1332,14 +1348,17 @@ public class ButcherClient implements ClientModInitializer {
     public static void drawOwnHud(net.minecraft.client.gui.GuiGraphicsExtractor graphics,
                                   net.minecraft.client.DeltaTracker delta) {
         net.minecraft.client.gui.screens.Screen cutscene = com.butcher.render.CutsceneHud.shown();
-        boolean fin = com.butcher.render.FinPopup.active();
+        boolean fin = com.butcher.render.FinPopup.active() || com.butcher.render.GhostPopup.active();
         boolean vitals = keepVitals();
         if (cutscene == null && !animationManager.isPlaying() && !fin) {
             if (vitals) drawVitals(graphics, delta);
             return;
         }
         graphics.nextStratum();
-        if (fin) com.butcher.render.FinPopup.draw(graphics);
+        if (fin) {
+            com.butcher.render.FinPopup.draw(graphics);
+            com.butcher.render.GhostPopup.draw(graphics);
+        }
         int before = com.butcher.render.HudFade.added;
         ButcherHudRenderer.render(graphics, 0f);
         com.butcher.render.CutsceneHud.draw(graphics, delta);
@@ -1446,6 +1465,13 @@ public class ButcherClient implements ClientModInitializer {
                 decisions.note("§7Fishing: " + shark.title + " - \"" + message.getString() + "\"");
                 ButcherStats.get().onSource("shark", shark.title);
                 com.butcher.render.FinPopup.show(shark);
+            }
+        }
+        if (!overlay && !player && config != null && config.ghostAnnounce) {
+            com.butcher.detect.GhostDrops.Drop ghost = com.butcher.detect.GhostDrops.of(message.getString());
+            if (ghost != null) {
+                decisions.note("§7Ghost: " + ghost.title + " - \"" + message.getString() + "\"");
+                com.butcher.render.GhostPopup.show(ghost);
             }
         }
         if (config != null && config.vanguardAnimation && vanguardWatcher.onChatLine(message.getString())) {

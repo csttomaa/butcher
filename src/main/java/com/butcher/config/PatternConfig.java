@@ -207,6 +207,10 @@ public class PatternConfig {
     public boolean calmEffects = false;
     /** "Quick Thaw": a corpse with nothing above common skips to its last strike. */
     public boolean vanguardQuick = false;
+    /** "Wisp": a pop-up when a Ghost in the Dwarven Mines drops Sorrow or Plasma. */
+    public boolean ghostAnnounce = true;
+    public boolean ghostPrice = true;
+    public int ghostVolume = 100;
 
     /** "Hellion": the cutscene on every kill of the player's own tier IV Inferno Demonlord. */
     public boolean blazeAnimation = true;

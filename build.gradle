@@ -72,7 +72,7 @@ jar {
 	}
 }
 
-// Auto-incrementing beta build number: mod_version lives in
+// Auto-incrementing build number: mod_version lives in
 // gradle.properties as "0.0.x-beta". This runs as the last step of the
 // "build" lifecycle task, which only reaches doLast if everything it
 // depends on (compileJava, jar, etc.) actually succeeded - a failed build
@@ -85,16 +85,18 @@ tasks.named("build") {
 		def text = propsFile.text
 		// Any major.minor.patch, not just 0.0.x - the first real release moved off
 		// that shape and the bump silently stopped working.
-		def pattern = ~/(?m)^mod_version=(\d+)\.(\d+)\.(\d+)-beta$/
+		// The suffix (-alpha, -beta) is kept: 0.3.0 moved to -alpha.
+		def pattern = ~/(?m)^mod_version=(\d+)\.(\d+)\.(\d+)-(alpha|beta)$/
 		def matcher = pattern.matcher(text)
 		if (matcher.find()) {
 			def major = matcher.group(1)
 			def minor = matcher.group(2)
 			int next = matcher.group(3).toInteger() + 1
-			propsFile.text = matcher.replaceFirst("mod_version=${major}.${minor}.${next}-beta")
-			logger.lifecycle("Butcher: build succeeded as ${project.version} - next build will be ${major}.${minor}.${next}-beta")
+			def tag = matcher.group(4)
+			propsFile.text = matcher.replaceFirst("mod_version=${major}.${minor}.${next}-${tag}")
+			logger.lifecycle("Butcher: build succeeded as ${project.version} - next build will be ${major}.${minor}.${next}-${tag}")
 		} else {
-			logger.warn("Butcher: mod_version in gradle.properties isn't in the expected \"x.y.z-beta\" shape, skipping auto-bump")
+			logger.warn("Butcher: mod_version in gradle.properties isn't in the expected \"x.y.z-alpha|beta\" shape, skipping auto-bump")
 		}
 	}
 }

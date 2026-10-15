@@ -30,7 +30,8 @@ final class ChopFill {
 
     private static final int[] WOOD = {0x8A5A2B, 0xB98546, 0x5E3A1A, 0xA06A34};
     private static final int[] SPARK = {0xFFE9A8, 0xFFC35A, 0xFFF6D8};
-    private static final int[] DEBRIS = {12, 16, 20, 44};
+    /** Few on the first blow, more on each after (the review, D4). */
+    private static final int[] DEBRIS = {6, 12, 18, 40};
     private static final float LIFE = 1.15f;
 
     /** One head-texel on screen - the grid everything here sits on. */
@@ -66,8 +67,16 @@ final class ChopFill {
                 if (sec > life) continue;
                 float fade = 1f - ease01((sec - life * 0.6f) / (life * 0.4f));
                 int rgb = spark ? SPARK[r.nextInt(SPARK.length)] : WOOD[r.nextInt(WOOD.length)];
-                float s = spark ? u : u * (1 + r.nextInt(3));
-                square(c, x, y, s, u, alpha(fade * ChopScene.sceneAlpha) | rgb);
+                int argb = alpha(fade * ChopScene.sceneAlpha) | rgb;
+                if (spark) {
+                    square(c, x, y, u, u, argb);
+                } else {
+                    // A splinter: three cells in a line, turning as it flies - squares read as confetti (the
+                    // review, D4). Each cell snapped to the grid, so it stays pixel art at any angle.
+                    float spin = (r.nextFloat() - 0.5f) * 14f * sec + r.nextFloat() * 3.14f;
+                    float dx = (float) Math.cos(spin) * u, dy = (float) Math.sin(spin) * u;
+                    for (int q = -1; q <= 1; q++) square(c, x + dx * q, y + dy * q, u, u, argb);
+                }
             }
         }
     }
@@ -101,22 +110,47 @@ final class ChopFill {
         int rgb = tl.crackColour(ts) & 0xFFFFFF;
         float u = px();
         float turn = (t - ChopTimeline.SPLIT) / 1000f * 0.10f;
-        int n = 12;
+        // Eight wedges, narrow at the item and 4-6 cells wide at their ends, bright and dim in turn - twelve
+        // one-pixel lines read as a laser grid (the review, D8).
+        int n = 8;
         for (int i = 0; i < n; i++) {
-            float a = (float) (i * Math.PI * 2 / n) + turn + (i % 2) * 0.09f;
-            float width = u * (i % 2 == 0 ? 2 : 1f);
+            float a = (float) (i * Math.PI * 2 / n) + turn;
+            boolean bright = i % 2 == 0;
+            float far = bright ? 6f : 4f;
             float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
             // A halo just round the item, 0.85 of its size past its middle; the ones pointing down stop short of the words under it.
             float reach = size * (sa > 0.25f ? 0.3f + 0.4f * (1f - sa) : 0.85f);
             float start = size * 0.3f;
-            // Stepped: each band a little weaker, so it reads as pixel light, not a gradient smear.
-            int steps = 7;
+            // Stepped a cell or two at a time, each band a little weaker and a little wider - long bands six cells
+            // wide drew as big translucent squares (the user's screenshot, 0.3.0).
+            int steps = Math.max(7, Math.round(reach / (1.5f * u)));
             for (int sIdx = 0; sIdx < steps; sIdx++) {
                 float r0 = start + reach * sIdx / steps, r1 = start + reach * (sIdx + 1) / steps;
-                float a0 = strength * (1f - sIdx / (float) steps) * (i % 2 == 0 ? 1f : 0.6f);
+                float a0 = strength * (1f - sIdx / (float) steps) * (bright ? 1f : 0.55f);
                 if (a0 < 0.012f) continue;
+                float width = u * Math.max(1, Math.round(1f + (far - 1f) * (sIdx + 0.5f) / steps));
                 c.line(ox + ca * r0, oy + sa * r0, ox + ca * r1, oy + sa * r1, width, alpha(a0) | rgb);
             }
+        }
+    }
+
+    // ================================================================== dust: the board landing
+
+    /** A puff of dust off the board's edges as it pops in (the review, D2). Drawn over the scene. */
+    static void dust(ChopTimeline tl, long ts, ChopScene.Canvas c) {
+        if (ts > 520) return;
+        float k = ts / 520f;
+        float u = px();
+        Random r = new Random(tl.seed() * 3 + 17);
+        for (int i = 0; i < 18; i++) {
+            float side = (i % 4) - 1.5f;
+            float ex = i % 2 == 0 ? side * ChopTimeline.BLOCK_W / 1.5f : (r.nextFloat() < 0.5f ? -1 : 1) * ChopTimeline.BLOCK_W,
+                    ez = i % 2 == 0 ? (r.nextFloat() < 0.5f ? -1 : 1) * ChopTimeline.BLOCK_D : side * ChopTimeline.BLOCK_D / 1.5f;
+            float out = 1f + 0.35f * k * (0.6f + r.nextFloat());
+            project(ex * out, 0.5f + 2.5f * k * r.nextFloat(), ez * out);
+            float a = 0.5f * (1f - k) * ChopScene.sceneAlpha;
+            int s = k < 0.4f ? 1 : 2;
+            square(c, P[0], P[1], u * s, u, alpha(a) | (i % 3 == 0 ? 0x8A7A66 : 0xB8A890));
         }
     }
 

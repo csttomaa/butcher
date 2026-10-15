@@ -280,12 +280,16 @@ public final class HellionScene {
 
     // ================================================================== the shield
 
-    /** A 5x5 sigil per attunement - a pixel rune. */
+    /**
+     * A 5x7 rune per attunement, one alphabet: single strokes of the same weight, read off the Elder Futhark -
+     * thurisaz, algiz, othala, dagaz. The old set (a diamond, an X, a plus, a target) read as UI icons, a close
+     * button and a crosshair among them (the review, H1).
+     */
     private static final String[][] RUNES = {
-            {"..#..", ".###.", "##.##", ".###.", "..#.."},   // Ashen
-            {"#...#", ".#.#.", "..#..", ".#.#.", "#...#"},   // Spirit
-            {"..#..", "..#..", "#####", "..#..", "..#.."},   // Auric
-            {".###.", "#...#", "#.#.#", "#...#", ".###."}};  // Crystal
+            {"#....", "##...", "#.#..", "#..#.", "#.#..", "##...", "#...."},   // Ashen: thurisaz
+            {"#.#.#", "#.#.#", ".###.", "..#..", "..#..", "..#..", "..#.."},   // Spirit: algiz
+            {"..#..", ".#.#.", "#...#", ".#.#.", "..#..", ".#.#.", "#...#"},   // Auric: othala
+            {"#...#", "##.##", "#.#.#", "#...#", "#.#.#", "##.##", "#...#"}};  // Crystal: dagaz
 
     static void sigils(ChopScene.Canvas c, HellionTimeline tl, long t, Attunement now, float clang, int w, int h) {
         float shatter = tl.shatter(t), burn = tl.burnOut(t);
@@ -299,9 +303,11 @@ public final class HellionScene {
             if (burn >= 0f) y -= 30f * burn * burn;
             ChopScene.project(x, y, z);
             boolean on = a == now;
-            float scale = on ? 1.4f + 0.4f * clang : 0.9f;
+            float scale = on ? 1.3f + 0.35f * clang : 0.85f;
             int rgb = burn >= 0f ? 0x5A5A5A : (on ? a.rgb : dim(a.rgb));
-            float alpha = (on ? 1f : 0.55f) * (burn >= 0f ? 1f - burn : 1f) * ChopScene.sceneAlpha;
+            // The current one large and lit, the rest at half.
+            float alpha = (on ? 1f : 0.5f) * (burn >= 0f ? 1f - burn : 1f) * ChopScene.sceneAlpha;
+            if (on && burn < 0f) ChopScene.glow(c, ChopScene.P[0], ChopScene.P[1], u * scale * 9f, a.rgb, 0.3f * alpha);
             rune(c, RUNES[a.ordinal()], ChopScene.P[0], ChopScene.P[1], u * scale, rgb, alpha);
         }
     }
@@ -309,11 +315,12 @@ public final class HellionScene {
     private static void rune(ChopScene.Canvas c, String[] rows, float cx, float cy, float u, int rgb, float alpha) {
         if (alpha < 0.02f) return;
         float s = Math.max(1f, Math.round(u));
-        float left = Math.round(cx - 2.5f * s), top = Math.round(cy - 2.5f * s);
+        int cols = rows[0].length(), lines = rows.length;
+        float left = Math.round(cx - cols / 2f * s), top = Math.round(cy - lines / 2f * s);
         // Outline: each lit cell's neighbours in near-black, then the cells.
         for (int pass = 0; pass < 2; pass++) {
-            for (int j = 0; j < 5; j++) {
-                for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < lines; j++) {
+                for (int i = 0; i < cols; i++) {
                     if (rows[j].charAt(i) != '#') continue;
                     if (pass == 0) c.fill(left + (i - 1) * s, top + (j - 1) * s, 3 * s, 3 * s, ChopScene.alpha(0.85f * alpha) | 0x0A0606);
                     else c.fill(left + i * s, top + j * s, s, s, ChopScene.alpha(alpha) | rgb);
@@ -958,8 +965,14 @@ public final class HellionScene {
             }
             ChopScene.inkWidth = 0f;
 
-            // The fire on top: the game's own fire, on the game's own floor-fire model, animated.
-            float fireH = (burn >= 0f ? 1f - ease(burn / 0.3f) : 1f) * (shatter >= 0f ? 1f - ease(shatter / 0.25f) : 1f);
+            // The fire on top: the game's own fire, on the game's own floor-fire model, animated. A bust snuffs
+            // them in turn, left then right, each with a puff of smoke - they used to just shrink away together
+            // (the review, H5).
+            long snuffAt = HellionTimeline.REVEAL + (side < 0 ? 230 : 350);
+            // On the top block wherever it is: a bust sinks the pillars, and the fire floated where they had been.
+            float fireBase = burn >= 0f ? top - BLOCK * 8f * ease(burn) * 0.9f : top;
+            float fireH = (burn >= 0f ? 1f - ease((t - snuffAt) / 110f) : 1f) * (shatter >= 0f ? 1f - ease(shatter / 0.25f) : 1f);
+            if (burn >= 0f && t >= snuffAt && t < snuffAt + 900) snuffPuff(embers, px, fireBase, pz, t - snuffAt, side, h, alpha);
             if (fireH > 0.02f) {
                 // Vanilla's own size; only a small lick upwards on each clang (the user: no taller).
                 float grow = (1f + 0.1f * clang + 2.2f * er) * fireH, wide = 1f + 0.35f * er;
@@ -976,7 +989,15 @@ public final class HellionScene {
                 int glowRgb = ig > 0f ? 0xFF8A2A : fireTint(att);
                 ChopScene.glow(c, ChopScene.P[0], ChopScene.P[1], BLOCK * 7f * ChopScene.size * (0.8f + 0.2f * grow),
                         mix(glowRgb, 0x6E84A8, frozen), (0.22f + 0.15f * clang) * alpha * fireH * (1f - 0.7f * frozen));
-                fire(c, tex, rect, px, pz, top, grow, wide, argb);
+                fire(c, tex, rect, px, pz, fireBase, grow, wide, argb);
+                // A warm core in the bottom fifth whatever the tint: grey and white fire alone read as smoke
+                // (the review, H2). The game's own fire, its bottom five rows at their own size, so its tongues lick
+                // up into the tinted flame instead of ending in a flat band.
+                if (ig <= 0f) {
+                    int[] base5 = {0, frame * 16 + 11, 16, 5};
+                    fire(c, TEX_FIRE, base5, px, pz, fireBase, grow * 5f / 16f, wide * 0.92f,
+                            ChopScene.alpha(0.65f * alpha * fireH * (1f - frozen)) | 0xFFD8B0);
+                }
                 // Its light, on the blaze's sides that face it.
                 ChopScene.light(px, top + 2f, pz, 30f, att.rgb, 0.35f + 0.4f * clang);
                 // Embers off the top, pixel squares.
@@ -995,21 +1016,46 @@ public final class HellionScene {
             }
 
             // The nametag, as the fight shows it: seconds left, then hits left.
-            if (t < HellionTimeline.REVEAL && rise > 0.9f) {
-                long left = (long) Math.ceil((HellionTimeline.REVEAL - t) / 1000.0);
+            if (t < HellionTimeline.REVEAL + 160 && rise > 0.9f) {
+                // The last second in tenths, red, landing on 0.0 on the reveal frame - whole seconds rounded up
+                // never reached 0 (the review, H3).
+                long ms = Math.max(0, HellionTimeline.REVEAL - t);
+                boolean last = ms < 1000;
                 int steps = Math.max(0, HellionTimeline.step(t) + 1);
                 int hits = Math.max(0, 8 - steps / 2);
                 ChopScene.project(px, top + BLOCK * 3.4f, pz);
                 float ts = Math.min(1.2f, h / 300f);
-                String secs = left + "s", hit = hits + " Hits";
+                String secs = last ? (ms / 1000) + "." + (ms / 100 % 10) + "s" : (long) Math.ceil(ms / 1000.0) + "s";
+                String hit = hits + " Hits";
                 float cw = 6f * ts;
                 float wTot = (secs.length() + 1 + hit.length()) * cw;
                 c.fill(ChopScene.P[0] - wTot / 2f - 2f, ChopScene.P[1] - 6f * ts, wTot + 4f, 11f * ts,
                         ChopScene.alpha(0.45f * alpha) | 0x000000);
-                c.text(secs, ChopScene.P[0] - wTot / 2f + secs.length() * cw / 2f, ChopScene.P[1], ts, ChopScene.alpha(alpha) | 0xFFFF55);
+                c.text(secs, ChopScene.P[0] - wTot / 2f + secs.length() * cw / 2f, ChopScene.P[1], ts,
+                        ChopScene.alpha(alpha) | (last ? 0xFF5555 : 0xFFFF55));
+                // White, red only for a moment as a hit comes off - it used to flip with every clang (the review, H4).
                 c.text(hit, ChopScene.P[0] + wTot / 2f - hit.length() * cw / 2f, ChopScene.P[1], ts,
-                        ChopScene.alpha(alpha) | (clang > 0.3f ? 0xFFFFFF : 0xFF5555));
+                        ChopScene.alpha(alpha) | (clang > 0.3f && steps % 2 == 0 && steps > 0 ? 0xFF5555 : 0xFFFFFF));
             }
+        }
+    }
+
+    /** A snuffed pillar fire's puff: grey squares off its top, growing and drifting up and out. */
+    static void snuffPuff(CrystalVeins.Fill layer, float px, float top, float pz, long since, int side, int h, float alpha) {
+        float k = since / 900f;
+        float u = unitFor(h);
+        Random r = new Random(side * 31L + 9);
+        for (int i = 0; i < 14; i++) {
+            float ph = r.nextFloat() * 0.3f, rx = r.nextFloat(), ry = r.nextFloat();
+            float q = Math.max(0f, Math.min(1f, (k - ph) / 0.7f));
+            if (q <= 0f || q >= 1f) continue;
+            float ox = (rx - 0.5f) * BLOCK * (1.2f + 2.5f * q) + side * BLOCK * 1.2f * q;
+            float oy = BLOCK * (0.4f + ry * 0.6f + 5f * q);
+            ChopScene.project(px + ox, top + oy, pz);
+            int s = 1 + (int) (q * 2.5f);
+            float a = alpha * (1f - q) * 0.75f;
+            layer.fill(Math.round(ChopScene.P[0] / u) * u, Math.round(ChopScene.P[1] / u) * u, u * s, u * s,
+                    (Math.round(a * 255) << 24) | (i % 3 == 0 ? 0x4A4648 : 0x8A8688));
         }
     }
 

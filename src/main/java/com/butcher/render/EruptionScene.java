@@ -131,6 +131,7 @@ public final class EruptionScene {
         ChopScene.insideOut = false;
         ChopScene.yShift = 0f;
         camera(tl, t, w, h);
+        sideLimits(w, h);
         long pt = tl.phys(t);
         float g = unitFor(h);
 
@@ -143,6 +144,7 @@ public final class EruptionScene {
         models(c, tl, t, pt, w, h);
         frontEffects(c, front, tl, t, pt, w, h, g);
         if (flushFront != null) flushFront.run();
+        if (tl.creature() != null && t < 1200) nametag(c, tl, t, h);
         showcase(c, tl, t, w, h, g);
         ChopScene.sceneAlpha = 1f;
     }
@@ -304,20 +306,26 @@ public final class EruptionScene {
      * in front; behind the lake it climbs into a cliff that runs off the top of the screen and fades into the dark
      * as it rises - a low wall there left the dimmed game showing above it (the user, 0.2.75).
      */
-    /** Where the crust's front is, from the vent: far beyond the pool, closing to the ring (or shut on a bust). */
+    /**
+     * Where the crust's front is. It spreads out from where the creature sank, a glowing front running out over
+     * 700 ms (the review, E3: the whole floor used to go dark in one step). On a bust it closes back in over the ring.
+     */
     static float crustFront(EruptionTimeline tl, long t) {
-        float k = EruptionTimeline.crust(t);
-        float front = 340f + (RING - 340f) * k;
         float cool = tl.cool(t);
-        if (cool > 0f) front = RING * (1f - cool);
-        return front;
+        if (cool > 0f) return RING * (1f - cool);
+        float k = EruptionTimeline.crust(t);
+        // Once it has run off the screen, the whole field is crust.
+        return k >= 0.999f ? 1e9f : 380f * k;
     }
 
     static ChopScene.Gild floorGild(EruptionTimeline tl, long t) {
         float front = crustFront(tl, t);
+        boolean closing = tl.cool(t) > 0f;
+        float erupted = tl.erupt(t) >= 0f ? ease(tl.erupt(t) * 2f) : 0f;
         // The heat shows in the ring once the vent is up; before that the lava is its own colour.
         float showHeat = ease((t - EruptionTimeline.VENT_FROM) / 600f);
         int heat = tl.heatColour(t);
+        float heatLevel = Math.max(0f, Math.min(4f, tl.heat(t)));
         // Kuudra's carmine reaches 105 units, not the whole view: past it the cold crust stays - all red was a wash
         // (the review, E16).
         float carmine = Math.min(105f, tl.carmine(t) * 320f), green = tl.green(t) * 300f;
@@ -327,9 +335,12 @@ public final class EruptionScene {
         Ending e = tl.ending();
         return (x, y, z, cell, now, sx, sy) -> {
             float d = (float) Math.sqrt(x * x + z * z);
-            float n = ((cell * 2654435761L) >>> 16 & 255) / 255f * 10f;
+            // The edge's roughness in blocks of 3 texels, not per texel: per texel it was a spray-paint fringe
+            // (the review, E7).
+            int blk = (int) Math.floor(x / 3f) * 73856093 ^ (int) Math.floor(z / 3f) * 19349663;
+            float n = ((blk * 2654435761L) >>> 16 & 255) / 255f * 8f;
             float dd = d + n;
-            boolean crust = dd > front;
+            boolean crust = closing ? dd > front : dd < front && !(showHeat > 0.01f && d < RING + 8f);
             if (e == Ending.KUUDRA) {
                 // The carmine takes the whole sea, crust and all, from the vent out: the lava's own pattern
                 // still moving in it. Ahead of it, while time is stopped, everything is cold grey.
@@ -361,12 +372,22 @@ public final class EruptionScene {
                 }
             }
             if (crust) {
-                // The crust, and just inside its front a rim still glowing as it cools.
-                if (dd < front + 5f && front > RING + 2f) return 0x50 << 24 | 0xFF6A10;
+                // The crust, and at its front a rim still glowing as it sets.
+                if (!closing && dd > front - 6f && front < 370f) return 0x50 << 24 | 0xFF6A10;
                 // Cooled crust: near-black rock, the lava's own pattern faint in it as relief.
                 return 0x38 << 24 | 0x161213;
             }
-            if (showHeat > 0.01f && d < RING + 8f) return Math.round(0x70 * showHeat) << 24 | heat;
+            if (showHeat > 0.01f && d < RING + 8f) {
+                // The ring is lava of the heat's own colour, its texture moving in it - a flat disc read as a sticker,
+                // and white heat as sand (the review, E7). White heat is pale yellow-white with an orange rim.
+                int col = heat;
+                if (heatLevel > 3f) col = EruptionTimeline.mix(heat, d > RING - 2f ? 0xFF8A20 : 0xFFF0B0, heatLevel - 3f);
+                // After the eruption the pool darkens towards its edge: one flat orange ellipse filled a third of
+                // the screen (the review, E13).
+                if (erupted > 0f) col = EruptionTimeline.mix(col, 0x2A0E06, erupted * 0.75f * smooth((d - RING * 0.35f) / (RING * 0.65f + 8f)));
+                if (showHeat < 0.99f) return Math.round(0x70 * showHeat) << 24 | col;
+                return RECOLOUR << 24 | col;
+            }
             return 0;
         };
     }
@@ -399,21 +420,56 @@ public final class EruptionScene {
         return (masks[j * MASK_W + i] & bit) != 0;
     }
 
-    /** The End Times' cracks: nine jagged rays out from the vent, a texel or two wide, forking once. */
+    /**
+     * The End Times' cracks: nine rays out from the vent made of straight segments with a kink at each joint, and a
+     * branch off two of the joints - a crack in rock. Wavy rays read as worms (the review, E15).
+     */
     static boolean crack(float x, float z, float d) {
-        double ang = Math.atan2(z, x);
-        for (int i = 0; i < 9; i++) {
-            double base = i * Math.PI * 2 / 9 + 0.3 * Math.sin(i * 7.1);
-            double wob = 0.05 * Math.sin(d * 0.09 + i * 3) + 0.03 * Math.sin(d * 0.23 + i);
-            double da = Math.abs(Math.IEEEremainder(ang - base - wob, Math.PI * 2));
-            if (da * d < 1.6) return true;
-            if (d > 90f + 20f * (i % 3)) {
-                double fork = base + (i % 2 == 0 ? 0.22 : -0.22) * Math.min(1.0, (d - 90 - 20 * (i % 3)) / 60.0);
-                double df = Math.abs(Math.IEEEremainder(ang - fork - wob, Math.PI * 2));
-                if (df * d < 1.2) return true;
-            }
+        if (CRACKS == null) CRACKS = crackSegments();
+        for (float[] s : CRACKS) {
+            float ex = s[2] - s[0], ez = s[3] - s[1];
+            float len2 = ex * ex + ez * ez;
+            float u = Math.max(0f, Math.min(1f, ((x - s[0]) * ex + (z - s[1]) * ez) / len2));
+            float px = s[0] + ex * u - x, pz = s[1] + ez * u - z;
+            if (px * px + pz * pz < s[4] * s[4]) return true;
         }
         return false;
+    }
+
+    private static float[][] CRACKS;
+
+    /** {x0, z0, x1, z1, half width}: each ray in 22-unit segments, a fixed seed. */
+    private static float[][] crackSegments() {
+        java.util.List<float[]> out = new java.util.ArrayList<>();
+        Random r = new Random(4242);
+        for (int i = 0; i < 9; i++) {
+            double ang = i * Math.PI * 2 / 9 + 0.3 * Math.sin(i * 7.1);
+            float x = (float) Math.cos(ang) * (RING + 4f), z = (float) Math.sin(ang) * (RING + 4f);
+            float w = 1.3f;
+            for (int j = 0; j < 13; j++) {
+                double dir = ang + (r.nextFloat() - 0.5f) * 0.7f;
+                float len = 16f + 12f * r.nextFloat();
+                float nx = x + (float) Math.cos(dir) * len, nz = z + (float) Math.sin(dir) * len;
+                out.add(new float[]{x, z, nx, nz, w});
+                if (j == 2 || j == 6) {
+                    // A branch off the joint, thinner, turned well aside, two segments long.
+                    double bd = dir + (r.nextBoolean() ? 0.6 : -0.6);
+                    float bx = nx, bz = nz;
+                    for (int q = 0; q < 2; q++) {
+                        float bl = 14f + 8f * r.nextFloat();
+                        bd += (r.nextFloat() - 0.5f) * 0.5f;
+                        float cx = bx + (float) Math.cos(bd) * bl, cz = bz + (float) Math.sin(bd) * bl;
+                        out.add(new float[]{bx, bz, cx, cz, 0.9f});
+                        bx = cx;
+                        bz = cz;
+                    }
+                }
+                x = nx;
+                z = nz;
+                w = Math.max(0.8f, w - 0.04f);
+            }
+        }
+        return out.toArray(new float[0][]);
     }
 
     /** Thin winding seams through the crust: near 0 on a seam. */
@@ -460,10 +516,47 @@ public final class EruptionScene {
 
     static final List<Poly> POLYS = new ArrayList<>();
 
+    /** The highest point on the screen of the polygons added since {@code from}; NaN when there are none. */
+    static void creatureTop(int from) {
+        float best = Float.MAX_VALUE, bx = 0f;
+        for (int i = from; i < POLYS.size(); i++) {
+            float[] q = POLYS.get(i).p;
+            for (int k = 0; k < 4; k++) {
+                float x = q[0], y = q[1], z = q[2];
+                if (k == 1 || k == 3) {
+                    x += q[3] - q[0];
+                    y += q[4] - q[1];
+                    z += q[5] - q[2];
+                }
+                if (k == 2 || k == 3) {
+                    x += q[6] - q[0];
+                    y += q[7] - q[1];
+                    z += q[8] - q[2];
+                }
+                ChopScene.project(x, y, z);
+                if (ChopScene.P[1] < best) {
+                    best = ChopScene.P[1];
+                    bx = ChopScene.P[0];
+                }
+            }
+        }
+        creatureTopY = best == Float.MAX_VALUE ? Float.NaN : best;
+        ChopScene.project(0f, 0f, 0f);
+        creatureTopX = ChopScene.P[0];
+    }
+
+    /** The side clusters' reach for this screen: 6% in from the edge, at the camera's closest framing. */
+    static void sideLimits(int w, int h) {
+        float unit = h * 1.2f / 128f * 1.1f;
+        sideMax = (w / 2f) / unit * 0.88f - 9f;
+    }
+
     static void models(ChopScene.Canvas c, EruptionTimeline tl, long t, long pt, int w, int h) {
         POLYS.clear();
         nextGroup = 0;
+        int creatureFrom = POLYS.size();
         creature(tl, t, pt);
+        creatureTop(creatureFrom);
         cone(tl, t, pt);
         pillars(tl, t);
         if (tl.ending() == Ending.VIAL) golemBehind(tl, t);
@@ -479,29 +572,62 @@ public final class EruptionScene {
         if (sink >= 1f) return;
         float k = pt / 1000f;
         Creature cr = tl.creature();
+        float cs = creatureScale(cr);
         // Everything turns slowly as it goes down, struggling.
         float yaw = 18f + 10f * (float) Math.sin(k * 1.7);
         switch (cr) {
-            case JAWBUS -> add(rigs.golem(k * 2.5f, yaw, 0.9f * sink + 0.3f * (float) Math.sin(k * 6)), 1f,
-                    0f, -46f * sink, 0f, SLOT_CREATURE);
-            case THUNDER -> add(rigs.guardian(0.5f + 0.5f * (float) Math.sin(k * 3), k * 2f, yaw, 0f, 0.3f), 1f,
-                    0f, 18f - 50f * sink, 0f, SLOT_CREATURE);
-            case PLHLEGBLAST -> add(rigs.squid(0.4f + 0.6f * (float) Math.abs(Math.sin(k * 2.4)), -10f, yaw), 2.6f,
-                    0f, 6f - 64f * sink, 0f, SLOT_CREATURE);
-            case RAGNAROK -> add(rigs.rider(yaw, 0.5f * (float) Math.abs(Math.sin(k * 2.2)) + 0.3f * sink, 0.4f), 1.05f,
-                    0f, -52f * sink, 0f, -1);
+            // Half as big again as they were: at a tenth of the screen nobody could tell it was Jawbus (the review, E1).
+            case JAWBUS -> add(rigs.golem(k * 2.5f, yaw, 0.9f * sink + 0.3f * (float) Math.sin(k * 6)), cs,
+                    0f, -46f * cs * sink, 0f, SLOT_CREATURE);
+            case THUNDER -> add(rigs.guardian(0.5f + 0.5f * (float) Math.sin(k * 3), k * 2f, yaw, 0f, 0.3f), cs,
+                    0f, (18f - 50f * sink) * cs, 0f, SLOT_CREATURE);
+            case PLHLEGBLAST -> add(rigs.squid(0.4f + 0.6f * (float) Math.abs(Math.sin(k * 2.4)), -10f, yaw), 2.6f * cs,
+                    0f, (6f - 64f * sink) * cs, 0f, SLOT_CREATURE);
+            case RAGNAROK -> add(rigs.rider(yaw, 0.5f * (float) Math.abs(Math.sin(k * 2.2)) + 0.3f * sink, 0.4f), 1.05f * cs,
+                    0f, -52f * cs * sink, 0f, -1);
             case SCUTTLER -> {
                 // The Scuttler and its friends in tow: one big head, four small ones round it, all going under.
-                add(rigs.skull(yaw, 8f * (float) Math.sin(k * 5)), 2.4f, 0f, 9f - 34f * sink, 0f, SLOT_CREATURE);
+                add(rigs.skull(yaw, 8f * (float) Math.sin(k * 5)), 2.4f * cs, 0f, (9f - 34f * sink) * cs, 0f, SLOT_CREATURE);
                 float[][] friends = {{-26, 10}, {24, 14}, {-16, -22}, {20, -20}};
                 for (int i = 0; i < friends.length; i++) {
                     float s = EruptionTimeline.sink(t - 120L * (i + 1));
                     float bob = 2f * (float) Math.sin(k * 6 + i);
-                    add(rigs.skull(yaw + 40f * i, 10f * (float) Math.sin(k * 4 + i)), 1.15f,
-                            friends[i][0], 4f + bob - 22f * s, friends[i][1], SLOT_CREATURE);
+                    add(rigs.skull(yaw + 40f * i, 10f * (float) Math.sin(k * 4 + i)), 1.15f * cs,
+                            friends[i][0] * cs, (4f + bob - 22f * s) * cs, friends[i][1] * cs, SLOT_CREATURE);
                 }
             }
         }
+    }
+
+    /**
+     * Bigger than they were: at a tenth of the screen nobody could tell it was Jawbus (the review, E1). Not all by
+     * the same amount - the elder guardian and the squid are big already.
+     */
+    static float creatureScale(Creature cr) {
+        return switch (cr) {
+            case JAWBUS -> 1.5f;
+            case THUNDER -> 1.15f;
+            case PLHLEGBLAST -> 1.2f;
+            case RAGNAROK -> 1.3f;
+            case SCUTTLER -> 1.4f;
+        };
+    }
+
+    /** The top of the creature on the screen this frame (its highest projected corner), for its nametag. */
+    static float creatureTopX, creatureTopY = Float.NaN;
+
+    /**
+     * The creature's name over it for the first 1.2 s, as Hypixel floats it over a sea creature: nobody could tell a
+     * plain iron golem was Lord Jawbus (the review, E1). It goes down with the creature.
+     */
+    static void nametag(ChopScene.Canvas c, EruptionTimeline tl, long t, int h) {
+        float a = (1f - ease((t - 1000) / 200f)) * ChopScene.sceneAlpha;
+        if (a <= 0.02f || t > 1200) return;
+        if (Float.isNaN(creatureTopY)) return;
+        Creature cr = tl.creature();
+        float ts = Math.min(1.35f, h / 300f);
+        float y = Math.max(10f * ts, creatureTopY - 9f * ts);
+        c.text(cr.title, creatureTopX, y, 1.15f * ts, ChopScene.alpha(a) | cr.colour);
     }
 
     /** Polygons from a rig, scaled and placed; slot -1 keeps the rig's own slots (Ragnarok: skin, horse, saddle). */
@@ -623,6 +749,7 @@ public final class EruptionScene {
         if (tl.ending() == Ending.KUUDRA) rise -= 120f * tl.swell(t);
         if (rise < -60f) return;
         float erupt = tl.erupt(t);
+        float slump = tl.slump(t);
         float sh = tl.shudder(t);
         float jx = sh * 0.8f * (float) Math.sin(t * 0.21), jz = sh * 0.8f * (float) Math.cos(t * 0.19);
         int heat = tl.heatColour(t);
@@ -637,22 +764,47 @@ public final class EruptionScene {
         // of magma, the crater block on top. (A flat skirt of magma round it read as a platform - the user.)
         java.util.List<float[]> blocks = new java.util.ArrayList<>();
         int[][] rocks = {{-2, 0}, {2, 0}, {0, 2}, {0, -2}, {-2, 1}, {2, -1}};
-        for (int[] q : rocks) blocks.add(new float[]{q[0] * 15f, -5f, q[1] * 15f, 0});
-        for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) blocks.add(new float[]{i * 16f, 4f, j * 16f, Math.abs(i) + Math.abs(j) == 2 ? 0 : 1});
-        for (int i = -1; i <= 1; i += 2) for (int j = -1; j <= 1; j += 2) blocks.add(new float[]{i * 8f, 18f, j * 8f, 1});
-        blocks.add(new float[]{0f, 32f, 0f, 1});
+        // {x, y, z, magma?, half height}. The ring's corners are half blocks, so the foot is rounder than a stepped
+        // pyramid (the review, E6).
+        for (int[] q : rocks) blocks.add(new float[]{q[0] * 15f, -5f, q[1] * 15f, 0, 8f});
+        for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
+            boolean corner = Math.abs(i) + Math.abs(j) == 2;
+            blocks.add(new float[]{i * 16f, corner ? 0f : 4f, j * 16f, corner ? 0 : 1, corner ? 4f : 8f});
+        }
+        for (int i = -1; i <= 1; i += 2) for (int j = -1; j <= 1; j += 2) blocks.add(new float[]{i * 8f, 18f, j * 8f, 1, 8f});
+        blocks.add(new float[]{0f, 32f, 0f, 1, 8f});
         float[][] stone = {{0, 0, 1, 1}, {0, 0, 1, 1}, {0, 0, 1, 1}, null, {0, 0, 1, 1}, {0, 0, 1, 1}};
+        float[][] halfStone = {{0, 0, 1, 0.5f}, {0, 0, 1, 0.5f}, {0, 0, 1, 1}, null, {0, 0, 1, 0.5f}, {0, 0, 1, 0.5f}};
         Random r = new Random(7);
         for (int b = 0; b < blocks.size(); b++) {
             float[] p = blocks.get(b);
             float x = p[0] + jx, y = p[1] + rise, z = p[2] + jz;
             float[] X = AX, Y = AY, Z = AZ;
-            float hs = b == blocks.size() - 1 ? 7f : 8f;
+            boolean top = b == blocks.size() - 1;
+            float hs = top ? 7f : 8f;
+            float hy = Math.min(hs, p[4]);
+            if (top && slump > 0f) {
+                // A bust's last beat: the crater block drops into the vent, tipping a little.
+                y -= 11f * slump;
+                float tip = 0.22f * slump;
+                X = new float[]{(float) Math.cos(tip), -(float) Math.sin(tip), 0};
+                Y = new float[]{(float) Math.sin(tip), (float) Math.cos(tip), 0};
+            }
             if (erupt >= 0f) {
+                // The foot's boulders and the ring's corners stay as stumps of a broken crater ring, sunk lower -
+                // with nothing left the pool was one flat ellipse (the review, E13).
+                if (p[3] == 0) {
+                    // Ragged: each stump its own height, 3 to 9 units out of the lava.
+                    float stumpTop = 3f + 3f * (b % 3);
+                    float[][] stump = {{0, 0, 1, 0.6f}, {0, 0, 1, 0.6f}, {0, 0, 1, 1}, null, {0, 0, 1, 0.6f}, {0, 0, 1, 0.6f}};
+                    int from = POLYS.size();
+                    box(x, stumpTop - 5f, z, hs * 0.75f, 5f, hs * 0.75f, AX, AY, AZ, stump, SLOT_STONE, 0xFFFFFF, 0, false);
+                    onGpu(from);
+                    continue;
+                }
                 // Blown apart: each block bursts into four half-size chunks thrown out fast and high, tumbling,
                 // gone off the screen or back into the lava in well under a second - the column takes over.
-                if (p[1] < 0f) continue;
-                boolean rock = p[3] == 0;
+                boolean rock = false;
                 float s = erupt * 1.4f;
                 for (int piece = 0; piece < 4; piece++) {
                     double ang = Math.atan2(p[2] + 0.01, p[0] + 0.01) + (r.nextFloat() - 0.5f) * 1.6f;
@@ -676,18 +828,18 @@ public final class EruptionScene {
             }
             int from = POLYS.size();
             if (p[3] == 0) {
-                box(x, y, z, hs, hs, hs, X, Y, Z, stone, SLOT_STONE, 0xFFFFFF, 0, false);
+                box(x, y, z, hs, hy, hs, X, Y, Z, hy < hs ? halfStone : stone, SLOT_STONE, 0xFFFFFF, 0, false);
             } else {
                 box(x, y, z, hs, hs, hs, X, Y, Z, magma, SLOT_MAGMA, 0xFFFFFF, 0, false);
                 cracks(from, heat, add);
             }
             // The crater: the top block's top is lava, grey, tinted by the heat.
-            if (b == blocks.size() - 1 && erupt < 0f) {
+            if (top && erupt < 0f && slump < 1f) {
                 // The game's lava, moving, in the heat's colour.
                 int lf = lavaFrame(pt);
-                float[][] top = {null, null, {0, lf / 20f, 1, (lf + 1) / 20f}, null, null, null};
+                float[][] crater = {null, null, {0, lf / 20f, 1, (lf + 1) / 20f}, null, null, null};
                 // A narrow opening, a quarter of the block's top (the user: smaller).
-                box(x, y + 0.6f, z, 3.5f, hs, 3.5f, X, Y, Z, top, SLOT_LAVA_GREY, heat, Math.round(200 * (1f - cool)) << 24 | heat, false);
+                box(x, y + 0.6f, z, 3.5f, hs, 3.5f, X, Y, Z, crater, SLOT_LAVA_GREY, heat, Math.round(200 * (1f - cool)) << 24 | heat, false);
             }
             onGpu(from);
         }
@@ -702,22 +854,41 @@ public final class EruptionScene {
     static final float[][] PILLARS = {{-60, -40, 2}, {-76, -8, 1}, {-54, -76, 2}, {-84, -62, 3}, {-66, 12, 1},
             {62, -46, 2}, {78, -12, 3}, {58, -84, 1}, {88, -70, 2}, {68, 8, 1}};
 
+    /**
+     * A pillar's (or a smoke source's) screen x, pulled in so the outermost cluster keeps 6% of the screen clear at
+     * the edge: on a narrow window the left cluster was cut by the edge (the review, E4). Those within
+     * {@code SIDE_INNER} of the vent stay where they are.
+     */
+    static float sideX(float screenX) {
+        float maxX = sideMax;
+        float ax = Math.abs(screenX);
+        if (ax <= SIDE_INNER || maxX >= SIDE_OUTER) return screenX;
+        float k = (ax - SIDE_INNER) / (SIDE_OUTER - SIDE_INNER);
+        return Math.signum(screenX) * (SIDE_INNER + k * Math.max(4f, maxX - SIDE_INNER));
+    }
+
+    static final float SIDE_INNER = 52f, SIDE_OUTER = 92f;
+    /** The furthest screen x (world units) a side cluster's edge may reach, set per frame from the screen's shape. */
+    static float sideMax = SIDE_OUTER;
+
     static void pillars(EruptionTimeline tl, long t) {
         float sink = tl.ending() == Ending.KUUDRA ? 140f * tl.swell(t) : 0f;
         float[][] side = {{0, 0, 1, 1}, {0, 0, 1, 1}, null, null, {0, 0, 1, 1}, {0, 0, 1, 1}};
         float[][] top = {null, null, {0, 0, 1, 1}, null, null, null};
         for (int i = 0; i < PILLARS.length; i++) {
-            float z = PILLARS[i][1], x = (PILLARS[i][0] - 0.37f * z) / 0.93f;
+            float z = PILLARS[i][1], x = (sideX(PILLARS[i][0]) - 0.37f * z) / 0.93f;
             int blocks = (int) PILLARS[i][2];
-            // Sunk a little, by its own amount, so the tops do not line up.
-            float foot = -6f - 3f * (i % 3) - sink;
+            // Sunk a little, by its own amount, so the tops do not line up. A lone block sinks to its top face, a
+            // slab of basalt awash: standing half out it read as floating debris (the review, E4).
+            float foot = (blocks == 1 ? -14f : -6f - 3f * (i % 3)) - sink;
             for (int b = 0; b < blocks; b++) {
                 float cy = foot + 8f + 16f * b;
                 if (cy + 8f < -1f) continue;
                 int from = POLYS.size();
                 // In shadow: only the lava below lights them (drawGpu's glow by height).
-                box(x, cy, z, 8f, 8f, 8f, AX, AY, AZ, side, SLOT_BASALT, 0x8A8088, 0, false);
-                if (b == blocks - 1) box(x, cy, z, 8f, 8f, 8f, AX, AY, AZ, top, SLOT_BASALT_TOP, 0x9A9098, 0, false);
+                // Lighter than it was (#8A8088), so basalt's own stripes show (the review, E4).
+                box(x, cy, z, 8f, 8f, 8f, AX, AY, AZ, side, SLOT_BASALT, 0xB0A8B0, 0, false);
+                if (b == blocks - 1) box(x, cy, z, 8f, 8f, 8f, AX, AY, AZ, top, SLOT_BASALT_TOP, 0xC0B8C0, 0, false);
                 onGpu(from);
             }
         }
@@ -866,6 +1037,11 @@ public final class EruptionScene {
 
     /** Where the drop rests for its showcase, world units: over the vent. */
     static final float REST_Y = 44f;
+
+    static float smooth(float x) {
+        x = Math.max(0f, Math.min(1f, x));
+        return x * x * (3f - 2f * x);
+    }
 
     static float[] dropRest(EruptionTimeline tl) {
         // Kuudra's dye rests below its eyes - at 70 it sat across one (the review, E18).
@@ -1267,15 +1443,27 @@ public final class EruptionScene {
         }
         float cool = Math.max(0f, tl.cool(t));
         int hot = mixHot(tl, t);
+        // Yellow and white heat light the whole block, not only its cracks: cream cracks on brown blocks read as
+        // giraffe print (the review, E6).
+        float glowAll = Math.max(0f, Math.min(1f, (tl.heat(t) - 2.4f) / 1.6f)) * (1f - cool);
+        int heatRgb = tl.heatColour(t);
+        // Flash I: the vent white for a frame as the bolt strikes it (the review, E12).
+        boolean struck = tl.ending() == Ending.FLASH && t >= EruptionTimeline.F_BOLT && t < EruptionTimeline.F_BOLT + 50;
         for (int i = 0; i < faces.size(); i++) {
             Poly p = faces.get(i);
             int[] r = rect(p, p.slot);
+            if (struck && (p.slot == SLOT_MAGMA || p.slot == SLOT_STONE)) {
+                c.quad(gpuTexture(p.slot), q[i][0], q[i][1], q[i][2], q[i][3], q[i][4], q[i][5], r[0], r[1], r[2], r[3], alpha | 0xFFFFFF);
+                c.quad(gpuTexture(p.slot), q[i][0], q[i][1], q[i][2], q[i][3], q[i][4], q[i][5], r[0], r[1], r[2], r[3], alpha | 0xFFFFFF);
+                continue;
+            }
             int tint = p.tint;
             int addA = p.add >>> 24;
             // The crater's lava: the heat itself, only a touch lighter - mixing it far towards white turned it to sand.
             if (addA > 0) tint = EruptionTimeline.mix(tint, 0xFFFFFF, addA / 255f * 0.15f);
-            // The magma block a little darker, so its cracks glow against it.
-            else if (p.second >= 0) tint = EruptionTimeline.mix(tint, 0x000000, 0.35f);
+            // The magma block a little darker, so its cracks glow against it - less so as it heats up.
+            else if (p.second >= 0) tint = EruptionTimeline.mix(EruptionTimeline.mix(tint, 0x000000, 0.35f * (1f - glowAll)),
+                    EruptionTimeline.mix(heatRgb, 0xFFFFFF, 0.3f), 0.55f * glowAll);
             float lit = Math.max(0f, Math.min(1f, p.lit));
             tint = (int) ((tint >> 16 & 255) * lit) << 16 | (int) ((tint >> 8 & 255) * lit) << 8 | (int) ((tint & 255) * lit);
             // The lava's glow on what stands in it, fading with height.
@@ -1327,6 +1515,7 @@ public final class EruptionScene {
     static void backEffects(ChopScene.Canvas c, CrystalVeins.Fill layer, EruptionTimeline tl, long t, long pt, int w, int h, float g) {
         float a = ChopScene.sceneAlpha;
         embers(layer, tl, t, pt, w, h, g, a);
+        if (t > 700 && t < 2300) ripples(layer, tl, t, g, a);
         bubbles(layer, tl, t, pt, g, a);
         if (tl.cool(t) > 0f) smoke(layer, tl, t, g, a);
         if (tl.erupt(t) >= 0f) fountain(c, layer, tl, t, w, h, g, a);
@@ -1353,6 +1542,7 @@ public final class EruptionScene {
         if (tl.ending() == Ending.FORGE) forge(c, layer, tl, t, g, a);
         if (tl.ending() == Ending.PINCER) clacks(c, layer, tl, t, g, a);
         if (tl.ending() == Ending.FLASH) arcs(c, layer, tl, t, g, a);
+        if (!tl.drop().win() && t >= EruptionTimeline.SLUMP - 20) slumpSteam(layer, tl, t, g, a);
         if (tl.ending() == Ending.END_TIMES) bookFire(layer, tl, t, g, a);
         if (tl.ending() == Ending.VIAL) meltdown(c, layer, tl, t, g, a);
         if (tl.ending() == Ending.KUUDRA) carmineRain(layer, tl, t, w, h, g, a);
@@ -1377,6 +1567,61 @@ public final class EruptionScene {
             if (al <= 0.02f) continue;
             sq(layer, x, y, g * (i % 5 == 0 ? 2 : 1), g, Math.round(255 * al) << 24 | EruptionTimeline.mix(col, 0xFFE080, r.nextFloat() * 0.4f));
         }
+    }
+
+    /**
+     * Where the creature went under: rings running out over the lava and bubbles breaking, until the crust closes over
+     * the spot - the lava sat empty for a beat before (the review, E2). The same for every drop.
+     */
+    static void ripples(CrystalVeins.Fill layer, EruptionTimeline tl, long t, float g, float a) {
+        float front = crustFront(tl, t);
+        for (int k = 0; k < 4; k++) {
+            long since = t - (800 + 260L * k);
+            if (since < 0 || since > 1100) continue;
+            float life = since / 1100f;
+            float rad = 6f + 60f * (1f - (1f - life) * (1f - life));
+            if (rad < front) continue;
+            float al = a * (1f - life) * 0.75f;
+            int cells = Math.max(12, (int) (rad * ChopScene.size * 6.3f / g));
+            for (int i = 0; i < cells; i++) {
+                double ang = i * Math.PI * 2 / cells;
+                ChopScene.project((float) Math.cos(ang) * rad, 0.5f, (float) Math.sin(ang) * rad);
+                sq(layer, ChopScene.P[0], ChopScene.P[1], g, g, Math.round(255 * al) << 24 | (i % 3 == 0 ? 0xFFF0A0 : 0xFFC050));
+            }
+        }
+        Random r = new Random(77);
+        for (int i = 0; i < 10; i++) {
+            long at = 900 + r.nextInt(1100);
+            float bx = (r.nextFloat() - 0.5f) * 30f, bz = (r.nextFloat() - 0.5f) * 24f;
+            long since = t - at;
+            if (since < 0 || since > 320) continue;
+            if (Math.sqrt(bx * bx + bz * bz) < front) continue;
+            float life = since / 320f;
+            ChopScene.project(bx, 1f + 4f * life, bz);
+            int s = life < 0.5f ? 2 : 1;
+            sq(layer, ChopScene.P[0], ChopScene.P[1] - life * 3 * g, g * s, g, Math.round(255 * a * (1f - life)) << 24 | 0xFFD070);
+        }
+    }
+
+    /** A bust's slump: a puff of steam and grit off the vent as the crater block drops in. */
+    static void slumpSteam(CrystalVeins.Fill layer, EruptionTimeline tl, long t, float g, float a) {
+        long since = t - EruptionTimeline.SLUMP;
+        if (since < 0 || since > 1100) return;
+        float life = since / 1100f;
+        float rise = -10f * Math.max(0f, tl.cool(t));
+        Random r = new Random(tl.seed() * 13 + 1);
+        for (int i = 0; i < 26; i++) {
+            float ph = r.nextFloat() * 0.25f;
+            float k = Math.max(0f, Math.min(1f, (life - ph) / 0.75f));
+            if (k <= 0f || k >= 1f) continue;
+            float ox = (r.nextFloat() - 0.5f) * (10f + 26f * k), oz = (r.nextFloat() - 0.5f) * 12f;
+            ChopScene.project(ox, 40f + rise + 34f * k, oz);
+            int s = 1 + (int) (k * 3f);
+            sq(layer, ChopScene.P[0], ChopScene.P[1], g * s, g, Math.round(170 * a * (1f - k)) << 24 | (i % 4 == 0 ? 0x8A8486 : 0xD8D4D0));
+        }
+        float[] top = {0f, 40f + rise, 0f};
+        ChopScene.project(top[0], top[1], top[2]);
+        burst(layer, ChopScene.P[0], ChopScene.P[1], since, 500, tl.seed() + 3, 10, 22f * ChopScene.size, 0x5A5254, 0x2E282A, g, a);
     }
 
     /** Bubbles popping on the ring at each breath, the size of the heat. */
@@ -1483,9 +1728,11 @@ public final class EruptionScene {
                 float nx = x + (ex - x) * (1f / (segs - s)) + (s == segs - 1 ? 0 : (r.nextFloat() - 0.5f) * 8 * g);
                 float ny = y + (ey - y) / (segs - s);
                 int steps = Math.max(1, (int) (Math.hypot(nx - x, ny - y) / g));
+                // Two cells of white core with a cell of the bolt's colour either side (the review, E12).
                 for (int q = 0; q <= steps; q++) {
                     float px = x + (nx - x) * q / steps, py = y + (ny - y) * q / steps;
-                    sq(layer, px - 2 * g, py - g, g * 6, g * 3, Math.round(90 * a * k) << 24 | col);
+                    sq(layer, px - 3 * g, py - g, g * 8, g * 3, Math.round(90 * a * k) << 24 | col);
+                    sq(layer, px - 2 * g, py, g * 4, g, Math.round(255 * a * k) << 24 | col);
                     sq(layer, px - g, py, g * 2, g, Math.round(255 * a * k) << 24 | 0xFFFFFF);
                 }
                 // A branch off every third joint, short and fading.
@@ -1568,27 +1815,30 @@ public final class EruptionScene {
         long from = tl.riseFrom(), to = tl.arrive() + 900;
         if (t < from || t > to) return;
         float[] s = dropScreen(tl, t);
-        float reach = 22f * ChopScene.size;
-        long slot = (t - from) / 110;
+        // Two arcs crawling round the book's outline, each a third of the way round, jagged and re-struck every 60 ms -
+        // the short loose ones read as blue commas (the review, E12).
+        float half = 16f * ChopScene.size * dropPose(tl, t)[6] * 0.62f;
+        long slot = (t - from) / 60;
         for (int k = 0; k < 2; k++) {
             Random r = new Random(slot * 31 + k * 7 + tl.seed());
-            if (r.nextFloat() < 0.35f) continue;
-            double ang = r.nextFloat() * Math.PI * 2;
-            float x = s[0] + (float) Math.cos(ang) * reach * 0.45f, y = s[1] + (float) Math.sin(ang) * reach * 0.45f;
-            double dir = ang + (r.nextFloat() - 0.5f) * 1.2f;
-            int segs = 3 + r.nextInt(3);
-            for (int q = 0; q < segs; q++) {
-                float len = reach * (0.09f + 0.08f * r.nextFloat());
-                dir += (r.nextFloat() - 0.5f) * 1.6f;
-                float nx = x + (float) Math.cos(dir) * len, ny = y + (float) Math.sin(dir) * len;
-                int steps = Math.max(1, (int) (len / g));
-                for (int j = 0; j <= steps; j++) {
-                    float px = x + (nx - x) * j / steps, py = y + (ny - y) * j / steps;
-                    sq(layer, px - g, py - g, g * 3, g, Math.round(110 * a) << 24 | 0x6AB8FF);
-                    sq(layer, px, py, g, g, Math.round(255 * a) << 24 | 0xFFFFFF);
+            float start = ((t - from) / 900f + k * 0.5f) % 1f;
+            int segs = 10;
+            float px0 = 0, py0 = 0;
+            for (int q = 0; q <= segs; q++) {
+                float u = (start + 0.33f * q / segs) % 1f;
+                float[] e = outline(u, half);
+                float jit = q == 0 || q == segs ? 0f : (r.nextFloat() - 0.5f) * 8f * g;
+                float px = s[0] + e[0] + e[2] * jit, py = s[1] + e[1] + e[3] * jit;
+                if (q > 0) {
+                    int steps = Math.max(1, (int) (Math.hypot(px - px0, py - py0) / g));
+                    for (int j = 0; j <= steps; j++) {
+                        float ax = px0 + (px - px0) * j / steps, ay = py0 + (py - py0) * j / steps;
+                        sq(layer, ax - g, ay, g * 3, g, Math.round(110 * a) << 24 | 0x6AB8FF);
+                        sq(layer, ax, ay, g, g, Math.round(255 * a) << 24 | 0xFFFFFF);
+                    }
                 }
-                x = nx;
-                y = ny;
+                px0 = px;
+                py0 = py;
             }
         }
         // The strobe: a flicker of pale blue on the book, every 220 ms down to every 90.
@@ -1596,6 +1846,19 @@ public final class EruptionScene {
         long period = Math.round(220 - 130 * u);
         long ph = (t - from) % period;
         if (ph < 40) ChopScene.glow(c, s[0], s[1], 60f * ChopScene.size, 0xA8D8FF, 0.5f * a * (1f - u * 0.6f));
+    }
+
+    /** A point {@code u} 0..1 round a square of half-size {@code half}, and its outward normal: {x, y, nx, ny}. */
+    static float[] outline(float u, float half) {
+        float side = u * 4f;
+        int s = (int) side;
+        float f = side - s;
+        return switch (s) {
+            case 0 -> new float[]{-half + 2 * half * f, -half, 0, -1};
+            case 1 -> new float[]{half, -half + 2 * half * f, 1, 0};
+            case 2 -> new float[]{half - 2 * half * f, half, 0, 1};
+            default -> new float[]{-half, half - 2 * half * f, -1, 0};
+        };
     }
 
     /** The Burnt Texts: the book burning - ragged pixel flames licking up off its top, embers off them. */
@@ -1811,19 +2074,30 @@ public final class EruptionScene {
         // The plumes: from points beside the pillars, widening as they rise, leaning with a slow wind.
         float[][] sources = {{-70, -36}, {-60, -82}, {72, -36}, {64, -86}};
         Random r = new Random(tl.seed() * 19 + 7);
-        int[] greys = {0x3E383C, 0x504A4E, 0x625C60, 0x746E72};
+        // Fewer, bigger puffs: each a round blob of cells that grows and drifts with the wind, a denser darker core
+        // and lighter edges. Single grey squares read as dotted lines (the review, E5).
         for (int p = 0; p < sources.length; p++) {
-            float z = sources[p][1], x = (sources[p][0] - 0.37f * z) / 0.93f;
-            for (int i = 0; i < 120; i++) {
-                float ph = r.nextFloat(), sp = 0.12f + 0.1f * r.nextFloat();
+            float z = sources[p][1], x = (sideX(sources[p][0]) - 0.37f * z) / 0.93f;
+            for (int i = 0; i < 11; i++) {
+                float ph = r.nextFloat(), sp = 0.1f + 0.06f * r.nextFloat();
                 float life = (sec * sp + ph) % 1f;
-                float spread = 4f + 30f * life;
-                float ox = (r.nextFloat() - 0.5f) * spread + 26f * life * life, oz = (r.nextFloat() - 0.5f) * spread * 0.6f;
-                ChopScene.project(x + ox, 6f + 150f * life, z + oz);
-                float al = a * thick * 0.85f * (1f - life * 0.8f) * Math.min(1f, life * 8f);
+                float ox = (r.nextFloat() - 0.5f) * 8f + 34f * life * life, oz = (r.nextFloat() - 0.5f) * 6f;
+                ChopScene.project(x + ox, 6f + 140f * life, z + oz);
+                float al = a * thick * 0.8f * (1f - life * 0.85f) * Math.min(1f, life * 6f);
                 if (al <= 0.02f) continue;
-                int s = life < 0.25f ? 2 : life < 0.6f ? 3 : 4;
-                sq(layer, ChopScene.P[0], ChopScene.P[1], g * s, g, Math.round(255 * al) << 24 | greys[(i + p) % greys.length]);
+                float rad = 1.2f + 2.4f * life;
+                int ri = (int) Math.ceil(rad);
+                float cx = Math.round(ChopScene.P[0] / g) * g, cy = Math.round(ChopScene.P[1] / g) * g;
+                for (int dy = -ri; dy <= ri; dy++) {
+                    for (int dx = -ri; dx <= ri; dx++) {
+                        float dd = (float) Math.sqrt(dx * dx + dy * dy);
+                        if (dd > rad) continue;
+                        boolean core = dd < rad * 0.55f;
+                        int col = core ? 0x423C40 : (dy < 0 ? 0x7A7478 : 0x5E585C);
+                        float ca = al * (core ? 0.9f : 0.5f);
+                        layer.fill(cx + dx * g, cy + dy * g, g, g, Math.round(255 * ca) << 24 | col);
+                    }
+                }
             }
         }
         // Ash: pale grey flecks drifting down the whole screen, side to side.

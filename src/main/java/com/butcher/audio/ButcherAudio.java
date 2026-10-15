@@ -319,6 +319,29 @@ public final class ButcherAudio {
         return Math.max(0f, Math.min(1.5f, pct / 100f));
     }
 
+    private static float ghostGain() {
+        int pct = ButcherClient.config == null ? 100 : ButcherClient.config.ghostVolume;
+        return Math.max(0f, Math.min(1.5f, pct / 100f));
+    }
+
+    /** Wisp: the Ghost rising. */
+    public static void onGhostRise(long seed) {
+        float gain = ghostGain();
+        if (gain > 0.001f) for (Voice v : Voices.ghostWail(seed)) play(gained(v, gain));
+    }
+
+    /** Wisp: the Ghost coming apart. */
+    public static void onGhostBurst(long seed) {
+        float gain = ghostGain();
+        if (gain > 0.001f) for (Voice v : Voices.ghostBurst(seed)) play(gained(v, gain));
+    }
+
+    /** Wisp: the drop - a short chime, lower and minor-ish against Fin's. */
+    public static void onGhostReveal() {
+        float gain = ghostGain();
+        if (gain > 0.001f) for (Voice v : Voices.chime(3, 220f)) play(gained(v, gain));
+    }
+
     /** The fin breaking the surface. */
     public static void onFinRise() {
         float gain = finGain();
@@ -326,20 +349,20 @@ public final class ButcherAudio {
         for (Voice v : Voices.paintBlup()) play(gained(v, gain));
     }
 
-    /** The cleaver landing, and the water going up. */
+    /** The hook yanked up: the line whipping taut, and the water going up. */
     public static void onFinChop(long seed) {
         float gain = finGain();
         if (gain <= 0.001f) return;
-        for (Voice v : Voices.chopHit(1, seed)) play(gained(v, gain));
+        for (Voice v : Voices.finYank(seed)) play(gained(v, gain));
         for (Voice v : Voices.paintSplash(seed)) play(gained(v, gain * 0.8f));
     }
 
-    /** The bust: the blade going through empty air into the water, and the little falling notes. */
+    /** The bust: the hook yanked up empty, and the little falling notes. */
     public static void onFinMiss(long seed) {
         float gain = finGain();
         if (gain <= 0.001f) return;
         for (Voice v : Voices.miss(seed)) play(gained(v, gain));
-        for (Voice v : Voices.finPlunge(seed)) play(gained(v, gain));
+        for (Voice v : Voices.finYank(seed)) play(gained(v, gain * 0.8f));
     }
 
     /** The drop out of the splash: a short rising chime, one note longer for a legendary. */

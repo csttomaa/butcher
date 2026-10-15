@@ -59,6 +59,7 @@ public final class EruptionSound {
         Ending e = d.ending;
         if (!d.win()) {
             out.add(new Cue(R, true, Voices.eruptionCool(seed + 600)));
+            out.add(new Cue(EruptionTimeline.SLUMP, false, Voices.eruptionSlump(seed + 620)));
             if (EruptionTimeline.guaranteed(tl.creature()) != null) out.add(new Cue(R + 700, false, Voices.eruptionConsolation()));
             return sorted(out);
         }

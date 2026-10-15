@@ -536,6 +536,21 @@ public class ButcherMenuScreen extends Screen {
         List<String> fin = new ArrayList<>(names(com.butcher.detect.SharkDrops.Drop.values()));
         fin.add(0, "BUST");
         tryRows(rows, "shark", fin, font);
+        return ghostRows(rows, font, cfg);
+    }
+
+    /** The Dwarven Mines' Ghosts: Wisp, a pop-up for Sorrow and Plasma. Hands on to lava fishing. */
+    private List<Row> ghostRows(List<Row> rows, Font font, PatternConfig cfg) {
+        rows.add(new HeaderRow("ghost", "Dwarven Mines Ghosts - Wisp", cfg.ghostAnnounce, isOpen("ghost")));
+        if (!isOpen("ghost")) return lavaRows(rows, font, cfg);
+        rows.add(new SectionRow("The pop-up"));
+        rows.add(dianaToggle("Announce Sorrow or Plasma", cfg.ghostAnnounce, () -> cfg.ghostAnnounce = !cfg.ghostAnnounce, cfg));
+        rows.add(dianaToggle("Show the price", cfg.ghostPrice, () -> cfg.ghostPrice = !cfg.ghostPrice, cfg));
+        rows.add(new NoticeRow("A Ghost rises out of the Mist, comes apart, and the drop pops out. A quick pop-up over the game - nothing is hidden.",
+                font, rowsWidth()));
+        rows.add(new SliderRow("ghost_volume", "Volume", cfg.ghostVolume, 0, 150, 5,
+                v -> { cfg.ghostVolume = v; }, v -> v + "%"));
+        tryRows(rows, "ghost", names(com.butcher.detect.GhostDrops.Drop.values()), font);
         return lavaRows(rows, font, cfg);
     }
 
@@ -834,6 +849,8 @@ public class ButcherMenuScreen extends Screen {
                 v -> { cfg.seraphVolume = v; }, v -> v + "%"));
         rows.add(new SliderRow("snd_fishing", "Fishing Festival - Fin", cfg.fishingVolume, 0, 150, 5,
                 v -> { cfg.fishingVolume = v; }, v -> v + "%"));
+        rows.add(new SliderRow("snd_ghost", "Dwarven Mines Ghosts - Wisp", cfg.ghostVolume, 0, 150, 5,
+                v -> { cfg.ghostVolume = v; }, v -> v + "%"));
         rows.add(new NoticeRow("The same sliders as in each animation's own group. The Scatha plays at the cutscene volume above.", font, rowsWidth()));
 
         rows.add(new SectionRow("Switches"));

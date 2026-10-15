@@ -132,7 +132,11 @@ public final class ChopScene {
     /** "Calmer effects" (the menu): no screen shake and softer flashes, in every animation. Set by the screens. */
     public static boolean calm;
 
+    /** The screen's height this frame, for keeping a showcase on it. */
+    static int screenH = 360;
+
     public static void draw(Canvas c, ChopTimeline tl, long t, int w, int h) {
+        screenH = h;
         showScale = tl.showScale();
         // Before the drop is shown there is no item to shine from: forget the last cutscene's.
         if (t < tl.arrive() - 400) itemX = Float.NaN;
@@ -160,7 +164,11 @@ public final class ChopScene {
         }
         float[] fall = tl.blockFall(t);
         yShift = fall[0];
-        sceneAlpha = master * fall[1];
+        // The 3D scene is never faded in: a box at part alpha shows its own faces through it, and the board came in
+        // see-through. It pops in solid instead, a little small, with a puff of dust (the review, D2).
+        float solid = 1f - ease01((t - (tl.total() - 400)) / 400f);
+        blockPop = 0.85f + 0.15f * backOut01(ts / 120f);
+        sceneAlpha = solid * fall[1];
         if (sceneAlpha > 0.01f) {
             ChopSpecials.beforeBlock(tl, t, c);
             gild = ChopSpecials.gild(tl, t);
@@ -176,6 +184,7 @@ public final class ChopScene {
             gild = null;
             glintHook = null;
             cracks(tl, ts, c);
+            smear(tl, ts, c);
             cleaver(tl, ts, c);
             gild = ChopSpecials.gild(tl, t);
             chips(tl, ts, true, c);
@@ -186,13 +195,15 @@ public final class ChopScene {
         sceneAlpha = master;
         // Debris out to the screen's edges on every blow, and a bust's ash (ChopFill).
         ChopFill.debris(tl, ts, w, h, c);
+        ChopFill.dust(tl, ts, c);
         ChopFill.ash(tl, ts, w, h, c);
 
+        // The motes rise behind the drop and its words: over them they crossed the text (the user, 0.3.0).
+        ChopFill.motes(tl, t, w, h, c);
         if (tl.unmade()) relic(tl, t, c);
         else if (tl.thinks()) brain(tl, t, c);
         else if (tl.ending() != null) ChopSpecials.draw(tl, t, w, h, c);
         else drop(tl, t, c);
-        ChopFill.motes(tl, t, w, h, c);
 
         // A flash is a burst of light where it happens - never a white fill over the whole screen,
         // which over the dimmed game reads as grey fog (the user's screenshots, twice).
@@ -377,8 +388,8 @@ public final class ChopScene {
     static void block(Canvas c) {
         // A board, not a stump: only the top rows of the bark strip down its sides.
         int[] top = ChopArt.BLOCK_TOP, side = {ChopArt.BLOCK_SIDE[0], ChopArt.BLOCK_SIDE[1], 16, Math.max(2, Math.round(16 * ChopTimeline.BLOCK_H / 18f))};
-        float hy = ChopTimeline.BLOCK_H / 2f;
-        box(0f, -hy, 0f, 0f, 0f, 0f, ChopTimeline.BLOCK_W, hy, ChopTimeline.BLOCK_D, all(SHEET),
+        float hy = ChopTimeline.BLOCK_H / 2f * blockPop;
+        box(0f, -hy, 0f, 0f, 0f, 0f, ChopTimeline.BLOCK_W * blockPop, hy, ChopTimeline.BLOCK_D * blockPop, all(SHEET),
                 new int[][]{side, side, top, side, side, side}, 0.95f, 0.9f, 0.88f, 0f, 1f, c);
     }
 
@@ -492,7 +503,36 @@ public final class ChopScene {
      * The blade goes into the head, not in front of it: while it is level and in, only the part of
      * each face above the head's top (or, once through, above the board) is drawn.
      */
+    /** The board's size as it pops in, 0.85 to 1 (with a little overshoot) over its first 120 ms. */
+    static float blockPop = 1f;
+
+    static float backOut01(float x) {
+        x = Math.max(0f, Math.min(1f, x));
+        float s = 1.7f, u = x - 1f;
+        return 1f + (s + 1f) * u * u * u + s * u * u;
+    }
+
+    /**
+     * A smear on the down-swing: the blade where it was one and two frames ago, faint and without its outline, for
+     * the last 60 ms before each blow - the first blow read as the cleaver resting on the head (the review, D3).
+     */
+    static void smear(ChopTimeline tl, long t, Canvas c) {
+        for (int k = 0; k < 4; k++) {
+            long at = ChopTimeline.blowTime(k);
+            if (t < at - 60 || t >= at + 20) continue;
+            for (int g = 2; g >= 1; g--) {
+                long back = t - 28L * g;
+                if (back < at - ChopTimeline.SWING_MS) continue;
+                cleaverAt(tl, back, c, g == 1 ? 0.35f : 0.18f, false);
+            }
+        }
+    }
+
     static void cleaver(ChopTimeline tl, long t, Canvas c) {
+        cleaverAt(tl, t, c, 1f, true);
+    }
+
+    static void cleaverAt(ChopTimeline tl, long t, Canvas c, float alphaMul, boolean outline) {
         float[] cl = tl.cleaver(t);
         if (cl == null || cl[3] <= 0.01f) return;
         float s = CLEAVER_SCALE;
@@ -514,8 +554,8 @@ public final class ChopScene {
             faces.add(f);
         }
         faces.sort((a, b) -> Float.compare(a[0], b[0]));
-        faceAlpha = cl[3];
-        for (int pass = 0; pass < 2; pass++) {
+        faceAlpha = cl[3] * alphaMul;
+        for (int pass = outline ? 0 : 1; pass < 2; pass++) {
             for (float[] f : faces) {
                 project(f[1], f[2], f[3]);
                 float ox = P[0], oy = P[1];

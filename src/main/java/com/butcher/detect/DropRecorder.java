@@ -92,6 +92,9 @@ public final class DropRecorder {
                     + "|magma lord|crab stick|has spawned|has arrived|emerges|end times|waddles up|appeared"
                     + "|double hook|CHARM!|LOOT SHARE|DROP!|WOW!|RNGESUS|sea creature");
 
+    /** The Ghosts' drops (2026-10-12, for "Wisp"): GhostDrops was written before a real Sorrow or Plasma line was seen. */
+    private static final Pattern GHOST = Pattern.compile("(?i)sorrow|plasma|volta|ghostly boots|materialized|the mist|ghost");
+
     private static boolean enabled() {
         return ButcherClient.config == null || ButcherClient.config.recordDrops;
     }
@@ -114,6 +117,11 @@ public final class DropRecorder {
             JsonObject o = new JsonObject();
             o.addProperty("line", text);
             record("slayer_line", o);
+        }
+        if (enabled() && GHOST.matcher(text).find()) {
+            JsonObject o = new JsonObject();
+            o.addProperty("line", text);
+            record("ghost_line", o);
         }
         if (enabled() && FISHING.matcher(text).find()) {
             JsonObject o = new JsonObject();

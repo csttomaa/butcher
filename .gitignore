@@ -5,3 +5,9 @@ build/
 out/
 run/
 .vscode/
+
+# Offline renders and local game logs - regenerable, never shipped
+/*_preview.png
+/*_sounds/
+/*.wav
+logs/

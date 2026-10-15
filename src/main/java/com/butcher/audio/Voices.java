@@ -1271,6 +1271,15 @@ public final class Voices {
     }
 
     /** Fin's bust: the cleaver plunging into the water where the fin was - a wet plunk and a gurgle. */
+    /** Fin: the line whipping taut as the hook is yanked - a rising zip, a swish and the line's low twang. */
+    public static Voice[] finYank(long seed) {
+        return new Voice[]{
+                tone(420f, 1700f, 0.11f, 0.18f, 0.002f, new float[]{1f, 0.3f}, 0.5f),
+                noise(3200f, 1.2f, 0.14f, 0.16f, 0.002f, 0.5f, seed),
+                after(0.03f, tone(196f, 190f, 0.45f, 0.13f, 0.002f, new float[]{1f, 0.5f, 0.3f, 0.15f}, 0.5f)),
+        };
+    }
+
     public static Voice[] finPlunge(long seed) {
         return new Voice[]{
                 tone(240f, 520f, 0.09f, 0.35f, 0.003f, new float[]{1f, 0.35f, 0.1f}, 0.5f),
@@ -1572,6 +1581,22 @@ public final class Voices {
             };
         }
         return out;
+    }
+
+    /** Wisp: the Ghost rising out of the Mist - a hollow falling wail and a breath of air. */
+    public static Voice[] ghostWail(long seed) {
+        return new Voice[]{
+                tone(392f, 261.6f, 0.75f, 0.045f, 0.18f, new float[]{1f, 0f, 0.35f, 0f, 0.12f}, 0.7f),
+                tone(588f, 392f, 0.6f, 0.018f, 0.2f, new float[]{1f}, 0.7f),
+                noise(1400f, 0.6f, 0.55f, 0.03f, 0.2f, 0.6f, seed)};
+    }
+
+    /** Wisp: it comes apart - a crackle of the charge and a soft puff. */
+    public static Voice[] ghostBurst(long seed) {
+        java.util.List<Voice> out = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) for (Voice v : eruptionZap(seed + i)) out.add(after(0.035f * i, v));
+        out.add(noise(2600f, 0.8f, 0.3f, 0.06f, 0.002f, 0.5f, seed + 9));
+        return out.toArray(new Voice[0]);
     }
 
     /** Time stuttering: a short tape stop. */
@@ -2173,6 +2198,18 @@ public final class Voices {
             float at = 0.4f + 0.7f * (float) Math.pow(i / 12f, 1.3f);
             out.add(after(at, noise(1500f + rng.nextFloat() * 2500f, 2.2f, 0.03f, 0.05f * (1f - 0.5f * i / 12f), 0.001f, 0.3f, seed + 10 + i)));
         }
+        return out.toArray(new Voice[0]);
+    }
+
+    /** A bust's vent slumping: a dull stone thud, rubble settling and a last hiss of steam. */
+    public static Voice[] eruptionSlump(long seed) {
+        java.util.List<Voice> out = new java.util.ArrayList<>();
+        out.add(tone(70f, 42f, 0.5f, 0.3f, 0.004f, new float[]{1f, 0.4f, 0.15f}, 0.6f));
+        out.add(noise(300f, 0.9f, 0.35f, 0.14f, 0.003f, 0.5f, seed));
+        out.add(after(0.06f, noise(4200f, 0.8f, 0.7f, 0.06f, 0.02f, 0.5f, seed + 1)));
+        java.util.Random rng = new java.util.Random(seed);
+        for (int i = 0; i < 5; i++)
+            out.add(after(0.08f + 0.06f * i + 0.03f * rng.nextFloat(), noise(700f + rng.nextFloat() * 900f, 1.8f, 0.05f, 0.06f, 0.001f, 0.4f, seed + 2 + i)));
         return out.toArray(new Voice[0]);
     }
 

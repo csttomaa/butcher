@@ -61,8 +61,20 @@ public final class HellionWatcher {
     }
 
     static final String NAME = "Inferno Demonlord IV";
-    private static final double SCAN_RADIUS = 48, CLAIM_REACH = 16, PHASE_REACH = 24, TELEPORT = 12, FALLBACK_REACH = 12;
+    private static final double SCAN_RADIUS = 48, CLAIM_REACH = 16,
+            // A demon phase comes back where it left, a few blocks off; neighbouring players' bosses stood at 19-26
+            // blocks and were taken for it (a friend's records, 2026-10-12). The trailing ✯ on a nametag is not
+            // ownership - it is a Shuriken's Magic Find mark, which anyone can put on any mob (the user).
+            PHASE_REACH = 14, TELEPORT = 12, FALLBACK_REACH = 12;
     private static final long CLAIM_BEFORE_MS = 2_000, CLAIM_AFTER_MS = 5_000, PHASE_GAP_MS = 45_000;
+    /**
+     * A boss that comes with the quest itself: no "SLAYER BOSS!" line and no mini-bosses, its nametag at full health
+     * a few blocks away within the same tick as "SLAYER QUEST STARTED!" (a friend's records, 2026-10-12: 22 of 131
+     * kills, one of them an Archfiend Dice that never played). First seen within this long of the quest starting,
+     * and this close, at full health.
+     */
+    private static final long INSTANT_MS = 1_500;
+    private static final double INSTANT_REACH = 20;
     /** A drop line this long after the kill, with no "QUEST COMPLETE", still counts; then it is a bust. */
     private static final long DROP_WAIT_MS = 3_000;
 
@@ -119,6 +131,8 @@ public final class HellionWatcher {
         if (s.startsWith("SLAYER QUEST STARTED!")) {
             questStartedAt = now;
             forget();
+            // The boss may already be standing there: its nametag can arrive the same tick, before the line.
+            for (Boss b : bosses.values()) claim(b, now);
             return;
         }
         if (s.startsWith("SLAYER QUEST FAILED!") || s.startsWith("Your Slayer Quest has been cancelled")) {
@@ -154,6 +168,11 @@ public final class HellionWatcher {
                 Drop known = bestDrop != null && now - bestAt <= DROP_WAIT_MS ? bestDrop : Drop.BUST;
                 log.note("§aBlaze: quest complete - your Demonlord died out of sight; " + (known.win() ? known.title : "bust"));
                 listener.killKnown(known, bestLine);
+            } else if (!killedThisQuest && bestDrop != null && bestDrop.win() && now - bestAt <= DROP_WAIT_MS) {
+                // Never claimed (it spawned too far off, or without a line), but the drop line is our own - a slayer
+                // drop in brackets only ever names the player's own loot. The win still plays.
+                log.note("§aBlaze: quest complete with " + bestDrop.title + " - your Demonlord was never claimed; playing it");
+                listener.killKnown(bestDrop, bestLine);
             }
             forget();
             questStartedAt = -1;
@@ -277,10 +296,22 @@ public final class HellionWatcher {
     /** Ours if it appeared close by around the spawn line, or came back where ours left a phase. */
     private void claim(Boss b, long now) {
         if (b.owned || b.dead) return;
+        if (ownedIds.contains(b.id)) {
+            own(b, "back in range at " + fmt(b.hp));
+            oursWentAt = -1;
+            return;
+        }
+        // A fresh boss at full health may stand further off at first (21 blocks in a friend's records, 2026-10-12).
+        double reach = b.maxHp > 0 && b.hp >= b.maxHp * 0.99 ? INSTANT_REACH + 4 : CLAIM_REACH;
         if (spawnLineAt >= 0 && b.firstSeen >= spawnLineAt - CLAIM_BEFORE_MS && b.firstSeen <= spawnLineAt + CLAIM_AFTER_MS
-                && b.distSq <= CLAIM_REACH * CLAIM_REACH && !oursThisQuest) {
+                && b.distSq <= reach * reach && !oursThisQuest) {
             own(b, "first seen " + Math.round(Math.sqrt(b.distSq)) + " blocks away at the spawn line");
             spawnLineAt = -1;
+            return;
+        }
+        if (questStartedAt >= 0 && !oursThisQuest && b.firstSeen >= questStartedAt - 500 && b.firstSeen <= questStartedAt + INSTANT_MS
+                && b.maxHp > 0 && b.hp >= b.maxHp * 0.99 && b.distSq <= INSTANT_REACH * INSTANT_REACH) {
+            own(b, "at full health " + Math.round(Math.sqrt(b.distSq)) + " blocks away as the quest started (it spawned with the quest)");
             return;
         }
         if (!spawnLinesExist && questStartedAt >= 0 && !oursThisQuest && b.firstSeen > questStartedAt
@@ -295,8 +326,12 @@ public final class HellionWatcher {
         }
     }
 
+    /** Every entity of ours this quest: one that walks out of range and back keeps its id, and is still ours. */
+    private final Set<Integer> ownedIds = new HashSet<>();
+
     private void own(Boss b, String why) {
         b.owned = true;
+        ownedIds.add(b.id);
         oursThisQuest = true;
         log.note("§7Blaze: your Demonlord - " + why);
     }
@@ -317,6 +352,7 @@ public final class HellionWatcher {
     }
 
     private void forget() {
+        ownedIds.clear();
         oursThisQuest = false;
         killedThisQuest = false;
         oursWentAt = -1;

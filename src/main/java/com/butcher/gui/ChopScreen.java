@@ -128,10 +128,10 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
         // that a test is not counted.
         String[] lines = tl.lines();
         String name = com.butcher.render.DianaItems.name(verdict);
-        if (lines.length == 2 && name != null) {
-            String title = itemName == null ? name : itemName.getString();
+        if (lines.length == 1 && name != null && lines[0].contains(" \u00b7 ")) {
+            String odds = lines[0].substring(0, lines[0].indexOf(" \u00b7 "));
             int n = com.butcher.config.ButcherStats.get().dianaDropCount(name);
-            tl.lines(lines[0], test || n <= 0 ? "Test run - not counted" : "Your " + ordinal(n) + " " + title);
+            tl.lines(odds + " \u00b7 " + (test || n <= 0 ? "test run" : "your " + ordinal(n)));
         }
         // The drop's price, asked for now so it is there when it is shown - never waited on.
         String id = com.butcher.render.DianaItems.id(verdict);

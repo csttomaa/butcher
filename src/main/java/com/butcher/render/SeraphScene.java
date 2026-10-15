@@ -778,8 +778,13 @@ public final class SeraphScene {
     /** The edge drawn round a black beam, so the bust's tell shows against the night. */
     static final int BLACK_RIM = 0x9A5CF0;
 
+    /**
+     * How far out the pillars stand: as far as the screen allows with 6% of it clear at the edge, at the camera's
+     * framing at the reveal. At 48 the right crystal was half off a 16:9 screen (the review, S2).
+     */
     static float pillarX(int w, int h) {
-        return Math.min(48f, 27f * w / Math.max(1, h));
+        float halfW = w / (2f * Math.max(1, h) * 0.64f / 46f * 1.1f);
+        return Math.max(26f, Math.min(48f, halfW * 0.88f - 19f));
     }
 
     private static int pillarW = 640, pillarH = 360;
@@ -805,7 +810,7 @@ public final class SeraphScene {
         float[] p = pillarAt(side);
         float age = pt / 50f + (side > 0 ? 17f : 0f);
         float bob = 3f * (float) Math.sin(age * 0.2f);
-        return new float[]{p[0], p[1] + 8f + 18f + bob - 40f * sink, p[2]};
+        return new float[]{p[0], p[1] + 6f + 14f + bob - 40f * sink, p[2]};
     }
 
     static void pillars(ChopScene.Canvas c, SeraphTimeline tl, long t, long pt) {
@@ -834,7 +839,8 @@ public final class SeraphScene {
             float ca = 1f - sink;
             if (ca < 0.02f) continue;
             // The crystal's base (the bedrock plinth) and the crystal: core, inner glass, outer glass.
-            ChopScene.box(top[0], top[1] + 4f - lift - 40f * sink, top[2], 0, 0, 0, 12f, 4f, 12f, ChopScene.all(TEX_CRYSTAL),
+            // Three quarters of vanilla's size: next to the Seraph they were oversized (the review, S2).
+            ChopScene.box(top[0], top[1] + 3f - lift - 40f * sink, top[2], 0, 0, 0, 9f, 3f, 9f, ChopScene.all(TEX_CRYSTAL),
                     CRYSTAL_BASE_UV, 1, 1, 1, 0, ca, c);
             float[] ctr = crystalAt(side, pt, sink);
             ctr[1] -= lift;
@@ -864,7 +870,7 @@ public final class SeraphScene {
             float[] cube = mul(inner, mul(diag, ry(spin)));
             float[][] rots = {toWorld(cube), toWorld(inner), toWorld(outer)};
             float shrinkC = Math.max(0.02f, 1f - ease(tl.eyePull(t)));
-            float[] halves = {8f * 0.765625f * shrinkC, 8f * 0.875f * shrinkC, 8f * shrinkC};
+            float[] halves = {6f * 0.765625f * shrinkC, 6f * 0.875f * shrinkC, 6f * shrinkC};
             String[] texes = ChopScene.all(TEX_CRYSTAL);
             int[][][] uvs = {CORE_CUBE_UV, CRYSTAL_UV, CRYSTAL_UV};
             for (int k = 0; k < 3; k++) {
@@ -900,10 +906,16 @@ public final class SeraphScene {
         if (a < 0.02f) return;
         int beamRgb = mix(0xF0D8FF, 0x9A9A9A, tl.grey(t));
         float[] to = beamTarget(tl, t, pt);
+        // Two cells wide over a solid core a cell wide: the texture alone, thin, read as dotted noise (the review, S3).
+        float cell = unitFor(pillarH) / ChopScene.size;
         for (int side = -1; side <= 1; side += 2) {
             float[] from = crystalAt(side, pt, 0f);
-            beam(c, TEX_CRYSTAL_BEAM, 16, 256, from[0], from[1], from[2], to[0], to[1], to[2], 1.3f * wide, 40f, -pt / 20f,
-                    ChopScene.alpha(0.85f * a * ChopScene.sceneAlpha) | beamRgb);
+            beam(c, TEX_WHITE, 4, 4, from[0], from[1], from[2], to[0], to[1], to[2], cell * wide, 20f, 0f,
+                    ChopScene.alpha(0.4f * a * ChopScene.sceneAlpha) | mix(beamRgb, 0xA040F0, 0.55f));
+            beam(c, TEX_WHITE, 4, 4, from[0], from[1], from[2], to[0], to[1], to[2], 0.5f * cell * wide, 20f, 0f,
+                    ChopScene.alpha(0.8f * a * ChopScene.sceneAlpha) | beamRgb);
+            beam(c, TEX_CRYSTAL_BEAM, 16, 256, from[0], from[1], from[2], to[0], to[1], to[2], 1.5f * cell * wide, 80f, -pt / 20f,
+                    ChopScene.alpha(0.7f * a * ChopScene.sceneAlpha) | beamRgb);
         }
     }
 
