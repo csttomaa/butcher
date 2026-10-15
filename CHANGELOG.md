@@ -3,7 +3,7 @@
 One entry per jar that was actually handed out for testing. The version number bumps on
 every build, so the gaps between entries are builds nobody ran - not missing notes.
 
-## Unreleased - the publishing pass
+## 0.3.3-alpha - the first public release (2026-10-15)
 
 ### The menu, redesigned
 - A new look: the mod's icon and a gold title, embers drifting over a darkened game, a framed panel with a gold trim,

@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  * one kill in two thousand, a Minos Relic one Champion in several thousand. When one comes
  * out wrong there is no reproducing it. So every event is recorded as it happens, with the
  * exact chat lines around it and the detector's reasoning, and kept forever: append-only,
- * never pruned. The one real Relic becomes a permanent test case (see diana.md, section 10).
+ * never pruned. The one real Relic becomes a permanent test case (see docs/diana.md, section 10).
  *
  * <h2>What is recorded</h2>
  *

@@ -383,9 +383,9 @@ through `DropRecorder.chatLine` in `allowChatLine` before anything hides it. Als
 the drop tiers) - capture only, for animations not built yet. Tests are never
 recorded. Written on its own thread. `recordDrops` (menu: Drop records), `/butcher records`.
 
-## Diana - decisions made against diana.md (2026-09-27)
+## Diana - decisions made against docs/diana.md (2026-09-27)
 
-`diana.md` in the repo is the spec. Where it conflicts with this project, the user decided:
+`docs/diana.md` is the spec. Where it conflicts with this project, the user decided:
 
 - **The tell is honest**, like the Thaw's flare - it does not lie on a share of losses (§5).
   Tension comes from the fixed, outcome-identical sway and the verdict blackout.
@@ -421,7 +421,7 @@ recorded. Written on its own thread. `recordDrops` (menu: Drop records), `/butch
   on real strings from `diana_line` records.
 
 **The Thread replaced The Judgement** (2026-09-27). The user did not like the Judgement (a
-bronze scales chamber) and rewrote `diana.md` as "The Thread": Ariadne's thread, one
+bronze scales chamber) and rewrote `docs/diana.md` as "The Thread": Ariadne's thread, one
 locked-off shot, the whole animation two numbers. `diana_storyboard.png` beside it is the
 staging. The same four decisions were re-confirmed against the new spec: honest tell, Minos
 Champion only on a Relic, the Dye from any creature, Java art and a Java previewer.
@@ -861,6 +861,12 @@ so the words clear the bottom; the Dye's `showScale` is 1.3 (at 1.45 with the 13
   over 640x360, 480x360, 854x360, 480x270 and 427x240. `specialText` now shifts its block up to stay on screen;
   Hellion's pillar tag is clamped to the edges. Only Brain Food's pi ring leaves the screen, as it fades out.
 - `tools/ChopPreview` takes `-Dw` / `-Dh` (default 640 x 360), used by the other previews too.
+
+## Release (2026-10-15)
+
+0.3.3-alpha is the first build published to Modrinth. `docs/modrinth.md` holds the page's fields (summary, categories,
+dependencies) and the release notes; the project description is the README. **Next rework: the Stats tab** (the user,
+2026-10-15) - the plan is still to be made with them; do not start it unasked.
 
 ## Under maintenance: the Seraph (2026-10-15)
 
