@@ -22,7 +22,7 @@ public final class Dev {
 
     /** Minecraft account UUIDs allowed the developer commands, with dashes. */
     private static final Set<UUID> WHITELIST = Set.of(
-            // UUID.fromString("00000000-0000-0000-0000-000000000000"),   // add the developers' accounts here
+            UUID.fromString("e4e73328-cc88-4813-a50b-28edc8453ba0")   // the author
     );
 
     /** Whether the player running the game is allowed the developer commands. */
