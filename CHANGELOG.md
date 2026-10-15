@@ -21,6 +21,9 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   when it comes back.
 
 ### Added
+- **A Speed setting for every animation** (50-200%): the Chopping Block, Hellion, Eruption, Fin and Wisp join the
+  Thaw's Speed and the Scatha's Full run. The whole animation - picture, sound cues, skip target - runs on one clock
+  at that pace; what it shows never changes.
 - **Mod Menu support** (optional): its Configure button opens the Butcher menu, and Esc goes back to the mod list.
   Opened from the title screen, "Try it" says to join a world first instead of playing into nothing.
 
@@ -38,6 +41,7 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   and the Stats tab has Wisp's Sorrow and Plasma.
 
 ### Fixed
+- Fin and Wisp sat over the action bar (skill XP, mana...) above the hotbar. They are 18 pixels higher.
 - **Switching the Scatha cutscene off silenced every other animation.** The synth only ever started inside the
   Scatha's tick.
 - A skin download that failed (offline, or a slow textures.minecraft.net) was retried every tick, with a new

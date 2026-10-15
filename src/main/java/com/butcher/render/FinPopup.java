@@ -51,6 +51,10 @@ public final class FinPopup {
     private static Drop drop;
     /** Playing the bust (drop is null then). */
     private static boolean bust;
+    /** How far up from the bottom it sits: clear of the hotbar, its bars and the action bar over them (skill XP
+     *  and the like, at h - 72 .. h - 63), which it used to cover. */
+    private static final int LIFT = 82;
+    private static float speed = 1f;
     private static long startedAt = -1;
     private static long seed;
     private static boolean rose, chopped, revealed;
@@ -62,6 +66,7 @@ public final class FinPopup {
         drop = d;
         bust = false;
         startedAt = System.currentTimeMillis();
+        speed = Math.max(0.5f, Math.min(2f, (com.butcher.ButcherClient.config == null ? 100 : com.butcher.ButcherClient.config.fishingSpeed) / 100f));
         seed = startedAt * 31 + d.ordinal();
         rose = chopped = revealed = false;
         price = -1;
@@ -77,14 +82,20 @@ public final class FinPopup {
         drop = null;
         bust = true;
         startedAt = System.currentTimeMillis();
+        speed = Math.max(0.5f, Math.min(2f, (com.butcher.ButcherClient.config == null ? 100 : com.butcher.ButcherClient.config.fishingSpeed) / 100f));
         seed = startedAt * 31 + 7;
         rose = chopped = revealed = false;
         price = -1;
     }
 
+    /** The popup's own time, at the player's speed for it (the menu's Speed). */
+    private static long elapsed() {
+        return (long) ((System.currentTimeMillis() - startedAt) * speed);
+    }
+
     public static boolean active() {
-        if (bust) return System.currentTimeMillis() - startedAt < BUST_END;
-        return drop != null && System.currentTimeMillis() - startedAt < END;
+        if (bust) return elapsed() < BUST_END;
+        return drop != null && elapsed() < END;
     }
 
     public static void draw(GuiGraphicsExtractor g) {
@@ -93,12 +104,12 @@ public final class FinPopup {
             bust = false;
             return;
         }
-        long t = System.currentTimeMillis() - startedAt;
+        long t = elapsed();
         sounds(t);
         int w = g.guiWidth(), h = g.guiHeight();
         int cx = w / 2;
         // Above the hotbar, the bars over it and some air.
-        int waterY = h - 64;
+        int waterY = h - LIFT;
         long fadeAt = bust ? BUST_FADE : FADE, end = bust ? BUST_END : END;
         float fade = t < fadeAt ? 1f : 1f - (t - fadeAt) / (float) (end - fadeAt);
         int alpha = Math.round(255 * Math.max(0f, Math.min(1f, fade)));

@@ -164,6 +164,8 @@ public class PatternConfig {
 
     /** The Chopping Block's win sounds, 0-150%. */
     public int dianaVolume = 100;
+    /** How fast the Chopping Block plays, in percent (50-200): the whole of it, picture and cues together. */
+    public int dianaSpeed = 100;
 
     /** Which creatures' kills play it (the Champion's only when it drops a Relic), and the Dye from anything. */
     public boolean dianaSphinx = true, dianaInquisitor = true, dianaManticore = true, dianaKingMinos = true,
@@ -214,6 +216,8 @@ public class PatternConfig {
     public boolean ghostAnnounce = true;
     public boolean ghostPrice = true;
     public int ghostVolume = 100;
+    /** How fast Wisp plays, in percent (50-200): the whole of it, picture and cues together. */
+    public int ghostSpeed = 100;
 
     /** "Hellion": the cutscene on every kill of the player's own tier IV Inferno Demonlord. */
     public boolean blazeAnimation = true;
@@ -225,6 +229,8 @@ public class PatternConfig {
     public boolean blazePrice = true;
     /** Hellion's sounds, 0-150%. */
     public int blazeVolume = 100;
+    /** How fast Hellion plays, in percent (50-200): the whole of it, picture and cues together. */
+    public int blazeSpeed = 100;
 
     /** "The Seraph's Glyph": the Voidgloom Seraph's cutscene (tier IV; detection still waits on real records). */
     public boolean seraphAnimation = true;
@@ -234,6 +240,8 @@ public class PatternConfig {
     public boolean seraphPrice = true;
     /** The Seraph's sounds, 0-150%. */
     public int seraphVolume = 100;
+    /** How fast the Seraph's Glyph plays, in percent (50-200): the whole of it, picture and cues together. */
+    public int seraphSpeed = 100;
 
     /** "Eruption": lava fishing's cutscene on the rare Crimson Isle creatures (Jawbus, Thunder, Ragnarok, the Fiery Scuttler, Plhlegblast). */
     public boolean lavaAnimation = true;
@@ -247,6 +255,8 @@ public class PatternConfig {
     public boolean lavaPrice = true;
     /** Eruption's sounds, 0-150%. */
     public int lavaVolume = 100;
+    /** How fast Eruption plays, in percent (50-200): the whole of it, picture and cues together. */
+    public int lavaSpeed = 100;
 
     /** "Fin": the short pop-up when a Great White Shark drops a Megalodon pet or its tooth. */
     public boolean fishingAnnounce = true;
@@ -257,6 +267,8 @@ public class PatternConfig {
 
     /** Fin's sounds, 0-150%. */
     public int fishingVolume = 100;
+    /** How fast Fin plays, in percent (50-200): the whole of it, picture and cues together. */
+    public int fishingSpeed = 100;
 
     /**
      * Take the vanilla HUD off the screen during the pre-kill hide and the cutscene.
@@ -385,12 +397,18 @@ public class PatternConfig {
         vanguardNameSize = clamp(vanguardNameSize, 60, 160);
         vanguardFinaleVolume = clamp(vanguardFinaleVolume, 0, 150);
         dianaVolume = clamp(dianaVolume, 0, 150);
+        dianaSpeed = clamp(dianaSpeed, 50, 200);
         dianaSize = clamp(dianaSize, 60, 140);
         blazeVolume = clamp(blazeVolume, 0, 150);
+        blazeSpeed = clamp(blazeSpeed, 50, 200);
         seraphVolume = clamp(seraphVolume, 0, 150);
+        seraphSpeed = clamp(seraphSpeed, 50, 200);
         lavaVolume = clamp(lavaVolume, 0, 150);
+        lavaSpeed = clamp(lavaSpeed, 50, 200);
         fishingVolume = clamp(fishingVolume, 0, 150);
+        fishingSpeed = clamp(fishingSpeed, 50, 200);
         ghostVolume = clamp(ghostVolume, 0, 150);
+        ghostSpeed = clamp(ghostSpeed, 50, 200);
         dianaHidePct = clamp(dianaHidePct, 0, 20);
         blazeHidePct = clamp(blazeHidePct, 0, 30);
         seraphHidePct = clamp(seraphHidePct, 0, 30);

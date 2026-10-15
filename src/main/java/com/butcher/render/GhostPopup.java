@@ -37,6 +37,10 @@ public final class GhostPopup {
     private static final int P = 2;
 
     private static Drop drop;
+    /** How far up from the bottom it sits: clear of the hotbar, its bars and the action bar over them (skill XP
+     *  and the like, at h - 72 .. h - 63), which it used to cover. */
+    private static final int LIFT = 82;
+    private static float speed = 1f;
     private static long startedAt = -1, seed;
     private static boolean rose, burst, revealed;
     private static long price = -1;
@@ -47,6 +51,7 @@ public final class GhostPopup {
     public static void show(Drop d) {
         drop = d;
         startedAt = System.currentTimeMillis();
+        speed = Math.max(0.5f, Math.min(2f, (com.butcher.ButcherClient.config == null ? 100 : com.butcher.ButcherClient.config.ghostSpeed) / 100f));
         seed = startedAt * 31 + d.ordinal();
         rose = burst = revealed = false;
         price = -1;
@@ -54,8 +59,13 @@ public final class GhostPopup {
         if (ButcherClient.config == null || ButcherClient.config.livePrices) com.butcher.market.Bazaar.request();
     }
 
+    /** The popup's own time, at the player's speed for it (the menu's Speed). */
+    private static long elapsed() {
+        return (long) ((System.currentTimeMillis() - startedAt) * speed);
+    }
+
     public static boolean active() {
-        return drop != null && System.currentTimeMillis() - startedAt < END;
+        return drop != null && elapsed() < END;
     }
 
     public static void draw(GuiGraphicsExtractor g) {
@@ -63,10 +73,10 @@ public final class GhostPopup {
             drop = null;
             return;
         }
-        long t = System.currentTimeMillis() - startedAt;
+        long t = elapsed();
         sounds(t);
         int w = g.guiWidth(), h = g.guiHeight();
-        int cx = w / 2, mistY = h - 64;
+        int cx = w / 2, mistY = h - LIFT;
         float fade = t < FADE ? 1f : 1f - (t - FADE) / (float) (END - FADE);
         int alpha = Math.round(255 * Math.max(0f, Math.min(1f, fade)));
         if (alpha < 6) return;

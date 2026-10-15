@@ -39,7 +39,9 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     private final com.butcher.render.MeshRenderer meshes = new com.butcher.render.MeshRenderer();
     private final boolean test;
     /** Not final: the skip key moves it back, so the clock jumps to the showcase. */
-    private long openedAt = System.currentTimeMillis();
+    /** The scene's clock, at the player's speed for this animation (the menu's Speed). */
+    private final com.butcher.anim.SceneClock clock = new com.butcher.anim.SceneClock(
+            com.butcher.ButcherClient.config == null ? 100 : com.butcher.ButcherClient.config.dianaSpeed);
     private boolean active = true;
 
     private GuiGraphicsExtractor g;
@@ -86,7 +88,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     public ChopScreen(Verdict verdict, Creature creature, boolean test) {
         super(Component.literal("Butcher"));
         // The seed is picked here, before anything about the verdict is looked at.
-        this.seed = System.nanoTime() ^ openedAt;
+        this.seed = System.nanoTime() ^ clock.openedAt();
         this.test = test;
         this.pending = verdict == null;
         Verdict v = verdict == null ? Verdict.BUST : verdict;
@@ -110,7 +112,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
         if (!pending) return v == verdict;
         // Past the deadline (no frame was drawn to notice it - the HUD hidden with F1, say): it is the bust it
         // already is, and a win that came now gets a screen of its own from the caller.
-        boolean late = System.currentTimeMillis() - openedAt >= RESOLVE_BY;
+        boolean late = clock.t() >= RESOLVE_BY;
         if (late && v != Verdict.BUST) {
             resolve(Verdict.BUST);
             return false;
@@ -189,13 +191,13 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
 
     /** The gameplay window slides in over the first 400 ms. */
     private float pipFade() {
-        return Math.min(1f, (System.currentTimeMillis() - openedAt) / 400f);
+        return Math.min(1f, (System.currentTimeMillis() - clock.openedAt()) / 400f);
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(g, mouseX, mouseY, partialTick);
-        long t = System.currentTimeMillis() - openedAt;
+        long t = clock.t();
         // Nothing was said in time: the kill dropped nothing worth the cutscene.
         if (pending && t >= RESOLVE_BY) resolve(Verdict.BUST);
         if (t >= tl.total()) {
@@ -657,11 +659,11 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     @Override
     public void item(float cx, float cy, float size, float alpha, float yaw) {
         // A slow float, so a held showcase is never a still frame (the review, A5); heads also sway a little.
-        long now = System.currentTimeMillis() - openedAt;
+        long now = clock.t();
         cy += size * 0.05f * (float) Math.sin(now / 430.0);
         yaw += 7f * (float) Math.sin(now / 900.0);
         com.butcher.render.DianaItems.draw(g, meshes, verdict, cx, cy, size, yaw,
-                Math.round(255 * Math.max(0f, Math.min(1f, alpha))), tl.truth(System.currentTimeMillis() - openedAt));
+                Math.round(255 * Math.max(0f, Math.min(1f, alpha))), tl.truth(clock.t()));
     }
 
     @Override
@@ -720,9 +722,9 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     private void shortBust() {
         if (shortened || test || pending || verdict.win() || ButcherClient.bustStyle("diana") != 1) return;
         shortened = true;
-        long t = System.currentTimeMillis() - openedAt, target = ChopTimeline.SPLIT - 450;
+        long t = clock.t(), target = ChopTimeline.SPLIT - 450;
         if (t >= target) return;
-        openedAt -= target - t;
+        clock.jump(target);
         ButcherAudio.silence();
         ButcherAudio.muted(() -> sounds(target));
     }
@@ -756,7 +758,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     @Override
     public void skip() {
         if (!active) return;
-        long t = System.currentTimeMillis() - openedAt;
+        long t = clock.t();
         long target = Math.max(tl.arrive(), tl.countStart() + ChopTimeline.COUNT_MS);
         if (pending || !verdict.win() || t >= target || target >= tl.total()) {
             summary();
@@ -765,7 +767,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
         }
         // The clock jumps; every cue on the way is run silently, so flags, counters and the price are where the
         // showcase expects them and nothing skipped fires at once.
-        openedAt -= target - t;
+        clock.jump(target);
         ButcherAudio.silence();
         ButcherAudio.muted(() -> sounds(target));
         ButcherAudio.onSkip();
@@ -776,7 +778,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     public void interrupt() {
         if (!active) return;
         // A kill still waiting for its drop is handed back: its drop line (or its absence) is counted for it.
-        if (pending && !test) ButcherClient.dianaKillUnshown(creature, openedAt);
+        if (pending && !test) ButcherClient.dianaKillUnshown(creature, clock.openedAt());
         ButcherAudio.silence();
         ButcherAudio.onSkip();
         close();
@@ -797,7 +799,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     public void onClose() {
         com.butcher.render.CutsceneHud.hide(this);
         com.butcher.render.GameplayView.release();
-        boolean finished = System.currentTimeMillis() - openedAt >= tl.total();
+        boolean finished = clock.t() >= tl.total();
         active = false;
         if (!finished) ButcherAudio.silence();
         super.onClose();

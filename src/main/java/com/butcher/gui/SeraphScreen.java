@@ -42,7 +42,9 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
     private long lastT = -1;
     private final boolean test;
     /** Not final: the skip key moves it back, so the clock jumps to the showcase. */
-    private long openedAt = System.currentTimeMillis();
+    /** The scene's clock, at the player's speed for this animation (the menu's Speed). */
+    private final com.butcher.anim.SceneClock clock = new com.butcher.anim.SceneClock(
+            com.butcher.ButcherClient.config == null ? 100 : com.butcher.ButcherClient.config.seraphSpeed);
     private boolean active = true;
 
     private GuiGraphicsExtractor g;
@@ -70,7 +72,7 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
         this.pending = drop == null;
         this.drop = drop == null ? Drop.BUST : drop;
         this.test = test;
-        this.seed = System.nanoTime() ^ openedAt;
+        this.seed = System.nanoTime() ^ clock.openedAt();
         this.tl = new SeraphTimeline(this.drop, seed);
         this.cues = SeraphSound.schedule(tl);
         requestPrice();
@@ -117,7 +119,7 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
     public boolean resolve(Drop d) {
         if (!pending) return d == null || d == drop;
         pending = false;
-        long t = System.currentTimeMillis() - openedAt;
+        long t = clock.t();
         if (t >= SeraphTimeline.REVEAL - 250 || d == null || d == drop) {
             // Too late to change what this one shows: it plays as the bust it is. A win that came now still needs
             // a screen of its own - the caller gives it one.
@@ -144,7 +146,7 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(g, mouseX, mouseY, partialTick);
-        long t = System.currentTimeMillis() - openedAt;
+        long t = clock.t();
         if (t >= tl.total()) {
             summary();
             close();
@@ -200,7 +202,7 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
 
     /** The gameplay window's fade-in as the cutscene opens. */
     private float pipFade() {
-        return Math.min(1f, (System.currentTimeMillis() - openedAt) / 400f);
+        return Math.min(1f, (System.currentTimeMillis() - clock.openedAt()) / 400f);
     }
 
 
@@ -428,9 +430,9 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
     private void shortBust() {
         if (shortened || test || pending || drop.win() || ButcherClient.bustStyle("seraph") != 1) return;
         shortened = true;
-        long t = System.currentTimeMillis() - openedAt, target = SeraphTimeline.REVEAL - 450;
+        long t = clock.t(), target = SeraphTimeline.REVEAL - 450;
         if (t >= target) return;
-        openedAt -= target - t;
+        clock.jump(target);
         ButcherAudio.silence();
         ButcherAudio.muted(() -> sounds(target));
     }
@@ -457,7 +459,7 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
     @Override
     public void skip() {
         if (!active) return;
-        long t = System.currentTimeMillis() - openedAt;
+        long t = clock.t();
         long target = Math.max(tl.arrive(), tl.countStart() + SeraphTimeline.COUNT_MS);
         if (pending || !drop.win() || t >= target || target >= tl.total()) {
             summary();
@@ -466,7 +468,7 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
         }
         // The clock jumps; every cue on the way is run silently, so flags, counters and the price are where the
         // showcase expects them and nothing skipped fires at once.
-        openedAt -= target - t;
+        clock.jump(target);
         ButcherAudio.silence();
         ButcherAudio.muted(() -> sounds(target));
         ButcherAudio.onSkip();

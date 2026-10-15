@@ -63,7 +63,7 @@ Java 25 is required, and the Minecraft 26.2 launcher already ships it.
 Type **`/butcher`** (or use Mod Menu's *Configure* button) to open the settings.
 
 - **Animations**: every cutscene has its own card. Switch it on or off, pick which creatures trigger it, how early
-  the HUD hides, how busts play, the size and the volume. Each card ends with **Try it**, which plays any outcome
+  the HUD hides, how busts play, the speed, the size and the volume. Each card ends with **Try it**, which plays any outcome
   on demand. It never counts towards your stats, so go ahead and "win" a Mythological Dye. We won't tell.
 - **Sound**: every volume in one place.
 - **General**: live prices, the minimum drop value worth a cutscene, the chat summary, calmer effects for anyone

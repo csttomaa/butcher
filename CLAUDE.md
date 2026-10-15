@@ -866,6 +866,19 @@ the Sound tab's slider and the Stats card, and the Slayers subtitle says it is o
 the tape. To bring it back, set `SERAPH` to false; the README's table and fabric.mod.json's description name it as
 coming, and need the same edit.
 
+## Speed per animation (2026-10-15)
+
+`anim/SceneClock` is the scene time of the Chop, Hellion, Seraph and Eruption screens: `t()` is wall time since
+opening times the speed (`dianaSpeed`, `blazeSpeed`, `seraphSpeed`, `lavaSpeed`, 50-200, read once when the screen
+is made), `jump(target)` is what `openedAt -= target - t` used to be (skip, short bust), `openedAt()` the wall time
+for seeds, the gameplay window's fade and `dianaKillUnshown`. Cue lists and `RESOLVE_BY` are on scene time, so at
+200% a pending kill must be resolved in half the real time - a drop line later than that plays as its own screen,
+as any late one does. Sounds are not pitched or stretched: each cue just fires sooner. Fin and Wisp scale their own
+`elapsed()` (`fishingSpeed`, `ghostSpeed`). The Thaw (`vanguardSpeed`) and the Scatha (`scopeDurationMs`, "Full run")
+already had their own, through their timelines.
+
+Fin and Wisp sit at `h - LIFT` (82): at `h - 64` they covered the action bar (vanilla draws it at h - 72 .. h - 63).
+
 ## Mod Menu
 
 `gui/ModMenuIntegration` (the "modmenu" entrypoint, `suggests` in fabric.mod.json) returns `ButcherMenuScreen::new`

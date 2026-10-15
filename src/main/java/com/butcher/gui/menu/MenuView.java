@@ -516,6 +516,7 @@ public final class MenuView {
         rows.add(new SectionRow("Sound"));
         rows.add(toggle("Music on the big drops", cfg.dianaMusic, () -> cfg.dianaMusic = !cfg.dianaMusic, cfg));
         rows.add(new SliderRow("diana_volume", "Volume", cfg.dianaVolume, 0, 150, 5, v -> cfg.dianaVolume = v, v -> v + "%"));
+        speedRow(rows, "diana_speed", cfg.dianaSpeed, v -> cfg.dianaSpeed = v);
         bustsRow(rows, cfg.dianaBusts, v -> cfg.dianaBusts = v, cfg);
         tryRows(rows, "diana", names(com.butcher.anim.ChopTimeline.Verdict.values()), host::dianaName);
     }
@@ -529,6 +530,7 @@ public final class MenuView {
         rows.add(toggle("Show the price", cfg.fishingPrice, () -> cfg.fishingPrice = !cfg.fishingPrice, cfg));
         rows.add(new NoticeRow("The pets show what George pays for them."));
         rows.add(new SliderRow("fishing_volume", "Volume", cfg.fishingVolume, 0, 150, 5, v -> cfg.fishingVolume = v, v -> v + "%"));
+        speedRow(rows, "fishing_speed", cfg.fishingSpeed, v -> cfg.fishingSpeed = v);
         List<String> fin = new ArrayList<>(names(com.butcher.detect.SharkDrops.Drop.values()));
         fin.add(0, "BUST");
         tryRows(rows, "shark", fin, n -> switch (n) {
@@ -545,6 +547,7 @@ public final class MenuView {
         rows.add(new NoticeRow("A Ghost rises out of the Mist, comes apart, and its Sorrow or Plasma pops out. A quick pop-up over the game - nothing is hidden."));
         rows.add(toggle("Show the price", cfg.ghostPrice, () -> cfg.ghostPrice = !cfg.ghostPrice, cfg));
         rows.add(new SliderRow("ghost_volume", "Volume", cfg.ghostVolume, 0, 150, 5, v -> cfg.ghostVolume = v, v -> v + "%"));
+        speedRow(rows, "ghost_speed", cfg.ghostSpeed, v -> cfg.ghostSpeed = v);
         tryRows(rows, "ghost", names(com.butcher.detect.GhostDrops.Drop.values()),
                 n -> com.butcher.detect.GhostDrops.Drop.valueOf(n).title);
     }
@@ -567,6 +570,7 @@ public final class MenuView {
         rows.add(toggle("RARE DROP! banner", cfg.lavaBanner, () -> cfg.lavaBanner = !cfg.lavaBanner, cfg));
         rows.add(toggle("Show the price", cfg.lavaPrice, () -> cfg.lavaPrice = !cfg.lavaPrice, cfg));
         rows.add(new SliderRow("lava_volume", "Volume", cfg.lavaVolume, 0, 150, 5, v -> cfg.lavaVolume = v, v -> v + "%"));
+        speedRow(rows, "lava_speed", cfg.lavaSpeed, v -> cfg.lavaSpeed = v);
         bustsRow(rows, cfg.lavaBusts, v -> cfg.lavaBusts = v, cfg);
         tryRows(rows, "lava", names(com.butcher.anim.EruptionTimeline.Drop.values()),
                 n -> com.butcher.anim.EruptionTimeline.Drop.valueOf(n).title);
@@ -589,6 +593,7 @@ public final class MenuView {
             rows.add(toggle("Drop banner (RARE DROP! and up)", cfg.blazeBanner, () -> cfg.blazeBanner = !cfg.blazeBanner, cfg));
             rows.add(toggle("Show the price", cfg.blazePrice, () -> cfg.blazePrice = !cfg.blazePrice, cfg));
             rows.add(new SliderRow("blaze_volume", "Volume", cfg.blazeVolume, 0, 150, 5, v -> cfg.blazeVolume = v, v -> v + "%"));
+            speedRow(rows, "blaze_speed", cfg.blazeSpeed, v -> cfg.blazeSpeed = v);
             bustsRow(rows, cfg.blazeBusts, v -> cfg.blazeBusts = v, cfg);
             tryRows(rows, "blaze", names(com.butcher.anim.HellionTimeline.Drop.values()),
                     n -> com.butcher.anim.HellionTimeline.Drop.valueOf(n).title);
@@ -610,11 +615,17 @@ public final class MenuView {
             rows.add(toggle("Drop banner (RARE DROP! and up)", cfg.seraphBanner, () -> cfg.seraphBanner = !cfg.seraphBanner, cfg));
             rows.add(toggle("Show the price", cfg.seraphPrice, () -> cfg.seraphPrice = !cfg.seraphPrice, cfg));
             rows.add(new SliderRow("seraph_volume", "Volume", cfg.seraphVolume, 0, 150, 5, v -> cfg.seraphVolume = v, v -> v + "%"));
+            speedRow(rows, "seraph_speed", cfg.seraphSpeed, v -> cfg.seraphSpeed = v);
             bustsRow(rows, cfg.seraphBusts, v -> cfg.seraphBusts = v, cfg);
             tryRows(rows, "seraph", names(com.butcher.anim.SeraphTimeline.Drop.values()),
                     n -> com.butcher.anim.SeraphTimeline.Drop.valueOf(n).title);
         }
         curIndent = outer;
+    }
+
+    /** "Speed": the whole animation, picture and sound cues together, faster or slower. Never the outcome. */
+    private void speedRow(List<Row> rows, String id, int value, IntConsumer set) {
+        rows.add(new SliderRow(id, "Speed", value, 50, 200, 10, set, v -> v + "%"));
     }
 
     /** "Busts": the whole cutscene, a short one (straight to the bust's ending), or none (wins only). */
