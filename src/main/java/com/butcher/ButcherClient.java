@@ -546,6 +546,14 @@ public class ButcherClient implements ClientModInitializer {
         TextureBank.register(TEX_BLOOM, CaveArt::gemBloom);
         TextureBank.register(TEX_VIGNETTE, CaveArt::vignette);
 
+        // The menu's title icon: the mod's own icon, scaled down smoothly once.
+        TextureBank.register(ButcherMenuScreen.TEX_ICON, () -> {
+            try (java.io.InputStream in = ButcherClient.class.getResourceAsStream("/assets/butcher/icon.png")) {
+                return com.butcher.gui.menu.MenuIcon.scaled(in == null ? null : javax.imageio.ImageIO.read(in), 96);
+            } catch (Exception e) {
+                return com.butcher.gui.menu.MenuIcon.scaled(null, 96);
+            }
+        });
         TextureBank.register(PropArt.TEX_CRYSTAL, PropArt::crystalFacets);
         TextureBank.register(PropArt.TEX_GEM_GLOW, PropArt::gemGlow);
         TextureBank.register(PropArt.TEX_CLEAVER, PropArt::cleaver);

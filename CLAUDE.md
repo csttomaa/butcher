@@ -855,6 +855,26 @@ so the words clear the bottom; the Dye's `showScale` is 1.3 (at 1.45 with the 13
   Hellion's pillar tag is clamped to the edges. Only Brain Food's pi ring leaves the screen, as it fades out.
 - `tools/ChopPreview` takes `-Dw` / `-Dh` (default 640 x 360), used by the other previews too.
 
+## The menu (redesigned 2026-10-15)
+
+`gui/menu/MenuView` is the whole menu - rows, layout, drawing, mouse - with **no Minecraft in it**: it draws through
+`gui/menu/Draw` (fill, text, width, item, modIcon, clip, push/translate/scale/pop) and asks a `Host` for the config,
+"Try it", reset, Diana's drop names and the version. `gui/ButcherMenuScreen` is a thin Screen that implements `Draw`
+over `GuiGraphicsExtractor` (only calls the codebase already uses in game) and forwards the mouse. That split is so the
+real menu can be rendered offline: a Java2D `Draw` with the game font's character advances, plus stubs for
+`FabricLoader`, Gson and `ButcherClient.LOGGER` (the session's scratchpad `menu/` held one). Keep `MenuView` free of
+Minecraft, Fabric (beyond config/stats) and the market classes, or that stops working.
+
+The look: embers rising over a vignette; the title with the mod icon (`TEX_ICON`, the icon averaged down to 96 px by
+`MenuIcon`, registered in `ButcherClient`); a gradient panel with a gold trim and a glint along its top, as tall as its
+content (`shownH` eases); tabs with 7x7 pixel icons and a sliding gold underline; each animation a card in its own
+colour (`SCATHA`, `VANGUARD`, `DIANA`...) with a vanilla item icon, a subtitle (what it plays on; on the Stats tab the
+live dry streak), and its **on/off switch on the card itself** (`HeaderRow.onSwitch`) - so the in-card master toggles
+are gone. An open card's rows hang off a bar in its colour. Pill switches (`pill`, eased per id by `approach`),
+sliders with a track and knob, `< value >` choices (right-click goes back), `ButtonRow` for "Play" and the red
+two-click resets, `HeroRow` for the dry streak. Smooth scrolling (`scrollTarget`), faded list edges, a footer with
+hints and the version. The tab and the open cards are static, so the menu reopens where it was left.
+
 ## Hellion (the blaze slayer, Inferno Demonlord tier IV) - first version 0.2.54
 
 Built without the user's Demonlord session (they asked for a start before it); detection waits for
@@ -1526,7 +1546,7 @@ including all three real messages) and `tools/ThawTest.java` (timeline, flare an
 ButcherClient       entrypoint: events, commands, texture registration
 gui/ScopeMinigameScreen   the cleaver cutscene - the Scatha's
 gui/ThawScreen            the Thaw - the Vanguard corpse's
-gui/ButcherMenuScreen     /butcher - hand-drawn tabs + collapsible rows, no vanilla widgets
+gui/ButcherMenuScreen     /butcher - a thin Screen over gui/menu/MenuView (the whole menu, no Minecraft)
 anim/ButcherHudRenderer   the older guillotine cutscene, drawn as a HUD overlay
 anim/AnimationManager     that cutscene's phase clock
 anim/PetHeadPopup         the pet reveal = vanilla's totem animation with a skinned player head

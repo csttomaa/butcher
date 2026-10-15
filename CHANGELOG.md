@@ -5,6 +5,15 @@ every build, so the gaps between entries are builds nobody ran - not missing not
 
 ## Unreleased - the publishing pass
 
+### The menu, redesigned
+- A new look: the mod's icon and a gold title, embers drifting over a darkened game, a framed panel with a gold trim,
+  and tabs with icons and a sliding underline.
+- Every animation is a card in its own colour with an item icon, a line saying what it plays on, and **its on/off
+  switch right on the card** - no need to open it to turn it off. Switched-off cards dim.
+- Animated switches, sliders with a real track, `< value >` pickers, "Play" buttons, a two-click red reset.
+- The Stats tab shows each dry streak on its card, and large inside it.
+- The panel fits its content, scrolling is smooth, and the menu reopens on the tab and cards you left open.
+
 ### Changed
 - **`/butcher test` and `/butcher debug` are developer-only.** They exist only for the accounts in `Dev.java` (and
   in a development run). For everyone else they are gone, tab completion included. Players use the menu instead.
