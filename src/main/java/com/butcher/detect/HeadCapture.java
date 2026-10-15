@@ -24,12 +24,15 @@ import java.util.Set;
 public final class HeadCapture {
     private HeadCapture() {}
 
-    /** The heads still wanted, by their item name. */
-    private static final Set<String> WANTED = Set.of("Paragon Shard");
+    /**
+     * The heads still wanted, by their item name. Empty: the Paragon Shard was captured and is bundled in
+     * slayer_heads.json, so nothing is asked of players. Add a name here to capture another.
+     */
+    private static final Set<String> WANTED = Set.of();
     private static final Set<String> captured = new HashSet<>();
 
     public static void tick(Minecraft client) {
-        if (captured.size() == WANTED.size()) return;
+        if (WANTED.isEmpty() || captured.size() == WANTED.size()) return;
         if (!(client.gui.screen() instanceof AbstractContainerScreen<?> screen)) return;
         for (Slot slot : screen.getMenu().slots) {
             ItemStack stack = slot.getItem();

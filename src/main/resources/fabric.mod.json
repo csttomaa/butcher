@@ -3,12 +3,13 @@
 	"id": "butcher",
 	"version": "${version}",
 	"name": "Butcher",
-	"description": "Plays a custom cutting-board animation whenever a Scatha drop is detected in Hypixel Skyblock: the Scatha's head gets cut off on a pet drop, or the knife is blocked on a gemstone / Dwarven O's drop. Hides chat while the animation plays.",
+	"description": "Cutscenes for Hypixel SkyBlock's rare drops: the Scatha, Vanguard corpses, Diana's Mythological Ritual, the Inferno Demonlord and Voidgloom Seraph, lava fishing, the Fishing Festival's Great White Shark and the Dwarven Mines' Ghosts. The drop is hidden until the reveal; you keep control while it plays. /butcher opens the settings.",
 	"authors": [
 		"toma"
 	],
 	"contact": {
-		"sources": "https://github.com/NamelessJu/Scatha-Pro"
+		"sources": "https://github.com/csttomaa/butcher",
+		"issues": "https://github.com/csttomaa/butcher/issues"
 	},
 	"license": "MIT",
 	"icon": "assets/butcher/icon.png",

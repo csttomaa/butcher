@@ -827,6 +827,21 @@ showcases go through `ChopSpecials.fit` - the drop at most 0.26 of the screen hi
 so the words clear the bottom; the Dye's `showScale` is 1.3 (at 1.45 with the 130% size its price was off-screen).
 `ChopFill.motes` draws before the drop and its words. The wedge rays step every ~1.5 cells and end 6 / 4 cells wide.
 
+## Publishing pass (2026-10-15)
+
+- **Developer commands are whitelisted** (`Dev.allowed()`: the UUIDs in `Dev.WHITELIST`, or a development run).
+  `/butcher test` and `/butcher debug` carry `.requires(src -> Dev.allowed())`, so for anyone else they do not exist.
+  Everything a player needs is in the menu: every group ends in "Try it" (`tryRows` + `ButcherClient.playTest`,
+  which covers "scatha" and "vanguard" too). Menu text must not point players at `/butcher test`.
+- `ButcherAudio.tick()` runs every client tick, outside the Scatha's check - inside it, the cleaver switched off left
+  the synth unstarted and every other animation silent.
+- Config: `PatternConfig.sanitize()` clamps every value to the menu's range on load (keep it in step with new
+  sliders); `fresh()` is the defaults with the one-off migrations marked done; `writeAtomically` is used by both
+  config and stats; an unreadable file is moved to `.broken`. `recordDrops` defaults to **false**.
+- The profit window waits in `pendingProfit` until no screen is open (`showPendingProfit`, 20 s at most).
+- `HeadSkins.pixels` backs off two minutes after a failed fetch. `HeadCapture.WANTED` is empty (the Paragon Shard is
+  bundled).
+
 ## Hellion (the blaze slayer, Inferno Demonlord tier IV) - first version 0.2.54
 
 Built without the user's Demonlord session (they asked for a start before it); detection waits for

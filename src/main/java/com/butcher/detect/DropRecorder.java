@@ -111,8 +111,6 @@ public final class DropRecorder {
             o.addProperty("line", text);
             record("diana_line", o);
         }
-        // The Fishing Festival's lines, for the same reason: SharkDrops was written before a real
-        // Megalodon or tooth line had been seen.
         if (enabled() && SLAYER.matcher(text).find()) {
             JsonObject o = new JsonObject();
             o.addProperty("line", text);
@@ -123,6 +121,8 @@ public final class DropRecorder {
             o.addProperty("line", text);
             record("ghost_line", o);
         }
+        // The Fishing Festival's lines, for the same reason: SharkDrops was written before a real
+        // Megalodon or tooth line had been seen.
         if (enabled() && FISHING.matcher(text).find()) {
             JsonObject o = new JsonObject();
             o.addProperty("line", text);

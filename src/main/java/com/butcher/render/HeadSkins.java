@@ -130,22 +130,29 @@ public final class HeadSkins {
 
     private final Map<String, java.awt.image.BufferedImage> images = new java.util.concurrent.ConcurrentHashMap<>();
     private final java.util.Set<String> fetching = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** When each head's last fetch failed: it is tried again only after {@link #RETRY_MS}, not on every tick. */
+    private final Map<String, Long> failedAt = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long RETRY_MS = 120_000;
 
-    /**
-     * The skin itself as pixels (64 x 64), for what is rasterised on the CPU (Eruption's models), or null until
-     * it is here. Fetched once on a daemon thread from the blob's own textures.minecraft.net URL and kept in
-     * config/butcher/skin_cache, so it is instant after the first time.
-     */
     /** Starts every head's pixel fetch (cached on disk after the first time). Cheap, idempotent. */
     public void prewarmPixels() {
         for (String name : blobs().keySet()) pixels(name);
     }
 
+    /**
+     * The skin itself as pixels (64 x 64), for what is rasterised on the CPU (Eruption's models), or null until
+     * it is here. Fetched once on a daemon thread from the blob's own textures.minecraft.net URL and kept in
+     * config/butcher/skin_cache, so it is instant after the first time. A failed fetch waits two minutes before
+     * the next try - this is asked every tick, and offline it used to start a thread and a request each time.
+     */
     public java.awt.image.BufferedImage pixels(String name) {
         java.awt.image.BufferedImage img = images.get(name);
         if (img != null) return img;
         String blob = blobs().get(name);
-        if (blob == null || !fetching.add(name)) return null;
+        if (blob == null) return null;
+        Long failed = failedAt.get(name);
+        if (failed != null && System.currentTimeMillis() - failed < RETRY_MS) return null;
+        if (!fetching.add(name)) return null;
         Thread th = new Thread(() -> {
             try {
                 String json = new String(java.util.Base64.getDecoder().decode(blob.trim()), StandardCharsets.UTF_8);
@@ -177,9 +184,12 @@ public final class HeadSkins {
                 g.dispose();
                 images.put(name, out);
             } catch (Throwable t) {
-                ButcherClient.LOGGER.warn("[Butcher] could not fetch the skin of {}", name, t);
+                if (failedAt.get(name) == null) ButcherClient.LOGGER.warn("[Butcher] could not fetch the skin of {}: {}", name, t.toString());
             } finally {
-                if (!images.containsKey(name)) fetching.remove(name);
+                if (!images.containsKey(name)) {
+                    failedAt.put(name, System.currentTimeMillis());
+                    fetching.remove(name);
+                }
             }
         }, "butcher-skin-" + name);
         th.setDaemon(true);

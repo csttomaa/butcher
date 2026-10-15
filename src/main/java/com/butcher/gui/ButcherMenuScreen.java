@@ -135,7 +135,10 @@ public class ButcherMenuScreen extends Screen {
         return ease(clamp01((System.currentTimeMillis() - openedAt) / (float) OPEN_MS));
     }
 
-    private int panelX() { return (this.width - PANEL_W) / 2; }
+    /** 340 wide, narrower on a window too small for it (a high GUI scale), with a margin either side. */
+    private int panelW() { return Math.max(200, Math.min(PANEL_W, this.width - 16)); }
+
+    private int panelX() { return (this.width - panelW()) / 2; }
 
     /** Leaves room for the title above and a margin below, so the frame always fits the window. */
     private int panelH() { return Math.max(120, Math.min(PANEL_H_MAX, this.height - 44)); }
@@ -149,12 +152,12 @@ public class ButcherMenuScreen extends Screen {
     private int contentBottom() { return panelY() + panelH(); }
     private int rowsLeft() { return panelX() + PAD; }
     private int rowsWidth() {
-        int w = PANEL_W - PAD * 2;
+        int w = panelW() - PAD * 2;
         return contentHeight > viewHeight() ? w - SCROLLBAR_W - 3 : w;
     }
     private int viewHeight() { return panelH() - TAB_H - PAD * 2; }
 
-    private int scrollbarX() { return panelX() + PANEL_W - PAD + 2; }
+    private int scrollbarX() { return panelX() + panelW() - PAD + 2; }
 
     private boolean scrollable() { return contentHeight > viewHeight(); }
 
@@ -193,13 +196,13 @@ public class ButcherMenuScreen extends Screen {
 
         // ---- title, sitting above the frame ----
         Component title = Component.literal("BUTCHER").withStyle(ChatFormatting.BOLD);
-        g.text(font, title, px + (PANEL_W - font.width(title)) / 2, py - 24, COL_GOLD, true);
+        g.text(font, title, px + (panelW() - font.width(title)) / 2, py - 24, COL_GOLD, true);
 
         // ---- tab bar ----
-        int tabW = PANEL_W / TAB_COUNT;
+        int tabW = panelW() / TAB_COUNT;
         for (int i = 0; i < TAB_COUNT; i++) {
             int tx0 = px + i * tabW;
-            int tx1 = (i == TAB_COUNT - 1) ? px + PANEL_W : tx0 + tabW;
+            int tx1 = (i == TAB_COUNT - 1) ? px + panelW() : tx0 + tabW;
             boolean active = i == tab;
             boolean hover = !active && within(mouseX, mouseY, tx0, py, tx1, py + TAB_H);
 
@@ -219,18 +222,18 @@ public class ButcherMenuScreen extends Screen {
 
         // ---- content frame ----
         int cy0 = contentTop(), cy1 = contentBottom();
-        g.fill(px, cy0, px + PANEL_W, cy1, COL_PANEL);
-        g.fill(px, cy0, px + PANEL_W, cy0 + 1, COL_BORDER);
-        g.fill(px, cy1 - 1, px + PANEL_W, cy1, COL_BORDER);
+        g.fill(px, cy0, px + panelW(), cy1, COL_PANEL);
+        g.fill(px, cy0, px + panelW(), cy0 + 1, COL_BORDER);
+        g.fill(px, cy1 - 1, px + panelW(), cy1, COL_BORDER);
         g.fill(px, cy0, px + 1, cy1, COL_BORDER);
-        g.fill(px + PANEL_W - 1, cy0, px + PANEL_W, cy1, COL_BORDER);
+        g.fill(px + panelW() - 1, cy0, px + panelW(), cy1, COL_BORDER);
 
         // ---- rows ----
         layout(font);
         int viewTop = cy0 + PAD, viewH = viewHeight();
         scroll = clampScroll(scroll, viewH);
 
-        g.enableScissor(px + 1, viewTop, px + PANEL_W - 1, viewTop + viewH);
+        g.enableScissor(px + 1, viewTop, px + panelW() - 1, viewTop + viewH);
         int x = rowsLeft(), w = rowsWidth();
         for (Placed p : placed) {
             int ry = viewTop + p.y() - Math.round(scroll);
@@ -261,7 +264,7 @@ public class ButcherMenuScreen extends Screen {
         // labels sitting there at full brightness.
         if (open < 1f) {
             int veil = Math.round(255 * (1f - open)) << 24;
-            g.fill(px, py - 30, px + PANEL_W, cy1, veil);
+            g.fill(px, py - 30, px + panelW(), cy1, veil);
         }
     }
 
@@ -272,6 +275,8 @@ public class ButcherMenuScreen extends Screen {
         void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int mouseX, int mouseY);
         /** @return true if this row consumed the click. */
         default boolean click(double mx, double my, int x, int y, int w) { return false; }
+        /** Right-click: a cycling row steps back. @return true if this row consumed it. */
+        default boolean rightClick(double mx, double my, int x, int y, int w) { return false; }
         /** Sliders only: the stable id a drag re-finds itself by after the list is rebuilt. */
         default String dragId() { return null; }
         default void dragTo(double mx, int x, int w) { }
@@ -301,7 +306,7 @@ public class ButcherMenuScreen extends Screen {
         }
 
         boolean on = cfg.animationMode != AnimationMode.NONE;
-        rows.add(new HeaderRow("gambling", "Scatha - the cleaver", on, isOpen("gambling")));
+        rows.add(new HeaderRow("gambling", "Scatha - The Cleaver", on, isOpen("gambling")));
         if (!isOpen("gambling")) return vanguardRows(rows, font, cfg);
 
         boolean cleaver = cfg.animationMode != AnimationMode.GUILLOTINE;
@@ -365,6 +370,8 @@ public class ButcherMenuScreen extends Screen {
                     v -> { cfg.shakeStrength = v; }, v -> v + "%"));
             rows.add(new NoticeRow("These build as a run goes on. Set shake to 0 if it bothers you.", font, rowsWidth()));
         }
+        tryRows(rows, "scatha", List.of("RANDOM", "GEMSTONE", "DWARVEN_OS", "PET_RARE", "PET_EPIC", "PET_LEGENDARY"),
+                ButcherMenuScreen::scathaOutcome);
 
         return vanguardRows(rows, font, cfg);
     }
@@ -384,7 +391,7 @@ public class ButcherMenuScreen extends Screen {
      * genuinely the Thaw's own.
      */
     private List<Row> vanguardRows(List<Row> rows, Font font, PatternConfig cfg) {
-        rows.add(new HeaderRow("vanguard", "Vanguard Thaw", cfg.vanguardAnimation, isOpen("vanguard")));
+        rows.add(new HeaderRow("vanguard", "Vanguard Corpses - The Thaw", cfg.vanguardAnimation, isOpen("vanguard")));
         if (!isOpen("vanguard")) return dianaRows(rows, font, cfg);
         rows.add(new SectionRow("The cutscene"));
         rows.add(new ToggleRow("Vanguard Thaw", cfg.vanguardAnimation, () -> {
@@ -418,12 +425,14 @@ public class ButcherMenuScreen extends Screen {
                 v -> { cfg.vanguardNameSize = v; }, v -> v + "%"));
         rows.add(new SliderRow("vg_finale", "Ending volume", cfg.vanguardFinaleVolume, 0, 150, 5,
                 v -> { cfg.vanguardFinaleVolume = v; }, v -> v + "%"));
-        rows.add(new NoticeRow("The legendary, Locket and Dye endings. Try them with /butcher test vanguard.",
-                font, rowsWidth()));
+        rows.add(new NoticeRow("The legendary, Locket and Dye endings.", font, rowsWidth()));
         rows.add(new ToggleRow("Profit window after the Thaw", cfg.vanguardProfit, () -> {
             cfg.vanguardProfit = !cfg.vanguardProfit;
             cfg.save();
         }));
+        rows.add(new NoticeRow("Every drop priced, minus the Skeleton Key. Needs Live prices (General tab).", font, rowsWidth()));
+        tryRows(rows, "vanguard", List.of("RANDOM", "COMMON", "UNCOMMON", "LEGENDARY", "LOCKET", "DYE"),
+                ButcherMenuScreen::vanguardOutcome);
         return dianaRows(rows, font, cfg);
     }
 
@@ -442,7 +451,7 @@ public class ButcherMenuScreen extends Screen {
         }));
         rows.add(new SliderRow("diana_hide", "Hide the HUD below", cfg.dianaHidePct, 0, 20, 1,
                 v -> { cfg.dianaHidePct = v; }, v -> v == 0 ? "Off" : v + "% HP"));
-        rows.add(new NoticeRow("The HUD and chat fade out when your creature (or one you're getting loot share on) gets this low, so nothing gives the drop away. Try the cutscene with /butcher test diana.",
+        rows.add(new NoticeRow("The HUD and chat fade out when your creature (or one you're getting loot share on) gets this low, so nothing gives the drop away.",
                 font, rowsWidth()));
 
         rows.add(new SectionRow("What plays it"));
@@ -466,7 +475,8 @@ public class ButcherMenuScreen extends Screen {
         rows.add(new SliderRow("diana_volume", "Volume", cfg.dianaVolume, 0, 150, 5,
                 v -> { cfg.dianaVolume = v; }, v -> v + "%"));
         bustsRow(rows, font, cfg.dianaBusts, v -> cfg.dianaBusts = v, cfg);
-        tryRows(rows, "diana", names(com.butcher.anim.ChopTimeline.Verdict.values()), font);
+        tryRows(rows, "diana", names(com.butcher.anim.ChopTimeline.Verdict.values()),
+                n -> com.butcher.render.DianaItems.name(com.butcher.anim.ChopTimeline.Verdict.valueOf(n)));
         return fishingRows(rows, font, cfg);
     }
 
@@ -485,19 +495,20 @@ public class ButcherMenuScreen extends Screen {
         if (!isOpen("blaze")) return;
         rows.add(new SectionRow("The cutscene"));
         rows.add(dianaToggle("Hellion", cfg.blazeAnimation, () -> cfg.blazeAnimation = !cfg.blazeAnimation, cfg));
-        rows.add(new NoticeRow("Plays on every kill of your own tier IV Demonlord, the moment it dies; the drop decides the ending. Try it with /butcher test slayer blaze.",
+        rows.add(new NoticeRow("Plays on every kill of your own tier IV Demonlord, the moment it dies; the drop decides the ending.",
                 font, rowsWidth()));
         rows.add(new SliderRow("blaze_hide", "Hide the HUD below", cfg.blazeHidePct, 0, 30, 1,
                 v -> { cfg.blazeHidePct = v; }, v -> v == 0 ? "Off" : v + "% HP"));
         rows.add(new NoticeRow("The HUD and chat fade out when your Demonlord gets this low, so nothing gives the drop away.",
                 font, rowsWidth()));
         rows.add(new SectionRow("The endings"));
-        rows.add(dianaToggle("PRAY TO RNGESUS DROP! banner", cfg.blazeBanner, () -> cfg.blazeBanner = !cfg.blazeBanner, cfg));
+        rows.add(dianaToggle("Drop banner (RARE DROP! and up)", cfg.blazeBanner, () -> cfg.blazeBanner = !cfg.blazeBanner, cfg));
         rows.add(dianaToggle("Show the price", cfg.blazePrice, () -> cfg.blazePrice = !cfg.blazePrice, cfg));
         rows.add(new SliderRow("blaze_volume", "Volume", cfg.blazeVolume, 0, 150, 5,
                 v -> { cfg.blazeVolume = v; }, v -> v + "%"));
         bustsRow(rows, font, cfg.blazeBusts, v -> cfg.blazeBusts = v, cfg);
-        tryRows(rows, "blaze", names(com.butcher.anim.HellionTimeline.Drop.values()), font);
+        tryRows(rows, "blaze", names(com.butcher.anim.HellionTimeline.Drop.values()),
+                n -> com.butcher.anim.HellionTimeline.Drop.valueOf(n).title);
     }
 
     /** The enderman slayer: the Seraph's Glyph. Detection waits on real records; the test command plays it now. */
@@ -506,17 +517,20 @@ public class ButcherMenuScreen extends Screen {
         if (!isOpen("seraph")) return;
         rows.add(new SectionRow("The cutscene"));
         rows.add(dianaToggle("The Seraph's Glyph", cfg.seraphAnimation, () -> cfg.seraphAnimation = !cfg.seraphAnimation, cfg));
-        rows.add(new NoticeRow("Plays on every kill of your own tier IV Seraph (the one spawned by you), the moment it dies; the drop decides the ending. Try it with /butcher test slayer enderman.",
+        rows.add(new NoticeRow("Plays on every kill of your own tier IV Seraph (the one spawned by you), the moment it dies; the drop decides the ending.",
                 font, rowsWidth()));
         rows.add(new SliderRow("seraph_hide", "Hide the HUD below", cfg.seraphHidePct, 0, 30, 1,
                 v -> { cfg.seraphHidePct = v; }, v -> v == 0 ? "Off" : v + "% HP"));
+        rows.add(new NoticeRow("The HUD and chat fade out when your Seraph gets this low, so nothing gives the drop away.",
+                font, rowsWidth()));
         rows.add(new SectionRow("The endings"));
-        rows.add(dianaToggle("PRAY TO RNGESUS DROP! banner", cfg.seraphBanner, () -> cfg.seraphBanner = !cfg.seraphBanner, cfg));
+        rows.add(dianaToggle("Drop banner (RARE DROP! and up)", cfg.seraphBanner, () -> cfg.seraphBanner = !cfg.seraphBanner, cfg));
         rows.add(dianaToggle("Show the price", cfg.seraphPrice, () -> cfg.seraphPrice = !cfg.seraphPrice, cfg));
         rows.add(new SliderRow("seraph_volume", "Volume", cfg.seraphVolume, 0, 150, 5,
                 v -> { cfg.seraphVolume = v; }, v -> v + "%"));
         bustsRow(rows, font, cfg.seraphBusts, v -> cfg.seraphBusts = v, cfg);
-        tryRows(rows, "seraph", names(com.butcher.anim.SeraphTimeline.Drop.values()), font);
+        tryRows(rows, "seraph", names(com.butcher.anim.SeraphTimeline.Drop.values()),
+                n -> com.butcher.anim.SeraphTimeline.Drop.valueOf(n).title);
     }
 
     /** The Fishing Festival: one short pop-up for the Great White Shark's two big drops, and its bust. */
@@ -529,13 +543,17 @@ public class ButcherMenuScreen extends Screen {
         rows.add(dianaToggle("The bust - a shark of yours dies with nothing", cfg.fishingBust,
                 () -> cfg.fishingBust = !cfg.fishingBust, cfg));
         rows.add(dianaToggle("Show the price", cfg.fishingPrice, () -> cfg.fishingPrice = !cfg.fishingPrice, cfg));
-        rows.add(new NoticeRow("The pets show what George pays for them. A quick pop-up over the game - nothing is hidden. Try it with /butcher test shark.",
+        rows.add(new NoticeRow("The pets show what George pays for them. A quick pop-up over the game - nothing is hidden.",
                 font, rowsWidth()));
         rows.add(new SliderRow("fishing_volume", "Volume", cfg.fishingVolume, 0, 150, 5,
                 v -> { cfg.fishingVolume = v; }, v -> v + "%"));
         List<String> fin = new ArrayList<>(names(com.butcher.detect.SharkDrops.Drop.values()));
         fin.add(0, "BUST");
-        tryRows(rows, "shark", fin, font);
+        tryRows(rows, "shark", fin, n -> switch (n) {
+            case "MEGALODON_EPIC" -> "Epic Megalodon";
+            case "MEGALODON_LEGENDARY" -> "Legendary Megalodon";
+            default -> com.butcher.detect.SharkDrops.Drop.valueOf(n).title;
+        });
         return ghostRows(rows, font, cfg);
     }
 
@@ -550,7 +568,8 @@ public class ButcherMenuScreen extends Screen {
                 font, rowsWidth()));
         rows.add(new SliderRow("ghost_volume", "Volume", cfg.ghostVolume, 0, 150, 5,
                 v -> { cfg.ghostVolume = v; }, v -> v + "%"));
-        tryRows(rows, "ghost", names(com.butcher.detect.GhostDrops.Drop.values()), font);
+        tryRows(rows, "ghost", names(com.butcher.detect.GhostDrops.Drop.values()),
+                n -> com.butcher.detect.GhostDrops.Drop.valueOf(n).title);
         return lavaRows(rows, font, cfg);
     }
 
@@ -560,7 +579,7 @@ public class ButcherMenuScreen extends Screen {
         if (!isOpen("lava")) return slayerRows(rows, font, cfg);
         rows.add(new SectionRow("The cutscene"));
         rows.add(dianaToggle("Eruption", cfg.lavaAnimation, () -> cfg.lavaAnimation = !cfg.lavaAnimation, cfg));
-        rows.add(new NoticeRow("Plays on every kill of your own Lord Jawbus, Thunder, Ragnarok or Fiery Scuttler, the moment it dies - the heat it lands on is the drop. Plhlegblast only plays for the Carmine Dye. Try it with /butcher test lava.",
+        rows.add(new NoticeRow("Plays on every kill of your own Lord Jawbus, Thunder, Ragnarok or Fiery Scuttler, the moment it dies - the heat it lands on is the drop. Plhlegblast only plays for the Carmine Dye.",
                 font, rowsWidth()));
         rows.add(dianaToggle("Lord Jawbus", cfg.lavaJawbus, () -> cfg.lavaJawbus = !cfg.lavaJawbus, cfg));
         rows.add(dianaToggle("Thunder", cfg.lavaThunder, () -> cfg.lavaThunder = !cfg.lavaThunder, cfg));
@@ -577,7 +596,8 @@ public class ButcherMenuScreen extends Screen {
         rows.add(new SliderRow("lava_volume", "Volume", cfg.lavaVolume, 0, 150, 5,
                 v -> { cfg.lavaVolume = v; }, v -> v + "%"));
         bustsRow(rows, font, cfg.lavaBusts, v -> cfg.lavaBusts = v, cfg);
-        tryRows(rows, "lava", names(com.butcher.anim.EruptionTimeline.Drop.values()), font);
+        tryRows(rows, "lava", names(com.butcher.anim.EruptionTimeline.Drop.values()),
+                n -> com.butcher.anim.EruptionTimeline.Drop.valueOf(n).title);
         return slayerRows(rows, font, cfg);
     }
 
@@ -587,6 +607,9 @@ public class ButcherMenuScreen extends Screen {
         int v = Math.max(0, Math.min(2, value));
         rows.add(new ValueRow("Busts", styles[v], v != 0, () -> {
             set.accept((v + 1) % 3);
+            cfg.save();
+        }, () -> {
+            set.accept((v + 2) % 3);
             cfg.save();
         }));
         if (v == 1) rows.add(new NoticeRow("A bust jumps to its own ending as soon as it is known - so one that keeps going is a win.", font, rowsWidth()));
@@ -603,21 +626,59 @@ public class ButcherMenuScreen extends Screen {
     /** What each group's "Try it" will play, by group. */
     private static final java.util.Map<String, Integer> TRY = new java.util.HashMap<>();
 
-    /** "Try it": pick an outcome, then play it as /butcher test does - never counted (the review, M6). */
-    private void tryRows(List<Row> rows, String group, List<String> outcomes, Font font) {
+    /**
+     * "Try it": pick an outcome, then play it - the same cutscene a real drop gets, never counted in
+     * the stats (the review, M6). Click the outcome for the next one, right-click for the one before.
+     *
+     * @param title an outcome's display name; null or empty means "the bust" / its pretty name
+     */
+    private void tryRows(List<Row> rows, String group, List<String> outcomes, java.util.function.Function<String, String> title) {
         rows.add(new SectionRow("Try it"));
         int i = Math.floorMod(TRY.getOrDefault(group, 0), outcomes.size());
         String pick = outcomes.get(i);
-        rows.add(new ValueRow("Outcome", pretty(pick), true, () -> TRY.put(group, i + 1)));
-        rows.add(new ValueRow("Play it", "\u25B6 " + pretty(pick), true, () -> {
+        String name = outcomeName(pick, title);
+        rows.add(new ValueRow("Outcome", name, true, () -> TRY.put(group, i + 1), () -> TRY.put(group, i - 1)));
+        rows.add(new ValueRow("Play it", "\u25B6 " + name, true, () -> {
             if (minecraft != null) minecraft.gui.setScreen(null);
             ButcherClient.playTest(group, pick);
         }));
     }
 
+    private static String outcomeName(String pick, java.util.function.Function<String, String> title) {
+        if (pick.equals("BUST")) return "Bust";
+        String t = null;
+        try {
+            t = title.apply(pick);
+        } catch (RuntimeException ignored) {
+        }
+        return t == null || t.isEmpty() ? pretty(pick) : t;
+    }
+
     private static String pretty(String name) {
         String s = name.replace('_', ' ').toLowerCase(java.util.Locale.ROOT);
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private static String scathaOutcome(String pick) {
+        return switch (pick) {
+            case "RANDOM" -> "Random (real odds)";
+            case "DWARVEN_OS" -> "Dwarven O's";
+            case "PET_RARE" -> "Rare pet";
+            case "PET_EPIC" -> "Epic pet";
+            case "PET_LEGENDARY" -> "Legendary pet";
+            default -> "Gemstones";
+        };
+    }
+
+    private static String vanguardOutcome(String pick) {
+        return switch (pick) {
+            case "RANDOM" -> "Random (real odds)";
+            case "UNCOMMON" -> "An uncommon";
+            case "LEGENDARY" -> "A legendary";
+            case "LOCKET" -> "Shattered Locket";
+            case "DYE" -> "Frostbitten Dye";
+            default -> "All commons";
+        };
     }
 
     private ToggleRow dianaToggle(String label, boolean value, Runnable flip, PatternConfig cfg) {
@@ -666,6 +727,7 @@ public class ButcherMenuScreen extends Screen {
                 titles(com.butcher.anim.EruptionTimeline.Drop.values()));
         sourceGroup(rows, st, font, "shark", "Fin - Great White Sharks", "Sharks killed",
                 titles(com.butcher.detect.SharkDrops.Drop.values()));
+        ghostStats(rows, st, font);
 
         return rows;
     }
@@ -696,8 +758,24 @@ public class ButcherMenuScreen extends Screen {
         for (String d : drops) rows.add(new StatRow(d, Integer.toString(s.drops.getOrDefault(d, 0)), COL_TEXT));
         rows.add(new SectionRow("Everything else"));
         rows.add(new StatRow(killWord, String.format("%,d", s.kills), COL_TEXT_DIM));
-        if (s.kills == 0) rows.add(new NoticeRow("Nothing yet. Only real kills are counted; tests never are.", font, rowsWidth()));
+        if (s.kills == 0) rows.add(new NoticeRow("Nothing yet. Only real kills are counted; Try it never is.", font, rowsWidth()));
         resetRow(rows, font, id, "Reset these stats", () -> st.resetSource(key));
+    }
+
+    /** Wisp: a Ghost has no kill we can see, so only its two drops are counted. */
+    private void ghostStats(List<Row> rows, ButcherStats st, Font font) {
+        rows.add(new HeaderRow("stats-ghost", "Wisp - Dwarven Mines Ghosts", null, isOpen("stats-ghost")));
+        if (!isOpen("stats-ghost")) return;
+        ButcherStats.Source s = st.source("ghost");
+        rows.add(new SectionRow("Drops"));
+        int total = 0;
+        for (String d : titles(com.butcher.detect.GhostDrops.Drop.values())) {
+            int n = s.drops.getOrDefault(d, 0);
+            total += n;
+            rows.add(new StatRow(d, Integer.toString(n), 0xFF5555FF));
+        }
+        if (total == 0) rows.add(new NoticeRow("Nothing yet. Only real drops are counted; Try it never is.", font, rowsWidth()));
+        resetRow(rows, font, "stats-ghost", "Reset these stats", () -> st.resetSource("ghost"));
     }
 
     private void scathaStats(List<Row> rows, ButcherStats st) {
@@ -750,7 +828,7 @@ public class ButcherMenuScreen extends Screen {
                     String.format("%.2f", st.corpseRolls / (float) st.corpses), COL_TEXT_DIM));
         }
         if (st.corpses == 0) {
-            rows.add(new NoticeRow("Nothing yet. Open a Vanguard corpse, or try /butcher test vanguard random.",
+            rows.add(new NoticeRow("Nothing yet. Only real corpses are counted; Try it never is.",
                     font, rowsWidth()));
         }
     }
@@ -780,7 +858,7 @@ public class ButcherMenuScreen extends Screen {
             rows.add(new StatRow(k[1], String.format("%,d", n), COL_TEXT_DIM));
         }
         if (total == 0) {
-            rows.add(new NoticeRow("Nothing yet. Only real kills are counted; tests never are.",
+            rows.add(new NoticeRow("Nothing yet. Only real kills are counted; Try it never is.",
                     font, rowsWidth()));
         }
     }
@@ -918,7 +996,10 @@ public class ButcherMenuScreen extends Screen {
         String[] corners = {"Off", "Top right", "Top left", "Bottom right", "Bottom left"};
         int corner = Math.max(0, Math.min(4, cfg.gameplayCorner));
         rows.add(new ValueRow("During a cutscene", corners[corner], corner != 0, () -> {
-            cfg.gameplayCorner = (cfg.gameplayCorner + 1) % corners.length;
+            cfg.gameplayCorner = (corner + 1) % corners.length;
+            cfg.save();
+        }, () -> {
+            cfg.gameplayCorner = (corner + corners.length - 1) % corners.length;
             cfg.save();
         }));
         rows.add(new NoticeRow("The game, live, in a corner while a cutscene plays - so you can see what is around you. Click to move it or turn it off.", font, rowsWidth()));
@@ -928,7 +1009,7 @@ public class ButcherMenuScreen extends Screen {
             cfg.recordDrops = !cfg.recordDrops;
             cfg.save();
         }));
-        rows.add(new NoticeRow("Writes every real kill, corpse and Diana chat line to config/butcher-drops.jsonl, so a rare drop that goes wrong can be replayed. Stays on your computer. /butcher records shows the count.", font, rowsWidth()));
+        rows.add(new NoticeRow("For bug reports: writes every real kill and drop, with the chat around it, to config/butcher-drops.jsonl so one that went wrong can be replayed. Stays on your computer; send the file only if you choose to. /butcher records shows the count.", font, rowsWidth()));
 
         rows.add(new SectionRow("Art"));
         rows.add(new ToggleRow("Write art to config", cfg.writeGeneratedArt, () -> {
@@ -1080,11 +1161,15 @@ public class ButcherMenuScreen extends Screen {
         }
     }
 
-    /** "Label: Value" - clicking cycles to the next value. */
+    /** "Label: Value" - clicking cycles to the next value, right-clicking (where it can) to the one before. */
     private static final class ValueRow implements Row {
-        private final String label, value; private final boolean lit; private final Runnable cycle;
+        private final String label, value; private final boolean lit; private final Runnable cycle, back;
         ValueRow(String label, String value, boolean lit, Runnable cycle) {
-            this.label = label; this.value = value; this.lit = lit; this.cycle = cycle;
+            this(label, value, lit, cycle, null);
+        }
+
+        ValueRow(String label, String value, boolean lit, Runnable cycle, Runnable back) {
+            this.label = label; this.value = value; this.lit = lit; this.cycle = cycle; this.back = back;
         }
         @Override public int height() { return ROW_H; }
 
@@ -1101,6 +1186,13 @@ public class ButcherMenuScreen extends Screen {
         public boolean click(double mx, double my, int x, int y, int w) {
             if (!within(mx, my, x, y, x + w, y + height())) return false;
             cycle.run();
+            return true;
+        }
+
+        @Override
+        public boolean rightClick(double mx, double my, int x, int y, int w) {
+            if (back == null || !within(mx, my, x, y, x + w, y + height())) return false;
+            back.run();
             return true;
         }
     }
@@ -1170,12 +1262,13 @@ public class ButcherMenuScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == 1) return rightClicked(event.x(), event.y());
         if (event.button() != 0) return super.mouseClicked(event, doubleClick);
         double mx = event.x(), my = event.y();
         int px = panelX(), py = panelY();
 
-        int tabW = PANEL_W / TAB_COUNT;
-        if (my >= py && my < py + TAB_H && mx >= px && mx < px + PANEL_W) {
+        int tabW = panelW() / TAB_COUNT;
+        if (my >= py && my < py + TAB_H && mx >= px && mx < px + panelW()) {
             int i = Math.min(TAB_COUNT - 1, (int) ((mx - px) / tabW));
             if (i != tab) { tab = i; scroll = 0f; }
             return true;
@@ -1193,7 +1286,7 @@ public class ButcherMenuScreen extends Screen {
             return true;
         }
 
-        if (!within(mx, my, px, viewTop, px + PANEL_W, viewTop + viewH)) {
+        if (!within(mx, my, px, viewTop, px + panelW(), viewTop + viewH)) {
             return super.mouseClicked(event, doubleClick);
         }
 
@@ -1210,6 +1303,17 @@ public class ButcherMenuScreen extends Screen {
                 draggingId = p.row().dragId();
             }
             return true;
+        }
+        return true;
+    }
+
+    /** A right-click on a row steps a cycling value back. */
+    private boolean rightClicked(double mx, double my) {
+        int viewTop = contentTop() + PAD, viewH = viewHeight();
+        if (!within(mx, my, panelX(), viewTop, panelX() + panelW(), viewTop + viewH)) return false;
+        int x = rowsLeft(), w = rowsWidth();
+        for (Placed p : placed) {
+            if (p.row().rightClick(mx, my, x, viewTop + p.y() - Math.round(scroll), w)) return true;
         }
         return true;
     }

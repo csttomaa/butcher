@@ -25,6 +25,7 @@ import java.nio.file.Path;
 public class PatternConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path PATH = FabricLoader.getInstance().getConfigDir().resolve("butcher.json");
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("Butcher");
 
     /** Total length of the guillotine cutscene, in milliseconds. */
     public int animationDurationMs = 2600;
@@ -58,8 +59,7 @@ public class PatternConfig {
      */
     public int hideBelowHp = 3;
 
-    /** Set off a real firework, coloured by the pet's rarity, as a pet-drop cutscene closes.
-     *  No menu row for this one - edit the JSON and run "/butcher reload". */
+    /** Set off a real firework, coloured by the pet's rarity, as a pet-drop cutscene closes. */
     public boolean petDropFirework = true;
 
     /** Play the Scatha-head popup - vanilla's totem-of-undying animation, 2 seconds - as a
@@ -67,7 +67,7 @@ public class PatternConfig {
     public boolean petHeadPopup = true;
 
     /**
-     * Refuse the game's own sounds while a cutscene - or the pre-kill veil - owns the
+     * Refuse the game's own sounds while a cutscene - or the pre-kill hide - owns the
      * screen.
      *
      * On by default because a sound cue spoils the reveal the same way a chat line does:
@@ -147,8 +147,11 @@ public class PatternConfig {
     /**
      * Write every real drop event to config/butcher-drops.jsonl - the chat around it and the
      * detector's reasoning - so a rare drop that comes out wrong can be replayed. Local only.
+     *
+     * Off by default: it keeps chat lines (other players' too) in a file that is never pruned, which
+     * is for someone helping with a bug report to switch on, not for everyone.
      */
-    public boolean recordDrops = true;
+    public boolean recordDrops = false;
 
     /**
      * The game itself in a small window in a corner of every cutscene (SkyMaxx's gameplay view):
@@ -266,9 +269,8 @@ public class PatternConfig {
      * Before the kill the HUD simply goes, the moment the hide starts - Diana's way. The dark
      * veil that used to grow over the screen first is gone (the user asked).
      *
-     * ON by default. The version of this that faded each HUD element one at a time was
-     * off by default and never worked; {@code HudMixin} simply does not build the HUD
-     * on the frames it should not be there, which is what the game itself does for F1.
+     * ON by default. {@code mixin/HudFadeMixin} fades the whole HUD pass out - every mod's
+     * elements, not only vanilla's - and skips it once it has gone, as the game does for F1.
      */
     public boolean hideHud = true;
     /** While the HUD is away, the hotbar and the health, hunger, armour and XP bars stay (drawn over the cutscene). */
@@ -338,16 +340,71 @@ public class PatternConfig {
                 String json = Files.readString(PATH);
                 PatternConfig loaded = GSON.fromJson(json, PatternConfig.class);
                 if (loaded != null) {
+                    loaded.sanitize();
                     loaded.migrateHides();
                     return loaded;
                 }
             }
         } catch (IOException | RuntimeException e) {
-            System.err.println("[Butcher] Failed to read config, falling back to defaults: " + e);
+            // Kept aside rather than overwritten: a typo in a hand edit should not cost every setting.
+            LOGGER.warn("[Butcher] could not read {}, starting on the defaults (the old file is kept as butcher.json.broken)", PATH, e);
+            try {
+                Files.move(PATH, PATH.resolveSibling("butcher.json.broken"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException ignored) {
+            }
         }
+        return fresh();
+    }
+
+    /** The defaults, saved. A new file has nothing to migrate, so the one-off migrations are marked done. */
+    public static PatternConfig fresh() {
         PatternConfig fresh = new PatternConfig();
+        fresh.hidesInPercent = true;
+        fresh.dianaSizeRaised = true;
         fresh.save();
         return fresh;
+    }
+
+    /**
+     * Puts every value back inside what the menu can set. A hand-edited file can hold anything - a
+     * misspelt mode reads as null, a volume of -40 - and the cutscenes would crash or misbehave on it.
+     */
+    void sanitize() {
+        if (animationMode == null) animationMode = AnimationMode.SCOPE;
+        if (lastStyle == null || lastStyle == AnimationMode.NONE) lastStyle = AnimationMode.SCOPE;
+        animationDurationMs = clamp(animationDurationMs, 800, 5000);
+        scopeDurationMs = clamp(scopeDurationMs, 3000, 16000);
+        hideBelowHp = clamp(hideBelowHp, 1, 10);
+        escapeChance = clamp(escapeChance, 0, 100);
+        vignetteStrength = clamp(vignetteStrength, 0, 100);
+        zoomStrength = clamp(zoomStrength, 0, 200);
+        shakeStrength = clamp(shakeStrength, 0, 200);
+        cutsceneVolume = clamp(cutsceneVolume, 0, 150);
+        petFanfareVolume = clamp(petFanfareVolume, 0, 150);
+        vanguardSpeed = clamp(vanguardSpeed, 50, 200);
+        vanguardNameSize = clamp(vanguardNameSize, 60, 160);
+        vanguardFinaleVolume = clamp(vanguardFinaleVolume, 0, 150);
+        dianaVolume = clamp(dianaVolume, 0, 150);
+        dianaSize = clamp(dianaSize, 60, 140);
+        blazeVolume = clamp(blazeVolume, 0, 150);
+        seraphVolume = clamp(seraphVolume, 0, 150);
+        lavaVolume = clamp(lavaVolume, 0, 150);
+        fishingVolume = clamp(fishingVolume, 0, 150);
+        ghostVolume = clamp(ghostVolume, 0, 150);
+        dianaHidePct = clamp(dianaHidePct, 0, 20);
+        blazeHidePct = clamp(blazeHidePct, 0, 30);
+        seraphHidePct = clamp(seraphHidePct, 0, 30);
+        lavaHidePct = clamp(lavaHidePct, 0, 20);
+        dianaBusts = clamp(dianaBusts, 0, 2);
+        blazeBusts = clamp(blazeBusts, 0, 2);
+        seraphBusts = clamp(seraphBusts, 0, 2);
+        lavaBusts = clamp(lavaBusts, 0, 2);
+        minWorth = clamp(minWorth, 0, MIN_WORTH.length - 1);
+        gameplayCorner = clamp(gameplayCorner, 0, 4);
+    }
+
+    private static int clamp(int v, int lo, int hi) {
+        return Math.max(lo, Math.min(hi, v));
     }
 
     /** Once: the old million thresholds become percentages of each boss's health (150M Demonlord, 210M Seraph). */
@@ -365,12 +422,26 @@ public class PatternConfig {
         save();
     }
 
+    /**
+     * Writes {@code text} to a temporary file beside {@code path} and moves it into place, so a crash
+     * mid-write leaves the old file whole instead of a half-written one that can no longer be read.
+     */
+    public static void writeAtomically(Path path, String text) throws IOException {
+        Files.createDirectories(path.getParent());
+        Path tmp = path.resolveSibling(path.getFileName() + ".tmp");
+        Files.writeString(tmp, text);
+        try {
+            Files.move(tmp, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(tmp, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
     public void save() {
         try {
-            Files.createDirectories(PATH.getParent());
-            Files.writeString(PATH, GSON.toJson(this));
+            writeAtomically(PATH, GSON.toJson(this));
         } catch (IOException e) {
-            System.err.println("[Butcher] Failed to save config: " + e);
+            LOGGER.warn("[Butcher] could not save {}", PATH, e);
         }
     }
 }

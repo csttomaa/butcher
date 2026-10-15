@@ -62,22 +62,40 @@ public class ButcherClient implements ClientModInitializer {
     /** The profit window, while it is up - the next queued corpse waits for it. */
     private static com.butcher.gui.ProfitScreen currentProfit;
 
+    /** A profit window waiting for the player to close whatever menu they have open, and since when. */
+    private static com.butcher.gui.ProfitScreen pendingProfit;
+    private static long pendingProfitAt;
+    /** A profit window still waiting after this long is dropped: the player has moved on. */
+    private static final long PROFIT_WAIT_MS = 20_000;
+
     private static boolean profitShowing() {
-        return currentProfit != null && !currentProfit.isClosed();
+        return pendingProfit != null || (currentProfit != null && !currentProfit.isClosed());
     }
 
     /**
      * The Thaw has ended, finished or skipped: put the corpse's profit window up.
      *
-     * Deferred like every other setScreen here. The Thaw has already stepped down by the time
-     * this is called, so the screen-ownership mixin lets it through.
+     * Not straight away if the player has a screen open - a chest, their inventory, a menu. Putting
+     * ours over a container would close it on the client only, out of step with the server. It waits
+     * (see {@link #showPendingProfit}) until nothing is open.
      */
     public static void onThawFinished(CorpseHaul haul) {
         if (config == null || !config.vanguardProfit || !config.livePrices) return;
-        Minecraft client = Minecraft.getInstance();
-        com.butcher.gui.ProfitScreen screen = new com.butcher.gui.ProfitScreen(haul);
-        currentProfit = screen;
-        client.execute(() -> client.gui.setScreen(screen));
+        pendingProfit = new com.butcher.gui.ProfitScreen(haul);
+        pendingProfitAt = System.currentTimeMillis();
+    }
+
+    /** Opens the waiting profit window once no screen is open; called every tick. */
+    private static void showPendingProfit(Minecraft client) {
+        if (pendingProfit == null) return;
+        if (client.player == null || System.currentTimeMillis() - pendingProfitAt > PROFIT_WAIT_MS) {
+            pendingProfit = null;
+            return;
+        }
+        if (client.gui.screen() != null) return;
+        currentProfit = pendingProfit;
+        pendingProfit = null;
+        client.gui.setScreen(currentProfit);
     }
 
     /** Diana's cutscene, "The Chopping Block", while it plays. */
@@ -524,9 +542,6 @@ public class ButcherClient implements ClientModInitializer {
                     () -> com.butcher.render.art.ThawArt.splat(variant));
         }
 
-        // Draw the cutscene on top of everything else every frame. Using
-        // addLast() so it renders after (i.e. visually on top of) chat and
-        // every other vanilla HUD element.
         // The cutscenes are not HUD elements any more: mixin/GuiFadeMixin draws them itself, on
         // a stratum of their own, once the HUD pass and its fade are over (drawOwnHud). Inside
         // the pass, 0.2.37 played the sounds and drew nothing.
@@ -564,8 +579,10 @@ public class ButcherClient implements ClientModInitializer {
                 // point of opening early), but one that already knows must not be
                 // played over the top of.
                 dropWatcher.tick(client.player, wormTracker, !isAnimationPlaying() || awaitingDrop());
-                com.butcher.audio.ButcherAudio.tick();
             }
+            // Every animation's sound, not only the Scatha's: inside the check above, switching the
+            // cleaver off left the synth unstarted and every other cutscene silent.
+            com.butcher.audio.ButcherAudio.tick();
             // Outside the player check: a half-read loot message has to be able to time
             // out even if the player went away mid-message.
             vanguardWatcher.tick();
@@ -590,6 +607,14 @@ public class ButcherClient implements ClientModInitializer {
                 // A head we could not find in any repo, taken from whatever menu shows it (the bazaar).
                 com.butcher.detect.HeadCapture.tick(client);
             }
+            // Out of the world (disconnected, or back at the title screen): nothing waiting from the old
+            // server may play or pour its chat into the next one.
+            if (client.player == null && (!ChatHold.isEmpty() || !waiting.isEmpty() || !thawQueue.isEmpty())) {
+                ChatHold.clear();
+                waiting.clear();
+                thawQueue.clear();
+            }
+            showPendingProfit(client);
             skipTick();
             floorPrices();
             if (currentThaw != null && !currentThaw.isActive()) currentThaw = null;
@@ -852,7 +877,10 @@ public class ButcherClient implements ClientModInitializer {
                 lavaNode.then(dropNode);
             }
 
+            // The developer commands (test, debug) exist only for the accounts in Dev - for everyone else
+            // they are not there at all, not even in tab completion. Players use the menu's "Try it".
             LiteralArgumentBuilder<FabricClientCommandSource> testNode = ClientCommands.literal("test")
+                    .requires(src -> Dev.allowed())
                     .executes(ctx -> options(ctx, "test",
                             "scatha", "the cleaver cutscene",
                             "vanguard", "the Thaw",
@@ -891,9 +919,8 @@ public class ButcherClient implements ClientModInitializer {
                     .then(ClientCommands.literal("records").executes(ctx -> {
                         int[] n = com.butcher.detect.DropRecorder.counts();
                         ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7" + n[0]
-                                + " drop record(s), " + n[1] + " Diana line(s) captured, in §f"
-                                + com.butcher.detect.DropRecorder.file()
-                                + (config.recordDrops ? "" : " §c(recording is off)")));
+                                + " record(s) in §f" + com.butcher.detect.DropRecorder.file()
+                                + (config.recordDrops ? "" : " §8(recording is off - General tab, Drop records)")));
                         return 1;
                     }))
                     .then(ClientCommands.literal("log").executes(ctx -> {
@@ -926,6 +953,7 @@ public class ButcherClient implements ClientModInitializer {
                                 return 1;
                             })))
                     .then(ClientCommands.literal("debug")
+                            .requires(src -> Dev.allowed())
                             .then(ClientCommands.literal("solid").executes(ctx -> {
                                 com.butcher.render.MeshRenderer.debugSolid =
                                         !com.butcher.render.MeshRenderer.debugSolid;
@@ -951,7 +979,7 @@ public class ButcherClient implements ClientModInitializer {
                         com.butcher.render.ArtOverrides.reload();
                         com.butcher.render.model.ScathaModels.reload();
                         com.butcher.render.scene.CutsceneScene.reload();
-                        ctx.getSource().sendFeedback(Component.literal("[Butcher] config reloaded from config/butcher.json"));
+                        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7settings reloaded from §fconfig/butcher.json"));
                         return 1;
                     })));
         });
@@ -1111,6 +1139,11 @@ public class ButcherClient implements ClientModInitializer {
 
     /** The menu's "Try it": plays an outcome as /butcher test does (never counted), over whatever was playing. */
     public static void playTest(String group, String name) {
+        // The Scatha and the Thaw cannot be cut into: the try waits until they are over.
+        if ((currentScope != null && currentScope.isActive()) || thawActive()) {
+            waitForTurn(() -> playTest(group, name), true, "Try it");
+            return;
+        }
         com.butcher.gui.Cutscene c = currentCutscene();
         if (c != null) c.interrupt();
         clearFinished();
@@ -1129,6 +1162,22 @@ public class ButcherClient implements ClientModInitializer {
                 }
                 openEruption(who, d, true);
             }
+            case "scatha" -> triggerTest(switch (name) {
+                case "PET_RARE" -> DropResult.pet("rare");
+                case "PET_EPIC" -> DropResult.pet("epic");
+                case "PET_LEGENDARY" -> DropResult.pet("legendary");
+                case "DWARVEN_OS" -> DropResult.blocked();
+                case "RANDOM" -> randomDrop();
+                default -> DropResult.gemstone();
+            });
+            case "vanguard" -> injectTest(switch (name) {
+                case "RANDOM" -> randomCorpse();
+                case "UNCOMMON" -> endingCorpse(VanguardLoot.Tier.UNCOMMON, null);
+                case "LEGENDARY" -> endingCorpse(VanguardLoot.Tier.LEGENDARY, null);
+                case "LOCKET" -> endingCorpse(VanguardLoot.Tier.LEGENDARY, "Shattered Locket");
+                case "DYE" -> endingCorpse(VanguardLoot.Tier.SPECIAL, null);
+                default -> endingCorpse(VanguardLoot.Tier.COMMON, null);
+            });
             case "ghost" -> com.butcher.render.GhostPopup.show(com.butcher.detect.GhostDrops.Drop.valueOf(name));
             case "shark" -> {
                 if (name.equals("BUST")) com.butcher.render.FinPopup.showBust();
@@ -1140,11 +1189,7 @@ public class ButcherClient implements ClientModInitializer {
 
     /** "Reset all settings": the defaults back, stats untouched. */
     public static void resetSettings() {
-        PatternConfig fresh = new PatternConfig();
-        fresh.hidesInPercent = true;
-        fresh.dianaSizeRaised = true;
-        config = fresh;
-        fresh.save();
+        config = PatternConfig.fresh();
         decisions.note("§7Settings reset to the defaults");
     }
 
@@ -1418,6 +1463,17 @@ public class ButcherClient implements ClientModInitializer {
 
     // ------------------------------------------------------------------ Vanguard
 
+    /** One of the game's own textures as an image, through the resource manager; null if it cannot be read. */
+    public static java.awt.image.BufferedImage readGameTexture(String path) {
+        try (java.io.InputStream in = Minecraft.getInstance().getResourceManager()
+                .open(net.minecraft.resources.Identifier.withDefaultNamespace(path))) {
+            return javax.imageio.ImageIO.read(in);
+        } catch (Exception e) {
+            LOGGER.warn("[Butcher] could not read the game's {}", path, e);
+            return null;
+        }
+    }
+
     /**
      * Whether one incoming chat line should reach the chat box.
      *
@@ -1430,17 +1486,6 @@ public class ButcherClient implements ClientModInitializer {
      * reveal - it lists the whole haul before the animation has drawn anything, so leaving
      * it in chat is handing over the answer.
      */
-    /** One of the game's own textures as an image, through the resource manager; null if it cannot be read. */
-    public static java.awt.image.BufferedImage readGameTexture(String path) {
-        try (java.io.InputStream in = Minecraft.getInstance().getResourceManager()
-                .open(net.minecraft.resources.Identifier.withDefaultNamespace(path))) {
-            return javax.imageio.ImageIO.read(in);
-        } catch (Exception e) {
-            LOGGER.warn("[Butcher] could not read the game's {}", path, e);
-            return null;
-        }
-    }
-
     private static boolean allowChatLine(Component message, boolean player, boolean overlay) {
         // Our own lines (the chat summary, test notes) are never evidence of anything: not recorded, not detected.
         if (message.getString().replaceAll("§.", "").startsWith("[Butcher]")) return true;
@@ -1471,6 +1516,7 @@ public class ButcherClient implements ClientModInitializer {
             com.butcher.detect.GhostDrops.Drop ghost = com.butcher.detect.GhostDrops.of(message.getString());
             if (ghost != null) {
                 decisions.note("§7Ghost: " + ghost.title + " - \"" + message.getString() + "\"");
+                ButcherStats.get().onSourceDrop("ghost", ghost.title);
                 com.butcher.render.GhostPopup.show(ghost);
             }
         }
@@ -1494,14 +1540,6 @@ public class ButcherClient implements ClientModInitializer {
         return isAnimationPlaying() || shouldHidePreKill() || profitShowing();
     }
 
-    /**
-     * A Vanguard corpse has been read.
-     *
-     * The Thaw does not exist yet, so for now this records the haul and prints it. That
-     * printing is deliberate and temporary: with the loot message hidden, a corpse would
-     * otherwise be completely silent, and there would be no way to tell a working parser
-     * from a broken one in normal play. It comes out when the cutscene goes in.
-     */
     /** The Shattered Locket's item ID on the auction house - it is still called a pendant there. */
     public static final String LOCKET_ID = "SHATTERED_PENDANT";
 
@@ -1518,6 +1556,7 @@ public class ButcherClient implements ClientModInitializer {
         }
     }
 
+    /** A Vanguard corpse has been read: count it, record it, and play the Thaw (or queue it, or just announce it). */
     private static void onCorpseHaul(CorpseHaul haul) {
         int commons = 0, uncommons = 0, legendaries = 0, specials = 0;
         for (CorpseHaul.Drop drop : haul.drops()) {
@@ -1561,7 +1600,7 @@ public class ButcherClient implements ClientModInitializer {
         }
 
         Minecraft client = Minecraft.getInstance();
-        if (config == null || !config.vanguardAnimation) {
+        if (config == null || (!config.vanguardAnimation && !testingCorpse)) {
             announceHaul(haul);
             return;
         }
@@ -1636,15 +1675,6 @@ public class ButcherClient implements ClientModInitializer {
     }
 
     /**
-     * A corpse that ends a particular way: commons, then one drop of {@code tier} to finish.
-     *
-     * The finishing drop is picked at random from everything in that tier, evenly rather than
-     * by weight - the point is to see each item the ending can show off, and weighted the
-     * Shattered Locket would turn up half as often as the others.
-     *
-     * @param tier the ending to show; COMMON for an all-commons corpse
-     */
-    /**
      * /butcher test diana: the cutscene alone. The drop is drawn as its real SkyBlock item (see
      * DianaItems), so a test looks exactly as the real thing will.
      */
@@ -1660,6 +1690,23 @@ public class ButcherClient implements ClientModInitializer {
     /** As above, but ending on {@code forced} rather than a random item of the tier. */
     private static int testThaw(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> ctx,
                                 VanguardLoot.Tier tier, String forced) {
+        CorpseHaul haul = endingCorpse(tier, forced);
+        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7test corpse: §f" + haul.describe()));
+        injectTest(haul);
+        return 1;
+    }
+
+    /**
+     * A corpse that ends a particular way: commons, then one drop of {@code tier} to finish.
+     *
+     * The finishing drop is picked at random from everything in that tier, evenly rather than
+     * by weight - the point is to see each item the ending can show off, and weighted the
+     * Shattered Locket would turn up half as often as the others.
+     *
+     * @param tier the ending to show; COMMON for an all-commons corpse
+     * @param forced the finishing drop, or null for a random one of the tier
+     */
+    private static CorpseHaul endingCorpse(VanguardLoot.Tier tier, String forced) {
         String best = forced;
         if (best == null && tier != VanguardLoot.Tier.COMMON) {
             java.util.List<VanguardLoot.Entry> pool = new java.util.ArrayList<>();
@@ -1675,10 +1722,7 @@ public class ButcherClient implements ClientModInitializer {
             drops.add(new CorpseHaul.Drop(e, i == 0 ? 4 : (i == 1 ? 16 : 1)));
         }
         if (best != null) drops.add(new CorpseHaul.Drop(VanguardLoot.find(best), 1));
-        CorpseHaul haul = new CorpseHaul(drops);
-        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7test corpse: §f" + haul.describe()));
-        injectTest(haul);
-        return 1;
+        return new CorpseHaul(drops);
     }
 
     /**
@@ -1765,9 +1809,6 @@ public class ButcherClient implements ClientModInitializer {
         com.butcher.render.CutsceneHud.show(screen);
     }
 
-    /** True while the hotbar/chat/held-item should be hidden: a tracked Scatha is nearly dead, or its
-     *  drop-detection window is still open, and the real cutscene (which covers the whole screen itself)
-     *  hasn't started yet. Public so {@link com.butcher.mixin.ItemInHandRendererMixin} can read it. */
     /**
      * Forces the pre-kill hide on until this time, for {@code /butcher test scatha hide}.
      *
@@ -1793,6 +1834,9 @@ public class ButcherClient implements ClientModInitializer {
         return c.seraphAnimation && (seraphActive() || seraphWatcher.armed());
     }
 
+    /** True while the hotbar/chat/held-item should be hidden: a tracked creature is nearly dead, or the Scatha's
+     *  drop-detection window is still open, and the real cutscene hasn't started yet. Public so
+     *  {@link com.butcher.mixin.ItemInHandRendererMixin} can read it. */
     public static boolean shouldHidePreKill() {
         if (isAnimationPlaying()) return false;
         // Diana: a creature that may be ours is nearly dead (DianaWatcher.armed, SkyMaxx's way).
@@ -1802,8 +1846,8 @@ public class ButcherClient implements ClientModInitializer {
         if (config.seraphAnimation && seraphWatcher.armed()) return true;
         // Eruption: a lava creature of yours is nearly dead.
         if (config.lavaAnimation && lavaWatcher.armed()) return true;
-        if (config.animationMode == AnimationMode.NONE) return false;
         if (System.currentTimeMillis() < forceHideUntil) return true;
+        if (config.animationMode == AnimationMode.NONE) return false;
         int threshold = config.hideBelowHp > 0 ? config.hideBelowHp : DEFAULT_HIDE_HP;
         return wormTracker.lowHealthScathaNearby(threshold) || wormTracker.killedRecently(HotbarDropWatcher.KILL_WINDOW_MS);
     }
@@ -1835,9 +1879,17 @@ public class ButcherClient implements ClientModInitializer {
         }
         // A cutscene opened by the kill is already on screen waiting to be told what
         // fell - hand it the answer rather than starting a second one over the top.
+        // Never a test's: a conjured drop must not become the real kill's outcome.
         if (awaitingDrop()) {
+            if (test) return;
             ScopeMinigameScreen waiting = currentScope;
             client.execute(() -> waiting.resolve(result));
+            return;
+        }
+        // A test plays whatever the menu says, even with the cutscene switched off.
+        if (test) {
+            if (config.animationMode == AnimationMode.GUILLOTINE) animationManager.start(result);
+            else openScope(client, result, true, true);
             return;
         }
         switch (config.animationMode) {

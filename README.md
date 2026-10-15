@@ -1,115 +1,116 @@
 # Butcher
 
-A Fabric client mod for Minecraft 26.2 (Hypixel Skyblock, Crystal Hollows).
-Whenever the mod decides a Scatha has given up its loot, it plays a full-screen
-cutscene of the worm on a butcher's block.
+A Fabric client mod for **Minecraft 26.2** on Hypixel SkyBlock. When a rare drop is on its
+way, Butcher keeps it hidden and plays a cutscene for it instead. The drop is revealed at
+the end, and the cutscene tells you nothing about it until then.
 
-- **Pet drop** &rarr; the cleaver takes every body part off, and the head - which
-  *is* the pet - lifts away and turns into the real item.
-- **Anything else** &rarr; the cleaver stops short, or the Scatha ducks the last
-  swing entirely and bolts, shaking its drop loose as it goes.
+You keep control the whole time: cutscenes play over the game, so you can still move, look
+round and fight.
 
-The run tightens as it goes: each cut is slower than the last, the camera steps
-closer, the vignette closes in and the shake grows. How many cuts a run gets is
-the drop, and nothing on screen counts them - so a long run is never a promise.
+## What plays
 
-The worm and the cleaver are real 3D meshes projected into the GUI layer
-(`gui/ScopeMinigameScreen`); every texture and every sound is generated at
-runtime. The cutscene covers chat while it plays, and messages that arrive
-mid-animation are dropped rather than queued.
+| Where | Animation | Plays on |
+| --- | --- | --- |
+| Crystal Hollows | **The Cleaver** | every Scatha kill - a pet, gemstones or Dwarven O's |
+| Glacite Mineshafts | **The Thaw** | every Vanguard corpse you open, then its profit or loss |
+| Diana's Mythological Ritual | **The Chopping Block** | Sphinx, Minos Inquisitor, Manticore and King Minos kills; a Minos Relic; a Mythological Dye |
+| Inferno Demonlord IV | **Hellion** | every kill of your own boss |
+| Voidgloom Seraph IV | **The Seraph's Glyph** | every kill of your own boss |
+| Crimson Isle lava fishing | **Eruption** | Lord Jawbus, Thunder, Ragnarok and Fiery Scuttler kills; Plhlegblast only for the Carmine Dye |
+| Fishing Festival | **Fin** | a short pop-up for a Megalodon pet or a Great White Shark Tooth |
+| Dwarven Mines | **Wisp** | a short pop-up when a Ghost drops Sorrow or Plasma |
 
-An older guillotine style (`anim/ButcherHudRenderer`) still exists in the code
-but is no longer offered in the menu.
+The cutscenes only mention a drop once it's real. Nothing before the reveal depends on what
+dropped, so a long build-up is never a promise. The big drops get their own endings, a
+price counted up under them, and the odds.
 
-## Requirements
-
-- JDK 21 is fine to *launch* Gradle with. Minecraft 26.2 targets Java 25, and
-  `build.gradle` sets up a Gradle toolchain that auto-downloads a JDK 25 the
-  first time you build — it does not touch your existing JDK.
-- Minecraft 26.2 with Fabric Loader 0.19.3+ and a matching Fabric API jar in
-  your actual Minecraft instance.
-
-## Building
-
-The Gradle wrapper is included, so Gradle itself does not need to be installed.
-From the project folder:
-
-```
-.\gradlew.bat build
-```
-
-The first run downloads Gradle (~130MB), then Minecraft 26.2 + Fabric Loader +
-Fabric API, so it takes a few minutes. The jar lands in
-`build/libs/butcher-<version>.jar` (the `-sources.jar` beside it is not
-needed).
-
-**Versioning:** `mod_version` in `gradle.properties` is `x.y.z-beta` and the build
-bumps the patch after every *successful* build, so you never edit it by hand. Raise
-the major or minor by hand when you want to mark a release.
+While a cutscene plays, Butcher hides what would spoil it: the HUD (except, if you like,
+your hotbar and health), chat, the game's own drop sounds, and a slayer boss's loot on the
+floor. Chat that arrives in the meantime is held and put back afterwards, not lost.
 
 ## Installing
 
-1. Install Fabric Loader for Minecraft 26.2 (<https://fabricmc.net/use/installer/>).
-2. Put the Fabric API jar for 26.2 in `.minecraft/mods`.
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) 0.19.3 or newer for Minecraft 26.2.
+2. Put [Fabric API](https://modrinth.com/mod/fabric-api) for 26.2 in `.minecraft/mods`.
 3. Put `butcher-<version>.jar` in the same folder.
-4. Launch the Fabric profile.
 
-## Commands
+Needs Java 25, which the Minecraft 26.2 launcher already ships with.
 
-| command | does |
+## Using it
+
+- **`/butcher`** opens the settings. Each animation has its own group: switch it on or off,
+  choose which creatures play it, set the pre-kill hide, the size, the volume and how busts
+  play. Every group has a **Try it** row that plays any outcome right now, without counting
+  it in your stats. (Click to pick an outcome, right-click to go back.)
+- **Hold Backspace** to skip a cutscene: a win jumps to its showcase, a bust ends. You can
+  rebind it in Controls, under Butcher.
+- The **Stats** tab keeps your dry streaks and drops for every source. Only real kills count.
+
+| Command | Does |
 | --- | --- |
-| `/butcher` | opens the settings menu |
-| `/butcher reload` | re-reads `config/butcher.json` and redraws every generated texture |
-| `/butcher log` | the decision log: every kill accepted or refused, and why |
-| `/butcher skins` | whether the real Scatha skin has been captured yet |
-| `/butcher skins forget` | drops the captured skins so they are captured again |
-| `/butcher test` | lists the two test groups; each level on its own lists what is under it, clickable |
-| `/butcher test scatha random` | plays a run with a drop rolled from the real table |
-| `/butcher test scatha pet rare`<br>`… epic / legendary` | plays the pet cutscene now |
-| `/butcher test scatha gemstone` | plays the gemstone cutscene now |
-| `/butcher test scatha block` | plays the blocked cutscene now |
-| `/butcher test scatha hide` | runs the pre-kill HUD hide for four seconds |
-| `/butcher test scatha firework` | fires the pet-drop firework on its own |
-| `/butcher test vanguard random` | rolls a Vanguard corpse against the real table and plays the Thaw |
-| `/butcher test vanguard crash`<br>`… reveal / explode / locket / dye` | plays a particular ending of the Thaw |
-| `/butcher debug` | what the cleaver's last real draw asked for |
-| `/butcher debug solid` | draws model faces as flat colour, to separate geometry from texture |
+| `/butcher` | opens the settings |
+| `/butcher reload` | re-reads `config/butcher.json` and redraws the generated art |
+| `/butcher log` | the last 40 detection decisions: every kill accepted or refused, and why |
+| `/butcher skins` | whether the Scatha's real skin has been captured yet |
+| `/butcher skins forget` | forgets the captured Scatha skins so they are captured again |
+| `/butcher records` | how many drop records are on disk (when Drop records is on) |
 
-The test commands work even when the cutscene is switched off in the menu —
-the toggle only gates real drop detection.
+If a cutscene plays when it shouldn't, or doesn't play when it should, `/butcher log` says
+why. That output is the most useful thing to include in a bug report.
 
-## How a drop is detected
+## What it sends and writes
 
-**There is no chat message for a Scatha kill or its drop**, so detection is
-entirely observational and lives in `detect/`:
+**Network** (all optional except the skins, and only item IDs are sent - nothing about you):
 
-- `ScathaWormTracker` watches nearby armour-stand nametags for `❤` + `Scatha`.
-  A nametag that vanishes is *not* automatically a kill — it refuses vanishes
-  that came with a teleport, a bulk chunk unload, an unsettled world, too few
-  tracked ticks or too much distance.
-- `HotbarDropWatcher` diffs inventory NBT every tick and caches anything new,
-  because Hypixel usually hands over the loot *before* the kill is noticed.
-- Gemstones can only be inferred: with a gemstone sack they never enter the
-  inventory at all, so the signal is the claim window closing empty.
+- `api.hypixel.net` - bazaar prices, and `sky.coflnet.com` - lowest BIN. Both are used for
+  the prices under drops and the Vanguard profit window. Turn **Live prices** off (General
+  tab) and neither is contacted.
+- `textures.minecraft.net` - the skins of a few SkyBlock heads, cached in
+  `config/butcher/skin_cache/`.
 
-Because none of this can be summoned on demand, both halves narrate every
-decision into `DecisionLog` — read it with `/butcher log`.
+**Files**, all under `.minecraft/config/`:
 
-## Art
+- `butcher.json` - your settings. If it ever can't be read it is moved to
+  `butcher.json.broken` and the defaults are used.
+- `butcher/` - your stats, the captured Scatha skin, the skin cache, and the generated art
+  in `butcher/textures/` (see below).
+- `butcher-drops.jsonl` - only when **Drop records** is on (it is off by default). It keeps
+  each real kill and drop with the chat around it, for bug reports. It stays on your computer.
 
-Most textures are drawn at runtime by `render/art/` rather than shipped as
-PNGs, so tweaking them is a Java edit plus `/butcher reload`. The worm's own
-texture is not ours at all: a Crystal Hollows worm is a chain of armour stands
-wearing player heads, and `render/ScathaSkins` captures the real skin off a
-live one the first time you meet a Scatha.
+## Changing the art
 
-Any generated texture is also written to `config/butcher/textures/` so it
-can be edited, and your edits are never overwritten - the mod keeps a hash of
-what it wrote and leaves anything that no longer matches alone. Drop a `.gltf`
-or `.glb` box model in `config/butcher/models/` to replace the worm's mesh.
+Most textures are drawn by the mod when they're first needed, and written to
+`config/butcher/textures/` so you can edit them. An edited file is never overwritten; to go
+back to the built-in art, delete the PNG. Turn this off with **Write art to config**.
 
-The remaining baked PNGs are generated by the scripts in `tools/` — edit the
-script and re-run it rather than editing the PNG. The mod icon is rendered from
-the real cleaver mesh by `tools/IconGen.java`.
+The Scatha's own texture belongs to Hypixel and is taken from a live worm the first time you
+meet one. To supply it yourself, put `head.png` and/or `body.png` in `config/butcher/skins/`.
+A `.gltf` or `.glb` box model in `config/butcher/models/` replaces the worm's mesh.
 
-See `../CLAUDE.md` for the technical notes.
+## Building
+
+```
+.\gradlew.bat build        (Windows)
+./gradlew build            (Linux / macOS)
+```
+
+The jar lands in `build/libs/butcher-<version>.jar`. Gradle downloads a JDK 25 toolchain
+the first time if it can't find one. `mod_version` in `gradle.properties` is
+`x.y.z-alpha|beta` and its patch number goes up by one after every successful build.
+
+`/butcher test …` and `/butcher debug` are developer commands. They only exist for the
+accounts listed in `Dev.java` (and in a development run). For everyone else they don't
+appear at all.
+
+The technical notes are in `CLAUDE.md`.
+
+## Credits
+
+- The HUD fade, the gameplay window and the HUD-hiding approach are ported from **SkyMaxx**
+  (MIT, see `LICENSE`).
+- Scatha detection follows **Scatha-Pro**'s approach.
+- Item and creature head skins and item IDs come from the **NEU item repository**; the
+  Vanguard loot weights are cross-checked against **SkyOcean** and the SkyBlock wiki.
+- Prices from Hypixel's public API and **Coflnet**.
+
+Butcher is not affiliated with Hypixel or Mojang.

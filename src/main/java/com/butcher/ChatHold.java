@@ -48,6 +48,11 @@ public final class ChatHold {
         return true;
     }
 
+    /** Forgets every held line without putting it back - the player has left the server. */
+    public static void clear() {
+        held.clear();
+    }
+
     public static boolean isEmpty() {
         return held.isEmpty();
     }

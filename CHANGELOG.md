@@ -3,6 +3,42 @@
 One entry per jar that was actually handed out for testing. The version number bumps on
 every build, so the gaps between entries are builds nobody ran - not missing notes.
 
+## Unreleased - the publishing pass
+
+### Changed
+- **`/butcher test` and `/butcher debug` are developer-only.** They exist only for the accounts in `Dev.java` (and
+  in a development run). For everyone else they are gone, tab completion included. Players use the menu instead.
+- **Every animation has "Try it" in the menu**, the Scatha and the Thaw included (they had none). Outcomes show
+  their real names ("High Class Archfiend Dice", not "High class dice"). Right-click steps back through outcomes,
+  busts and the gameplay window's corner.
+- **Drop records are off by default** for new installs. They keep chat lines (other players' too) in a file that is
+  never pruned, which is for bug reports, not for everyone. An existing setting is left as it is.
+- The slayers' banner setting is called "Drop banner": it shows the drop's own tier (RARE DROP!, VERY RARE DROP!...),
+  not always "PRAY TO RNGESUS DROP!".
+- Menu: group names are consistent, the Seraph's hide slider has its explanation, the panel fits narrow windows,
+  and the Stats tab has Wisp's Sorrow and Plasma.
+
+### Fixed
+- **Switching the Scatha cutscene off silenced every other animation.** The synth only ever started inside the
+  Scatha's tick.
+- A skin download that failed (offline, or a slow textures.minecraft.net) was retried every tick, with a new
+  thread and a log warning each time. It waits two minutes now.
+- The Vanguard profit window no longer opens over a chest or your inventory (that closed it on the client only). It
+  waits until no screen is open, and gives up after 20 seconds.
+- Stats and settings are written atomically, so a crash mid-save can't leave a half-written file. An unreadable
+  `butcher.json` or `stats.json` is kept as `.broken` instead of being overwritten with defaults.
+- Hand-edited settings out of range (a negative volume, a misspelt mode) are put back in range instead of crashing.
+- On a brand-new install, setting the Chopping Block to 100% in the first session moved it to 130% on the next launch.
+- Testing the Scatha with its cutscene switched off played nothing; testing it during a real kill could hand the
+  test's drop to the real cutscene. Testing the Thaw with it switched off played nothing either.
+- The pre-kill hide test ran only with the Scatha cutscene on.
+- Held chat, and cutscenes waiting their turn, are dropped when you leave the server instead of following you
+  into the next one.
+- The finished Paragon Shard head capture no longer prints "thanks!" to players opening its bazaar page.
+- fabric.mod.json linked to Scatha-Pro's repository and described only the Scatha. The README described only two
+  of the eight animations and still said chat is dropped during a cutscene.
+- `LICENSE` now carries SkyMaxx's MIT notice for the code ported from it.
+
 ## 0.3.2-alpha — 2026-10-12
 
 ### Fixed

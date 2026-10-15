@@ -160,6 +160,12 @@ public final class ButcherStats {
         save();
     }
 
+    /** A drop from a source with no kill to count (the Ghosts): only the drop is tallied. */
+    public void onSourceDrop(String key, String drop) {
+        source(key).drops.merge(drop, 1, Integer::sum);
+        save();
+    }
+
     public int sourceDropCount(String key, String drop) {
         return source(key).drops.getOrDefault(drop, 0);
     }
@@ -340,15 +346,19 @@ public final class ButcherStats {
                 if (read != null) return read;
             }
         } catch (Exception e) {
-            ButcherClient.LOGGER.warn("[Butcher] could not read stats.json", e);
+            // Moved aside, never overwritten: the first save would otherwise wipe every streak for good.
+            ButcherClient.LOGGER.warn("[Butcher] could not read stats.json; starting fresh and keeping it as stats.json.broken", e);
+            try {
+                Files.move(PATH, PATH.resolveSibling("stats.json.broken"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (Exception ignored) {
+            }
         }
         return new ButcherStats();
     }
 
     public void save() {
         try {
-            Files.createDirectories(PATH.getParent());
-            Files.writeString(PATH, GSON.toJson(this));
+            PatternConfig.writeAtomically(PATH, GSON.toJson(this));
         } catch (Exception e) {
             // Never worth interrupting a cutscene over. The numbers are a nicety.
             ButcherClient.LOGGER.warn("[Butcher] could not write stats.json", e);
