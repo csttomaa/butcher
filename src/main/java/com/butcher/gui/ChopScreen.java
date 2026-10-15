@@ -106,8 +106,15 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
      * built again with the same seed and creature, and the screen cannot change until the split.
      * Counted here, not at the open, so the count line includes this one.
      */
-    public void resolve(Verdict v) {
-        if (!pending) return;
+    public boolean resolve(Verdict v) {
+        if (!pending) return v == verdict;
+        // Past the deadline (no frame was drawn to notice it - the HUD hidden with F1, say): it is the bust it
+        // already is, and a win that came now gets a screen of its own from the caller.
+        boolean late = System.currentTimeMillis() - openedAt >= RESOLVE_BY;
+        if (late && v != Verdict.BUST) {
+            resolve(Verdict.BUST);
+            return false;
+        }
         pending = false;
         if (!test) {
             com.butcher.config.ButcherStats.get().onDiana(creature.name(),
@@ -115,6 +122,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
         }
         settle(v);
         shortBust();
+        return true;
     }
 
     /** Everything that depends on what dropped. */
@@ -767,6 +775,8 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     @Override
     public void interrupt() {
         if (!active) return;
+        // A kill still waiting for its drop is handed back: its drop line (or its absence) is counted for it.
+        if (pending && !test) ButcherClient.dianaKillUnshown(creature, openedAt);
         ButcherAudio.silence();
         ButcherAudio.onSkip();
         close();

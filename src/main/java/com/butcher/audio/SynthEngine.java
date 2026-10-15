@@ -245,10 +245,16 @@ public final class SynthEngine {
      * stay within {@link Voice#HEADROOM}.
      */
     public static float softClip(float v) {
-        if (v > 1f) return 1f;
-        if (v < -1f) return -1f;
-        return v - (v * v * v) / 3f * 0.5f;
+        // Untouched up to half scale, then bent smoothly towards 1 - continuous and with no corner anywhere. The old
+        // cubic gave 0.83 just under 1.0 and jumped to 1.0 just over it: every loud moment with the volume sliders
+        // turned up crossed that step and clicked.
+        float a = Math.abs(v);
+        if (a <= KNEE) return v;
+        float y = KNEE + (1f - KNEE) * (float) Math.tanh((a - KNEE) / (1f - KNEE));
+        return v < 0f ? -y : y;
     }
+
+    private static final float KNEE = 0.5f;
 
     private static int pcm(float v) {
         int s = Math.round(v * 32767f);

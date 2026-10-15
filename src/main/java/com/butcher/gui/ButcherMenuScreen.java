@@ -305,9 +305,23 @@ public class ButcherMenuScreen extends Screen {
             return rows;
         }
 
+        // One group after another, each building only itself: when they handed on to each other, a
+        // closed group's early return skipped the next one (Wisp vanished whenever Fin was shut).
+        scathaRows(rows, font, cfg);
+        vanguardRows(rows, font, cfg);
+        dianaRows(rows, font, cfg);
+        fishingRows(rows, font, cfg);
+        ghostRows(rows, font, cfg);
+        lavaRows(rows, font, cfg);
+        slayerRows(rows, font, cfg);
+        return rows;
+    }
+
+    /** The Scatha's group: the cleaver cutscene. */
+    private void scathaRows(List<Row> rows, Font font, PatternConfig cfg) {
         boolean on = cfg.animationMode != AnimationMode.NONE;
         rows.add(new HeaderRow("gambling", "Scatha - The Cleaver", on, isOpen("gambling")));
-        if (!isOpen("gambling")) return vanguardRows(rows, font, cfg);
+        if (!isOpen("gambling")) return;
 
         boolean cleaver = cfg.animationMode != AnimationMode.GUILLOTINE;
 
@@ -372,8 +386,6 @@ public class ButcherMenuScreen extends Screen {
         }
         tryRows(rows, "scatha", List.of("RANDOM", "GEMSTONE", "DWARVEN_OS", "PET_RARE", "PET_EPIC", "PET_LEGENDARY"),
                 ButcherMenuScreen::scathaOutcome);
-
-        return vanguardRows(rows, font, cfg);
     }
 
     /**
@@ -390,9 +402,9 @@ public class ButcherMenuScreen extends Screen {
      * sting - is shared with the Scatha's and set there, so this only holds what is
      * genuinely the Thaw's own.
      */
-    private List<Row> vanguardRows(List<Row> rows, Font font, PatternConfig cfg) {
+    private void vanguardRows(List<Row> rows, Font font, PatternConfig cfg) {
         rows.add(new HeaderRow("vanguard", "Vanguard Corpses - The Thaw", cfg.vanguardAnimation, isOpen("vanguard")));
-        if (!isOpen("vanguard")) return dianaRows(rows, font, cfg);
+        if (!isOpen("vanguard")) return;
         rows.add(new SectionRow("The cutscene"));
         rows.add(new ToggleRow("Vanguard Thaw", cfg.vanguardAnimation, () -> {
             cfg.vanguardAnimation = !cfg.vanguardAnimation;
@@ -433,17 +445,16 @@ public class ButcherMenuScreen extends Screen {
         rows.add(new NoticeRow("Every drop priced, minus the Skeleton Key. Needs Live prices (General tab).", font, rowsWidth()));
         tryRows(rows, "vanguard", List.of("RANDOM", "COMMON", "UNCOMMON", "LEGENDARY", "LOCKET", "DYE"),
                 ButcherMenuScreen::vanguardOutcome);
-        return dianaRows(rows, font, cfg);
+
     }
 
     /**
      * Diana's cutscene, "The Chopping Block": the switch, which creatures play it, how its endings
      * look and sound. Detection waits on her real chat messages; the test command plays it now.
      */
-    private List<Row> dianaRows(List<Row> rows, Font font, PatternConfig cfg) {
+    private void dianaRows(List<Row> rows, Font font, PatternConfig cfg) {
         rows.add(new HeaderRow("diana", "Diana - The Chopping Block", cfg.dianaAnimation, isOpen("diana")));
-        // Each group is its own: a closed one must not hide the ones after it (it hid Fin and the slayers).
-        if (!isOpen("diana")) return fishingRows(rows, font, cfg);
+        if (!isOpen("diana")) return;
         rows.add(new SectionRow("The cutscene"));
         rows.add(new ToggleRow("The Chopping Block", cfg.dianaAnimation, () -> {
             cfg.dianaAnimation = !cfg.dianaAnimation;
@@ -477,16 +488,15 @@ public class ButcherMenuScreen extends Screen {
         bustsRow(rows, font, cfg.dianaBusts, v -> cfg.dianaBusts = v, cfg);
         tryRows(rows, "diana", names(com.butcher.anim.ChopTimeline.Verdict.values()),
                 n -> com.butcher.render.DianaItems.name(com.butcher.anim.ChopTimeline.Verdict.valueOf(n)));
-        return fishingRows(rows, font, cfg);
+
     }
 
     /** The slayers: one group, each boss its own sub-group under it. */
-    private List<Row> slayerRows(List<Row> rows, Font font, PatternConfig cfg) {
+    private void slayerRows(List<Row> rows, Font font, PatternConfig cfg) {
         rows.add(new HeaderRow("slayers", "Slayers", null, isOpen("slayers")));
-        if (!isOpen("slayers")) return rows;
+        if (!isOpen("slayers")) return;
         blazeRows(rows, font, cfg);
         seraphRows(rows, font, cfg);
-        return rows;
     }
 
     /** The blaze slayer: Hellion on every kill of your own tier IV Inferno Demonlord. */
@@ -534,9 +544,9 @@ public class ButcherMenuScreen extends Screen {
     }
 
     /** The Fishing Festival: one short pop-up for the Great White Shark's two big drops, and its bust. */
-    private List<Row> fishingRows(List<Row> rows, Font font, PatternConfig cfg) {
+    private void fishingRows(List<Row> rows, Font font, PatternConfig cfg) {
         rows.add(new HeaderRow("fishing", "Fishing Festival - Fin", cfg.fishingAnnounce, isOpen("fishing")));
-        if (!isOpen("fishing")) return lavaRows(rows, font, cfg);
+        if (!isOpen("fishing")) return;
         rows.add(new SectionRow("The pop-up"));
         rows.add(dianaToggle("Announce a Megalodon or a Great White Shark Tooth", cfg.fishingAnnounce,
                 () -> cfg.fishingAnnounce = !cfg.fishingAnnounce, cfg));
@@ -554,13 +564,13 @@ public class ButcherMenuScreen extends Screen {
             case "MEGALODON_LEGENDARY" -> "Legendary Megalodon";
             default -> com.butcher.detect.SharkDrops.Drop.valueOf(n).title;
         });
-        return ghostRows(rows, font, cfg);
+
     }
 
-    /** The Dwarven Mines' Ghosts: Wisp, a pop-up for Sorrow and Plasma. Hands on to lava fishing. */
-    private List<Row> ghostRows(List<Row> rows, Font font, PatternConfig cfg) {
+    /** The Dwarven Mines' Ghosts: Wisp, a pop-up for Sorrow and Plasma. */
+    private void ghostRows(List<Row> rows, Font font, PatternConfig cfg) {
         rows.add(new HeaderRow("ghost", "Dwarven Mines Ghosts - Wisp", cfg.ghostAnnounce, isOpen("ghost")));
-        if (!isOpen("ghost")) return lavaRows(rows, font, cfg);
+        if (!isOpen("ghost")) return;
         rows.add(new SectionRow("The pop-up"));
         rows.add(dianaToggle("Announce Sorrow or Plasma", cfg.ghostAnnounce, () -> cfg.ghostAnnounce = !cfg.ghostAnnounce, cfg));
         rows.add(dianaToggle("Show the price", cfg.ghostPrice, () -> cfg.ghostPrice = !cfg.ghostPrice, cfg));
@@ -570,13 +580,13 @@ public class ButcherMenuScreen extends Screen {
                 v -> { cfg.ghostVolume = v; }, v -> v + "%"));
         tryRows(rows, "ghost", names(com.butcher.detect.GhostDrops.Drop.values()),
                 n -> com.butcher.detect.GhostDrops.Drop.valueOf(n).title);
-        return lavaRows(rows, font, cfg);
+
     }
 
-    /** Lava fishing: Eruption on the rare Crimson Isle creatures. Hands on to the slayers either way. */
-    private List<Row> lavaRows(List<Row> rows, Font font, PatternConfig cfg) {
+    /** Lava fishing: Eruption on the rare Crimson Isle creatures. */
+    private void lavaRows(List<Row> rows, Font font, PatternConfig cfg) {
         rows.add(new HeaderRow("lava", "Lava Fishing - Eruption", cfg.lavaAnimation, isOpen("lava")));
-        if (!isOpen("lava")) return slayerRows(rows, font, cfg);
+        if (!isOpen("lava")) return;
         rows.add(new SectionRow("The cutscene"));
         rows.add(dianaToggle("Eruption", cfg.lavaAnimation, () -> cfg.lavaAnimation = !cfg.lavaAnimation, cfg));
         rows.add(new NoticeRow("Plays on every kill of your own Lord Jawbus, Thunder, Ragnarok or Fiery Scuttler, the moment it dies - the heat it lands on is the drop. Plhlegblast only plays for the Carmine Dye.",
@@ -598,7 +608,7 @@ public class ButcherMenuScreen extends Screen {
         bustsRow(rows, font, cfg.lavaBusts, v -> cfg.lavaBusts = v, cfg);
         tryRows(rows, "lava", names(com.butcher.anim.EruptionTimeline.Drop.values()),
                 n -> com.butcher.anim.EruptionTimeline.Drop.valueOf(n).title);
-        return slayerRows(rows, font, cfg);
+
     }
 
     /** "Busts": the whole cutscene, a short one (straight to the bust's ending), or none (wins only). */

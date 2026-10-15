@@ -38,6 +38,25 @@ every build, so the gaps between entries are builds nobody ran - not missing not
 - fabric.mod.json linked to Scatha-Pro's repository and described only the Scatha. The README described only two
   of the eight animations and still said chat is dropped during a cutscene.
 - `LICENSE` now carries SkyMaxx's MIT notice for the code ported from it.
+- **The Wisp group was missing from the menu** unless the Fishing Festival group was open. Groups no longer hand
+  on to each other, so a closed group can't hide the next one again.
+- **Stats now count every kill**, not only those that got a cutscene. With "Busts: none", a creature switched off,
+  or another cutscene already playing, a bust used to leave the dry streak and the kill count untouched. Diana's
+  kills with no screen are counted as busts once their drop has had time to come.
+- **Skipping the Scatha before its drop was known opened a second cutscene** when the drop came in. The drop now
+  goes to the skipped run: counted, summarised in chat, not played.
+- **A Scatha pet skipped before its reveal was never counted** (nor summarised). It is now.
+- A drop line arriving in the last quarter-second before Hellion's, the Seraph's or Eruption's reveal was
+  swallowed: the kill played as a bust and the win never showed. It now gets a cutscene of its own; the Chopping
+  Block does the same past its deadline.
+- Lava fishing: a win from a creature you switched off could play under the previous creature's name; a known
+  kill's drop skipped the "Only play drops worth at least" floor.
+- **Sound crackled with the volume turned up.** The synth's soft clip jumped from 0.83 to 1.0 at full scale, a
+  click on every loud moment past 100%. It is a smooth curve now.
+- Hellion, the Seraph and Eruption no longer fire a backlog of sounds all at once when frames resume after the
+  window was minimised or the game hitched.
+- The Chopping Block's price line ran off the bottom on short screens (1080p at GUI scale 4, 720p at 3); its
+  showcase text now stays on screen. Hellion's pillar timers ran off the side on 4:3 screens.
 
 ## 0.3.2-alpha — 2026-10-12
 

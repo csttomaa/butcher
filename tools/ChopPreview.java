@@ -39,7 +39,7 @@ import java.util.Map;
  */
 public final class ChopPreview {
 
-    static int W = 640, H = 360, S = Integer.getInteger("scale", 3);
+    static int W = Integer.getInteger("w", 640), H = Integer.getInteger("h", 360), S = Integer.getInteger("scale", 3);
 
     static final com.butcher.render.model.Mesh HEAD = com.butcher.render.model.PlayerHeadMesh.head();
 

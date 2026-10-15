@@ -355,6 +355,28 @@ public class ScopeMinigameScreen extends Screen {
 
     public boolean isResolved() { return resolved; }
 
+    /** Whether this run's drop has gone into the stats - at the reveal, or on a skip before it. */
+    private boolean dropCounted;
+
+    private void countDrop() {
+        if (dropCounted || test || !resolved) return;
+        dropCounted = true;
+        com.butcher.config.ButcherStats.get().onDrop(
+                reachesHead && result != null ? result.rarity : null,
+                result != null && result.outcome == Outcome.BLOCKED);
+    }
+
+    /**
+     * The drop of a run that was skipped before it was known: counted and summarised, never played - the
+     * player asked for it to be over. Without this the drop opened a second cutscene, and a skipped pet
+     * was never counted.
+     */
+    public void resolveSkipped(DropResult result) {
+        resolve(result);
+        countDrop();
+        summary();
+    }
+
     public boolean isActive() { return active; }
 
     @Override protected void init() { }
@@ -444,9 +466,7 @@ public class ScopeMinigameScreen extends Screen {
                         // good the drop was, so playing it before the reveal would hand
                         // the answer over exactly the way a chat line would.
                         ButcherAudio.onReveal(reachesHead && result != null ? result.rarity : null);
-                        if (!test) com.butcher.config.ButcherStats.get().onDrop(
-                                reachesHead && result != null ? result.rarity : null,
-                                result != null && result.outcome == Outcome.BLOCKED);
+                        countDrop();
                         enter(Phase.REVEAL, now);
                         revealStart = now;
                     }
@@ -1727,17 +1747,7 @@ public class ScopeMinigameScreen extends Screen {
         com.butcher.render.GameplayView.release();
         if (!active) return;
         active = false;
-        // "Chat summary": what the Scatha gave, once the run is over.
-        if (phase == Phase.DONE && result != null) {
-            String what = switch (result.outcome) {
-                case PET -> (result.rarity == null || result.rarity.equals("unknown") ? "" :
-                        Character.toUpperCase(result.rarity.charAt(0)) + result.rarity.substring(1) + " ") + "Scatha pet"
-                        + (test ? "" : " (your " + ChopScreen.ordinal(petNth) + ", after " + String.format("%,d", petKills) + " kills)");
-                case BLOCKED -> "Dwarven O's";
-                default -> "gemstones";
-            };
-            ButcherClient.summary("Scatha: " + what + (test ? " (test)" : ""));
-        }
+        if (phase == Phase.DONE) summary();
         // A run that FINISHED is allowed to keep ringing.
         //
         // The pet sting fires on the beat the head vanishes, which is a fraction of a
@@ -1751,10 +1761,31 @@ public class ScopeMinigameScreen extends Screen {
         com.butcher.render.CutsceneHud.hide(this);
     }
 
+    /** "Chat summary": what the Scatha gave, once - at the end of the run, or when it is skipped. */
+    private boolean summarised;
+
+    private void summary() {
+        if (summarised || result == null) return;
+        summarised = true;
+        String what = switch (result.outcome) {
+            case PET -> (result.rarity == null || result.rarity.equals("unknown") ? "" :
+                    Character.toUpperCase(result.rarity.charAt(0)) + result.rarity.substring(1) + " ") + "Scatha pet"
+                    + (test ? "" : " (your " + ChopScreen.ordinal(petNth) + ", after " + String.format("%,d", petKills) + " kills)");
+            case BLOCKED -> "Dwarven O's";
+            default -> "gemstones";
+        };
+        ButcherClient.summary("Scatha: " + what + (test ? " (test)" : ""));
+    }
+
     @Override
     public void onClose() {
         com.butcher.render.CutsceneHud.hide(this);
         com.butcher.render.GameplayView.release();
+        // Skipped (or taken away) before the reveal: the drop still counts, and chat still says what it was.
+        if (active && resolved) {
+            countDrop();
+            summary();
+        }
         active = false;
         // Also here, not only in close(): this is the path taken when something else
         // takes the screen away, which is exactly when a stuck sound would be worst.

@@ -841,6 +841,19 @@ so the words clear the bottom; the Dye's `showScale` is 1.3 (at 1.45 with the 13
 - The profit window waits in `pendingProfit` until no screen is open (`showPendingProfit`, 20 s at most).
 - `HeadSkins.pixels` backs off two minutes after a failed fetch. `HeadCapture.WANTED` is empty (the Paragon Shard is
   bundled).
+- **Stats count at detection when no screen will**: `countUnplayed` (busts off, switched off, a waited bust dropped),
+  `unopenedDiana` (Diana kills with no screen; claimed by their drop line, a bust after `DIANA_DROP_WAIT_MS`;
+  `ChopScreen.interrupt` hands a pending kill back). Screens still count their own runs - never both.
+- `resolve(drop)` on Hellion/Seraph/Eruption/Chop returns false when it came too late to change the screen; the
+  listener then gives the win a screen of its own (`killKnown` / a known chop).
+- Scatha: `skippedScope` takes the drop of a run skipped before it resolved (`resolveSkipped`: counted, summarised,
+  not played); `countDrop` counts once, at the reveal or on a skip.
+- `SynthEngine.softClip` is linear to 0.5 then tanh to 1 - the old cubic stepped from 0.83 to 1.0 at full scale.
+  The cue-list screens skip cues more than `STALE_CUE_MS` late (a `cut` still applies).
+- Off-screen text: a scratch checker (a Canvas recording every text box) ran ChopScene, HellionScene and SeraphScene
+  over 640x360, 480x360, 854x360, 480x270 and 427x240. `specialText` now shifts its block up to stay on screen;
+  Hellion's pillar tag is clamped to the edges. Only Brain Food's pi ring leaves the screen, as it fades out.
+- `tools/ChopPreview` takes `-Dw` / `-Dh` (default 640 x 360), used by the other previews too.
 
 ## Hellion (the blaze slayer, Inferno Demonlord tier IV) - first version 0.2.54
 
@@ -986,8 +999,9 @@ physics: the dice tumble) - their call.
     indent). Hellion: `blazeAnimation`, `blazeHideBelowM` (the pre-kill hide - `HellionWatcher.armed()`, Diana's
     rule on our own boss, feeds `shouldHidePreKill`; default 10M of 150M), `blazeBanner`
     (`HellionScene.showBanner`), `blazePrice`, `blazeVolume` (`ButcherAudio.playHellion` applies it; the Seraph
-    has `playSeraph` and `seraph*` of its own). **Every group's builder must hand on to the next even when
-    closed** - `dianaRows` returned early and hid Fin and the slayers whenever Diana's group was shut.
+    has `playSeraph` and `seraph*` of its own). Menu groups no longer hand on to each other (2026-10-15):
+    `buildRows` calls each group's builder in turn - chained, a closed group's early return hid the next (Diana hid
+    Fin and the slayers; later Fin hid Wisp).
   - **A friend's 131 tier IV kills (0.3.1, 2026-10-06..12, records on 0.2.69)**, replayed through `HellionReplay`:
     - **Bosses that come with the quest** (22 of 131): no "SLAYER BOSS!" line and no mini-bosses, the nametag at full
       health a few blocks off in the same tick as "SLAYER QUEST STARTED!" (auto-slayer). Claimed within `INSTANT_MS`

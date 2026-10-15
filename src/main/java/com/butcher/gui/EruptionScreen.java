@@ -101,6 +101,8 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
     public boolean isActive() { return active; }
     public boolean isTest() { return test; }
     public boolean pending() { return pending; }
+    /** Whether this run is in the stats already - so a late bust report for its kill is not counted twice. */
+    public boolean counted() { return counted; }
     public Creature creature() { return creature; }
 
     /**
@@ -108,14 +110,16 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
      * {@link EruptionTimeline#REVEAL} depends on the drop (tools/EruptionTest hashes every frame and sample),
      * so this cannot show - as long as it comes before the reveal.
      */
-    public void resolve(Drop d) {
-        if (!pending) return;
+    public boolean resolve(Drop d) {
+        if (!pending) return d == null || d == drop;
         pending = false;
         long t = System.currentTimeMillis() - openedAt;
         if (t >= EruptionTimeline.REVEAL - 250 || d == null || d == drop) {
+            // Too late to change what this one shows: it plays as the bust it is. A win that came now still needs
+            // a screen of its own - the caller gives it one.
             count();
-        shortBust();
-            return;
+            shortBust();
+            return d == null || d == drop;
         }
         drop = d;
         tl = new EruptionTimeline(creature, drop, seed);
@@ -125,6 +129,7 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
         requestPrice();
         count();
         shortBust();
+        return true;
     }
 
     private void requestPrice() {
@@ -151,7 +156,7 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
         if (pending && t >= EruptionTimeline.REVEAL - 250) {
             pending = false;
             count();
-        shortBust();
+            shortBust();
         }
         sounds(t);
         textures();
@@ -262,10 +267,16 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
 
     // ================================================================== sound
 
+    /** How late a sound cue may still play. */
+    private static final long STALE_CUE_MS = 1_000;
+
     private void sounds(long t) {
         while (cueAt < cues.size() && t >= cues.get(cueAt).at) {
             EruptionSound.Cue cue = cues.get(cueAt++);
             if (cue.cut) ButcherAudio.silence();
+            // Frames stopped for a while (the window minimised, a long hitch): a cue that old would only land on top
+            // of every other one due at once.
+            if (t - cue.at > STALE_CUE_MS) continue;
             ButcherAudio.playEruption(cue.voices);
         }
         lastT = t;

@@ -93,20 +93,24 @@ public class HellionScreen extends Screen implements ChopScene.Canvas, Cutscene 
     public boolean isActive() { return active; }
     public boolean isTest() { return test; }
     public boolean pending() { return pending; }
+    /** Whether this run is in the stats already - so a late bust report for its kill is not counted twice. */
+    public boolean counted() { return counted; }
 
     /**
      * The kill's drop, now known: the timeline is rebuilt with the same seed. Nothing drawn or heard before
      * {@link HellionTimeline#REVEAL} depends on the drop (tools/HellionTest hashes every frame and sample),
      * so this cannot show - as long as it comes before the reveal, which the drop line does by ~3.5 s.
      */
-    public void resolve(Drop d) {
-        if (!pending) return;
+    public boolean resolve(Drop d) {
+        if (!pending) return d == null || d == drop;
         pending = false;
         long t = System.currentTimeMillis() - openedAt;
         if (t >= HellionTimeline.REVEAL - 250 || d == null || d == drop) {
+            // Too late to change what this one shows: it plays as the bust it is. A win that came now still needs
+            // a screen of its own - the caller gives it one.
             count();
-        shortBust();
-            return;
+            shortBust();
+            return d == null || d == drop;
         }
         drop = d;
         tl = new HellionTimeline(drop, seed);
@@ -118,6 +122,7 @@ public class HellionScreen extends Screen implements ChopScene.Canvas, Cutscene 
         if (!test && this.drop.win()) tier = com.butcher.detect.HellionDrops.freshTier();
         count();
         shortBust();
+        return true;
     }
 
     private void requestPrice() {
@@ -144,7 +149,7 @@ public class HellionScreen extends Screen implements ChopScene.Canvas, Cutscene 
         if (pending && t >= HellionTimeline.REVEAL - 250) {
             pending = false;
             count();
-        shortBust();
+            shortBust();
         }
         sounds(t);
         // The game's own blaze texture, adopted every frame (free once there; /butcher reload forgets it).
@@ -187,11 +192,17 @@ public class HellionScreen extends Screen implements ChopScene.Canvas, Cutscene 
 
     // ================================================================== sound
 
+    /** How late a sound cue may still play. */
+    private static final long STALE_CUE_MS = 1_000;
+
     private void sounds(long t) {
         // Hellion's own soundtrack, worked out once (HellionSound) - play whatever has come due.
         while (cueAt < cues.size() && t >= cues.get(cueAt).at) {
             HellionSound.Cue cue = cues.get(cueAt++);
             if (cue.cut) ButcherAudio.silence();
+            // Frames stopped for a while (the window minimised, a long hitch): a cue that old would only land on top
+            // of every other one due at once.
+            if (t - cue.at > STALE_CUE_MS) continue;
             ButcherAudio.playHellion(cue.voices);
         }
         lastT = t;

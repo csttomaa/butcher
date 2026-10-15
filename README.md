@@ -17,7 +17,7 @@ round and fight.
 | Inferno Demonlord IV | **Hellion** | every kill of your own boss |
 | Voidgloom Seraph IV | **The Seraph's Glyph** | every kill of your own boss |
 | Crimson Isle lava fishing | **Eruption** | Lord Jawbus, Thunder, Ragnarok and Fiery Scuttler kills; Plhlegblast only for the Carmine Dye |
-| Fishing Festival | **Fin** | a short pop-up for a Megalodon pet or a Great White Shark Tooth |
+| Fishing Festival | **Fin** | a short pop-up for a Megalodon pet or a Great White Shark Tooth (and a quick "got away" when your shark drops neither) |
 | Dwarven Mines | **Wisp** | a short pop-up when a Ghost drops Sorrow or Plasma |
 
 The cutscenes only mention a drop once it's real. Nothing before the reveal depends on what

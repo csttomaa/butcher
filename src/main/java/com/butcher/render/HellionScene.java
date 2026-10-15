@@ -1029,12 +1029,15 @@ public final class HellionScene {
                 String hit = hits + " Hits";
                 float cw = 6f * ts;
                 float wTot = (secs.length() + 1 + hit.length()) * cw;
-                c.fill(ChopScene.P[0] - wTot / 2f - 2f, ChopScene.P[1] - 6f * ts, wTot + 4f, 11f * ts,
+                // Kept on the screen: on 4:3 the pillar stands near the edge and its tag ran a few pixels off.
+                float edge = wTot / 2f + 6f * ts;
+                float nx = Math.max(edge, Math.min(w - edge, ChopScene.P[0]));
+                c.fill(nx - wTot / 2f - 2f, ChopScene.P[1] - 6f * ts, wTot + 4f, 11f * ts,
                         ChopScene.alpha(0.45f * alpha) | 0x000000);
-                c.text(secs, ChopScene.P[0] - wTot / 2f + secs.length() * cw / 2f, ChopScene.P[1], ts,
+                c.text(secs, nx - wTot / 2f + secs.length() * cw / 2f, ChopScene.P[1], ts,
                         ChopScene.alpha(alpha) | (last ? 0xFF5555 : 0xFFFF55));
                 // White, red only for a moment as a hit comes off - it used to flip with every clang (the review, H4).
-                c.text(hit, ChopScene.P[0] + wTot / 2f - hit.length() * cw / 2f, ChopScene.P[1], ts,
+                c.text(hit, nx + wTot / 2f - hit.length() * cw / 2f, ChopScene.P[1], ts,
                         ChopScene.alpha(alpha) | (clang > 0.3f && steps % 2 == 0 && steps > 0 ? 0xFF5555 : 0xFFFFFF));
             }
         }

@@ -800,9 +800,13 @@ public final class ChopScene {
         float scale = textScale();
         int letters = tl.letters(t, Integer.MAX_VALUE);
         String banner = tl.banner();
+        // Room for the banner between the drop and its name: everything below moves down.
+        if (banner != null) top += 22f * scale;
+        // The whole block - name, lines, price and where the price is from - kept on the screen: on a short GUI
+        // (1080p at GUI scale 4, 720p at 3) the Relic's price source fell off the bottom.
+        float bottom = top + (16f + tl.lines().length * 11f + 8f + (tl.price() >= 0 ? 13f + 6f : 0f)) * scale;
+        if (bottom > screenH - 3f) top -= bottom - (screenH - 3f);
         if (banner != null) {
-            // Room for the banner between the drop and its name: everything below moves down.
-            top += 22f * scale;
             float[] stamp = tl.bannerStamp(t);
             if (stamp != null) {
                 float jolt = (stamp[0] - 1f) * 3f;

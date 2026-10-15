@@ -114,8 +114,14 @@ public class ButcherClient implements ClientModInitializer {
     public static void openChop(com.butcher.anim.ChopTimeline.Verdict verdict,
                                 com.butcher.anim.ChopTimeline.Creature creature, boolean test) {
         if (!test) {
-            // The menu's Diana switches. Tests always play, whatever they say.
-            if (config != null && !dianaPlays(verdict, creature)) return;
+            // The menu's Diana switches. Tests always play, whatever they say. Switched off, a kill still counts:
+            // a known drop now, a kill once its drop has had time to come (unopenedDiana).
+            if (config != null && !dianaPlays(verdict, creature)) {
+                if (verdict == null) unopenedDiana.add(new Object[]{creature, System.currentTimeMillis()});
+                else ButcherStats.get().onDiana(creature == null ? null : creature.name(),
+                        verdict.win() ? com.butcher.render.DianaItems.name(verdict) : null);
+                return;
+            }
             // Counted before the screen is made, so its "your Nth" line includes this one. A kill
             // (verdict still null) is counted when its drop is known - ChopScreen.resolve.
             if (verdict != null) {
@@ -126,6 +132,28 @@ public class ButcherClient implements ClientModInitializer {
         com.butcher.gui.ChopScreen screen = new com.butcher.gui.ChopScreen(verdict, creature, test);
         currentChop = screen;
         com.butcher.render.CutsceneHud.show(screen);
+    }
+
+    /**
+     * Diana kills of ours that got no screen (busts off, the creature switched off, another cutscene playing):
+     * {creature, when}. Their drop line claims them; one that never comes is counted as a bust (tick).
+     */
+    private static final java.util.ArrayDeque<Object[]> unopenedDiana = new java.util.ArrayDeque<>();
+    /** How long a kill's drop line may take - the Chopping Block's own deadline, with room to spare. */
+    private static final long DIANA_DROP_WAIT_MS = com.butcher.gui.ChopScreen.RESOLVE_BY + 1_000;
+
+    /** A Chopping Block skipped or cut into while it still waited for its drop: the kill goes back on the list. */
+    public static void dianaKillUnshown(com.butcher.anim.ChopTimeline.Creature creature, long killedAt) {
+        unopenedDiana.add(new Object[]{creature, killedAt});
+    }
+
+    /** Counts the unopened Diana kills whose drop never came, as busts. */
+    private static void expireUnopenedDiana() {
+        long now = System.currentTimeMillis();
+        while (!unopenedDiana.isEmpty() && now - (long) unopenedDiana.peekFirst()[1] > DIANA_DROP_WAIT_MS) {
+            com.butcher.anim.ChopTimeline.Creature c = (com.butcher.anim.ChopTimeline.Creature) unopenedDiana.pollFirst()[0];
+            ButcherStats.get().onDiana(c == null ? null : c.name(), null);
+        }
     }
 
     /** Whether the menu lets this kill or drop play the Chopping Block. */
@@ -175,50 +203,59 @@ public class ButcherClient implements ClientModInitializer {
             decisions, new com.butcher.detect.LavaWatcher.Listener() {
         @Override
         public void kill(com.butcher.anim.EruptionTimeline.Creature creature, String why) {
+            // Remembered even when it is switched off, so its drop is never taken for an earlier creature's.
+            lastLavaKill = creature;
+            lavaKillScreen = null;
             if (!lavaCreatureOn(creature)) {
                 decisions.note("§8Lava: " + creature.title + " is turned off in the menu");
                 return;
             }
-            lastLavaKill = creature;
             if (bustsOff("lava", "Lava: " + creature.title)) return;
             if (isAnimationPlaying()) {
                 decisions.note("§8Lava: not opened for the kill - a cutscene is already playing (a win still plays when its drop comes)");
                 return;
             }
             openEruption(creature, null, false);
+            lavaKillScreen = currentEruption;
         }
 
         @Override
         public void resolve(com.butcher.anim.EruptionTimeline.Drop drop, String line) {
             if (drop.win() && underFloor(drop.id)) drop = com.butcher.anim.EruptionTimeline.Drop.BUST;
-            if (currentEruption != null && currentEruption.isActive() && currentEruption.pending() && !currentEruption.isTest()) {
-                currentEruption.resolve(drop);
+            boolean screen = currentEruption != null && currentEruption.isActive() && currentEruption.pending() && !currentEruption.isTest();
+            if (screen && currentEruption.resolve(drop)) {
                 decisions.note("§aLava: the kill's drop is " + (drop.win() ? drop.title : "nothing the animation plays - bust"));
-            } else if (drop.win() && lastLavaKill != null) {
-                // Its kill never opened (something else was playing, or it was skipped): the win plays now.
-                killKnown(lastLavaKill, drop, line);
+                return;
             }
+            if (drop.win() && lastLavaKill != null) {
+                // Its kill never opened (something else was playing, it was skipped, or the line came too late for
+                // the screen): the win plays now.
+                killKnown(lastLavaKill, drop, line);
+            } else if (!drop.win() && !screen && lastLavaKill != null && !killCounted(lavaKillScreen)) {
+                countUnplayed("lava", null, "Lava: " + lastLavaKill.title + "'s bust");
+            }
+            lavaKillScreen = null;
         }
 
         @Override
         public void killKnown(com.butcher.anim.EruptionTimeline.Creature creature, com.butcher.anim.EruptionTimeline.Drop drop, String line) {
+            com.butcher.anim.EruptionTimeline.Drop dr = drop.win() && underFloor(drop.id) ? com.butcher.anim.EruptionTimeline.Drop.BUST : drop;
             if (drop != com.butcher.anim.EruptionTimeline.Drop.CARMINE && !lavaCreatureOn(creature)) {
-                decisions.note("§8Lava: " + creature.title + " is turned off in the menu");
+                countUnplayed("lava", dr.win() ? dr.title : null, "Lava: " + creature.title + " (turned off in the menu)");
                 return;
             }
             if (currentEruption != null && currentEruption.isActive() && currentEruption.pending() && !currentEruption.isTest()
-                    && currentEruption.creature() == creature) {
-                currentEruption.resolve(drop);
+                    && currentEruption.creature() == creature && currentEruption.resolve(dr)) {
                 return;
             }
-            com.butcher.anim.EruptionTimeline.Drop dr = drop.win() && underFloor(drop.id) ? com.butcher.anim.EruptionTimeline.Drop.BUST : drop;
             if (!dr.win() && bustStyle("lava") == 2) {
-                decisions.note("§8Lava: " + creature.title + "'s bust not played - busts are off");
+                countUnplayed("lava", null, "Lava: " + creature.title + "'s bust (busts are off)");
                 return;
             }
             Runnable open = () -> openEruption(creature, dr, false);
+            String what = "Lava: " + (dr.win() ? dr.title : creature.title + "'s bust");
             if (isAnimationPlaying()) {
-                if (!makeRoom(drop.win(), "Lava: " + drop.title)) waitForTurn(open, drop.win(), "Lava: " + (drop.win() ? drop.title : creature.title + "'s bust"));
+                if (!makeRoom(dr.win(), what)) waitForTurn(open, dr.win(), what, () -> countUnplayed("lava", null, what));
                 else open.run();
                 return;
             }
@@ -245,32 +282,40 @@ public class ButcherClient implements ClientModInitializer {
             decisions, new com.butcher.detect.SeraphWatcher.Listener() {
         @Override
         public void kill() {
+            seraphKillScreen = null;
             if (bustsOff("seraph", "Seraph: the kill")) return;
             if (isAnimationPlaying()) {
                 decisions.note("§8Seraph: not opened for the kill - a cutscene is already playing");
                 return;
             }
             openSeraph(null, false);
+            seraphKillScreen = currentSeraph;
         }
 
         @Override
         public void resolve(com.butcher.anim.SeraphTimeline.Drop drop, String line) {
             drop = seraphFloor(drop);
-            if (currentSeraph != null && currentSeraph.isActive() && currentSeraph.pending() && !currentSeraph.isTest()) {
-                currentSeraph.resolve(drop);
+            boolean screen = currentSeraph != null && currentSeraph.isActive() && currentSeraph.pending() && !currentSeraph.isTest();
+            if (screen && currentSeraph.resolve(drop)) {
                 decisions.note("§aSeraph: the kill's drop is " + (drop.win() ? drop.title : "nothing the animation plays - bust"));
-            } else if (drop.win()) {
-                killKnown(drop, line);
+                return;
             }
+            if (drop.win()) killKnown(drop, line);
+            else if (!screen && !killCounted(seraphKillScreen)) countUnplayed("seraph", null, "Seraph: the bust");
+            seraphKillScreen = null;
         }
 
         @Override
         public void killKnown(com.butcher.anim.SeraphTimeline.Drop drop, String line) {
             com.butcher.anim.SeraphTimeline.Drop d = seraphFloor(drop);
-            if (!d.win() && bustStyle("seraph") == 2) return;
+            if (!d.win() && bustStyle("seraph") == 2) {
+                countUnplayed("seraph", null, "Seraph: the bust (busts are off)");
+                return;
+            }
             Runnable open = () -> openSeraph(d, false);
+            String what = "Seraph: " + (d.win() ? d.title : "the bust");
             if (isAnimationPlaying()) {
-                if (!makeRoom(d.win(), "Seraph: " + d.title)) waitForTurn(open, d.win(), "Seraph: " + (d.win() ? d.title : "the bust"));
+                if (!makeRoom(d.win(), what)) waitForTurn(open, d.win(), what, () -> countUnplayed("seraph", null, what));
                 else open.run();
                 return;
             }
@@ -305,6 +350,7 @@ public class ButcherClient implements ClientModInitializer {
             decisions, new com.butcher.detect.HellionWatcher.Listener() {
         @Override
         public void kill() {
+            hellionKillScreen = null;
             if (bustsOff("blaze", "Blaze: the kill")) return;
             if (isAnimationPlaying()) {
                 decisions.note("§8Blaze: not opened for the kill - a cutscene is already playing");
@@ -312,26 +358,33 @@ public class ButcherClient implements ClientModInitializer {
             }
             // Opened the moment it dies, drop unknown; the drop line fills it in before the reveal.
             openHellion(null, false);
+            hellionKillScreen = currentHellion;
         }
 
         @Override
         public void resolve(com.butcher.anim.HellionTimeline.Drop drop, String line) {
             if (drop.win() && underFloor(drop.id)) drop = com.butcher.anim.HellionTimeline.Drop.BUST;
-            if (currentHellion != null && currentHellion.isActive() && currentHellion.pending() && !currentHellion.isTest()) {
-                currentHellion.resolve(drop);
+            boolean screen = currentHellion != null && currentHellion.isActive() && currentHellion.pending() && !currentHellion.isTest();
+            if (screen && currentHellion.resolve(drop)) {
                 decisions.note("§aBlaze: the kill's drop is " + (drop.win() ? drop.title : "nothing the animation plays - bust"));
-            } else if (drop.win()) {
-                killKnown(drop, line);
+                return;
             }
+            if (drop.win()) killKnown(drop, line);
+            else if (!screen && !killCounted(hellionKillScreen)) countUnplayed("blaze", null, "Blaze: the bust");
+            hellionKillScreen = null;
         }
 
         @Override
         public void killKnown(com.butcher.anim.HellionTimeline.Drop drop, String line) {
             com.butcher.anim.HellionTimeline.Drop dr = drop.win() && underFloor(drop.id) ? com.butcher.anim.HellionTimeline.Drop.BUST : drop;
-            if (!dr.win() && bustStyle("blaze") == 2) return;
+            if (!dr.win() && bustStyle("blaze") == 2) {
+                countUnplayed("blaze", null, "Blaze: the bust (busts are off)");
+                return;
+            }
             Runnable open = () -> openHellion(dr, false);
+            String what = "Blaze: " + (dr.win() ? dr.title : "the bust");
             if (isAnimationPlaying()) {
-                if (!makeRoom(drop.win(), "Blaze: " + drop.title)) waitForTurn(open, drop.win(), "Blaze: " + (drop.win() ? drop.title : "the bust"));
+                if (!makeRoom(dr.win(), what)) waitForTurn(open, dr.win(), what, () -> countUnplayed("blaze", null, what));
                 else open.run();
                 return;
             }
@@ -344,9 +397,13 @@ public class ButcherClient implements ClientModInitializer {
             decisions, new com.butcher.detect.DianaWatcher.Listener() {
         @Override
         public void kill(com.butcher.anim.ChopTimeline.Creature creature) {
-            if (bustsOff("diana", "Diana: the kill")) return;
+            if (bustsOff("diana", "Diana: the kill")) {
+                unopenedDiana.add(new Object[]{creature, System.currentTimeMillis()});
+                return;
+            }
             if (isAnimationPlaying()) {
                 decisions.note("§8Diana: not opened for the kill - a cutscene is already playing");
+                unopenedDiana.add(new Object[]{creature, System.currentTimeMillis()});
                 return;
             }
             // Opened the moment it dies, drop unknown; the drop's chat line fills it in.
@@ -357,16 +414,30 @@ public class ButcherClient implements ClientModInitializer {
         public void drop(com.butcher.anim.ChopTimeline.Verdict verdict0, String line) {
             com.butcher.anim.ChopTimeline.Verdict verdict = verdict0.win() && underFloor(com.butcher.render.DianaItems.id(verdict0))
                     ? com.butcher.anim.ChopTimeline.Verdict.BUST : verdict0;
-            if (!verdict.win() && bustStyle("diana") == 2 && !(currentChop != null && currentChop.pending())) return;
-            if (currentChop != null && currentChop.pending() && !currentChop.isTest()) {
-                currentChop.resolve(verdict);
+            if (currentChop != null && currentChop.pending() && !currentChop.isTest() && currentChop.resolve(verdict)) {
                 decisions.note("§aDiana: the kill's drop is " + com.butcher.render.DianaItems.name(verdict));
                 return;
             }
+            // A kill of ours that got no screen: this is its drop, and the screen it gets now counts it.
+            Object[] kill = null;
+            while (!unopenedDiana.isEmpty()) {
+                Object[] k = unopenedDiana.pollLast();
+                if (System.currentTimeMillis() - (long) k[1] <= DIANA_DROP_WAIT_MS) {
+                    kill = k;
+                    break;
+                }
+            }
+            com.butcher.anim.ChopTimeline.Creature killed = kill == null ? null : (com.butcher.anim.ChopTimeline.Creature) kill[0];
+            if (!verdict.win() && bustStyle("diana") == 2) {
+                if (killed != null) ButcherStats.get().onDiana(killed.name(), null);
+                return;
+            }
             // A drop with no kill waiting: the Relic, the Dye, a loot-shared drop, or a drop whose
-            // line beat the kill's nametag. Its own creature's head, or any for the Dye.
-            Runnable open = () -> openChop(verdict, verdict == com.butcher.anim.ChopTimeline.Verdict.DYE ? null
-                    : com.butcher.anim.ChopTimeline.Creature.of(verdict, 0), false);
+            // line beat the kill's nametag. The kill's head if there was one, else the drop's own
+            // creature's, or any for the Dye.
+            com.butcher.anim.ChopTimeline.Creature head = killed != null ? killed
+                    : verdict == com.butcher.anim.ChopTimeline.Verdict.DYE ? null : com.butcher.anim.ChopTimeline.Creature.of(verdict, 0);
+            Runnable open = () -> openChop(verdict, head, false);
             String what = "Diana: " + com.butcher.render.DianaItems.name(verdict);
             if (isAnimationPlaying()) {
                 if (!makeRoom(verdict.win(), what)) waitForTurn(open, verdict.win(), what);
@@ -615,6 +686,7 @@ public class ButcherClient implements ClientModInitializer {
                 thawQueue.clear();
             }
             showPendingProfit(client);
+            expireUnopenedDiana();
             skipTick();
             floorPrices();
             if (currentThaw != null && !currentThaw.isActive()) currentThaw = null;
@@ -1224,8 +1296,34 @@ public class ButcherClient implements ClientModInitializer {
     private static final long BUST_WAIT_MS = 5_000;
 
     private static void waitForTurn(Runnable open, boolean win, String what) {
-        waiting.add(new Object[]{open, System.currentTimeMillis(), win, what});
+        waitForTurn(open, win, what, null);
+    }
+
+    /** @param dropped run if it waits too long and is dropped (a bust's stats, which no screen will count now) */
+    private static void waitForTurn(Runnable open, boolean win, String what, Runnable dropped) {
+        waiting.add(new Object[]{open, System.currentTimeMillis(), win, what, dropped});
         decisions.note("§7" + what + " - waiting for the cutscene playing to end");
+    }
+
+    /**
+     * A real kill whose outcome is known but which no screen will show - busts switched off, its creature switched
+     * off, or no room - still goes into the stats: a screen counts its own kill, and without this the dry streak of
+     * someone with "Busts: none" never moved.
+     */
+    /** The screen each source opened for its latest kill, until that kill's outcome is in. */
+    private static com.butcher.gui.Cutscene hellionKillScreen, seraphKillScreen, lavaKillScreen;
+
+    /** Whether the screen opened for a kill has already put it in the stats (it gave up waiting and counted a bust). */
+    private static boolean killCounted(com.butcher.gui.Cutscene screen) {
+        if (screen instanceof com.butcher.gui.HellionScreen h) return h.counted();
+        if (screen instanceof com.butcher.gui.SeraphScreen sc) return sc.counted();
+        if (screen instanceof com.butcher.gui.EruptionScreen e) return e.counted();
+        return false;
+    }
+
+    private static void countUnplayed(String source, String drop, String what) {
+        ButcherStats.get().onSource(source, drop);
+        decisions.note("§8" + what + " - not played, counted in the stats");
     }
 
     private static void runWaiting() {
@@ -1233,6 +1331,7 @@ public class ButcherClient implements ClientModInitializer {
             Object[] w = waiting.poll();
             if (!(boolean) w[2] && System.currentTimeMillis() - (long) w[1] > BUST_WAIT_MS) {
                 decisions.note("§8" + w[3] + " - waited too long, dropped");
+                if (w[4] != null) ((Runnable) w[4]).run();
                 continue;
             }
             ((Runnable) w[0]).run();
@@ -1266,6 +1365,11 @@ public class ButcherClient implements ClientModInitializer {
         if (c != null) {
             c.skip();
         } else if (currentScope != null && currentScope.isActive()) {
+            // Skipped before its drop was known: the drop, when it comes, is counted for this run and opens nothing.
+            if (!currentScope.isResolved()) {
+                skippedScope = currentScope;
+                skippedScopeAt = System.currentTimeMillis();
+            }
             currentScope.onClose();
         } else if (thawActive()) {
             currentThaw.onClose();
@@ -1867,8 +1971,28 @@ public class ButcherClient implements ClientModInitializer {
         trigger(result, true);
     }
 
+    /** A Scatha run skipped before its drop was known, and when: its drop goes to it, not to a new cutscene. */
+    private static ScopeMinigameScreen skippedScope;
+    private static long skippedScopeAt;
+
     private static void trigger(DropResult result, boolean test) {
         Minecraft client = Minecraft.getInstance();
+        if (!test && skippedScope != null) {
+            ScopeMinigameScreen skipped = skippedScope;
+            skippedScope = null;
+            if (!skipped.isResolved() && System.currentTimeMillis() - skippedScopeAt < HotbarDropWatcher.KILL_WINDOW_MS + 2_000) {
+                skipped.resolveSkipped(result);
+                decisions.note("§7Scatha: the skipped run's drop came in - counted, not played");
+                if (result != null) {
+                    com.google.gson.JsonObject rec = new com.google.gson.JsonObject();
+                    rec.addProperty("outcome", result.outcome.name());
+                    if (result.rarity != null) rec.addProperty("rarity", result.rarity);
+                    rec.addProperty("skipped", true);
+                    com.butcher.detect.DropRecorder.record("scatha_kill", rec);
+                }
+                return;
+            }
+        }
         if (!test && result != null) {
             com.google.gson.JsonObject rec = new com.google.gson.JsonObject();
             rec.addProperty("outcome", result.outcome.name());
