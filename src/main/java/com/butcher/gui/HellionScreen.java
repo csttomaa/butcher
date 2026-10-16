@@ -165,7 +165,7 @@ public class HellionScreen extends Screen implements ChopScene.Canvas, Cutscene 
         // and registered at startup instead (ButcherClient, HellionArt).
         HellionScene.bannerWord = tier;
         HellionScene.nthNote = nth;
-        ChopScene.calm = ButcherClient.config != null && ButcherClient.config.calmEffects;
+        ChopScene.calm = (ButcherClient.config != null && ButcherClient.config.calmEffects) || com.butcher.Safety.slow();
         HellionScene.showBanner = ButcherClient.config == null || ButcherClient.config.blazeBanner;
         this.g = g;
         PILLARS.begin(width, height, HellionScene.unitFor(height));

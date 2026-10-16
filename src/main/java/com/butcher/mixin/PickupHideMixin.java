@@ -17,9 +17,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ItemPickupParticleGroup.class)
 public class PickupHideMixin {
 
-    @Inject(method = "extractRenderState", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "extractRenderState", at = @At("HEAD"), cancellable = true, require = 0)
     private void butcher$hidePickups(Frustum frustum, Camera camera, float partialTick,
                                      CallbackInfoReturnable<ParticleGroupRenderState> cir) {
+        com.butcher.Safety.hook(1);
         if (ButcherClient.hideDroppedItems()) cir.setReturnValue((collector, cameraState) -> { });
     }
 }

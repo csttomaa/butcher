@@ -113,6 +113,7 @@ public class ButcherClient implements ClientModInitializer {
      */
     public static void openChop(com.butcher.anim.ChopTimeline.Verdict verdict,
                                 com.butcher.anim.ChopTimeline.Creature creature, boolean test) {
+        if (!mayOpen("diana", test)) return;
         if (!test) {
             // The menu's Diana switches. Tests always play, whatever they say. Switched off, a kill still counts:
             // a known drop now, a kill once its drop has had time to come (unopenedDiana).
@@ -650,7 +651,11 @@ public class ButcherClient implements ClientModInitializer {
                 currentScope = null;
             }
 
-            if (config.animationMode != AnimationMode.NONE && client.player != null) {
+            // Detection runs on Hypixel only (Safety.onHypixel), and each source stops for the session after
+            // repeated errors (Safety.on). Every watcher runs inside Safety.run: one that throws is logged and
+            // stopped, and the tick goes on for the rest.
+            boolean live = client.player != null && Safety.onHypixel();
+            if (config.animationMode != AnimationMode.NONE && live) Safety.run("scatha", () -> {
                 wormTracker.tick(client.player);
                 openCutsceneOnKill(client);
                 // The watcher spots a drop by comparing this tick's inventory against
@@ -662,22 +667,22 @@ public class ButcherClient implements ClientModInitializer {
                 // point of opening early), but one that already knows must not be
                 // played over the top of.
                 dropWatcher.tick(client.player, wormTracker, !isAnimationPlaying() || awaitingDrop());
-            }
+            });
             // Every animation's sound, not only the Scatha's: inside the check above, switching the
             // cleaver off left the synth unstarted and every other cutscene silent.
             com.butcher.audio.ButcherAudio.tick();
             // Outside the player check: a half-read loot message has to be able to time
             // out even if the player went away mid-message.
-            vanguardWatcher.tick();
+            Safety.run("vanguard", vanguardWatcher::tick);
 
-            if (client.player != null && config.dianaAnimation) dianaWatcher.tick(client.player, config.dianaHidePct);
-            if (client.player != null && config.fishingAnnounce) sharkWatcher.tick(client.player);
-            if (client.player != null && config.blazeAnimation) hellionWatcher.tick(client.player, config.blazeHidePct);
-            if (client.player != null && seraphOn()) seraphWatcher.tick(client.player, config.seraphHidePct);
-            if (client.player != null && config.lavaAnimation) {
+            if (live && config.dianaAnimation) Safety.run("diana", () -> dianaWatcher.tick(client.player, config.dianaHidePct));
+            if (live && config.fishingAnnounce) Safety.run("shark", () -> sharkWatcher.tick(client.player));
+            if (live && config.blazeAnimation) Safety.run("blaze", () -> hellionWatcher.tick(client.player, config.blazeHidePct));
+            if (live && seraphOn()) Safety.run("seraph", () -> seraphWatcher.tick(client.player, config.seraphHidePct));
+            if (live && config.lavaAnimation) Safety.run("lava", () -> {
                 lavaWatcher.lootShare = config.lavaLootShare;
                 lavaWatcher.tick(client.player, config.lavaHidePct);
-            }
+            });
             // Slayer bosses' nametags, recorded for detection to be written against (no animation yet).
             if (client.player != null && config.recordDrops) com.butcher.detect.SlayerRecorder.tick(client.player);
             if (client.player != null) {
@@ -700,6 +705,7 @@ public class ButcherClient implements ClientModInitializer {
             showPendingProfit(client);
             expireUnopenedDiana();
             skipTick();
+            watchdog();
             ledgerWorthTick();
             floorPrices();
             if (currentThaw != null && !currentThaw.isActive()) currentThaw = null;
@@ -1020,8 +1026,29 @@ public class ButcherClient implements ClientModInitializer {
                                 ctx.getSource().sendFeedback(Component.literal("  " + line));
                             }
                         }
+                        ctx.getSource().sendFeedback(Component.literal("§7  Switched off after errors: §f"
+                                + Safety.offReport() + "§7. Hooks: " + Safety.hookReport()
+                                + (Safety.onHypixel() ? "" : ". §eNot on Hypixel - nothing is detected here.")));
                         return 1;
                     }))
+                    // Everything off the screen at once, for anyone: a cutscene or a hide that will not go is never
+                    // something to wait out.
+                    .then(ClientCommands.literal("stop").executes(ctx -> {
+                        stopAll(true);
+                        decisions.note("§7/butcher stop - everything stopped");
+                        ctx.getSource().sendFeedback(Component.literal(
+                                "§6[Butcher] §7Stopped. Any held chat is back, and the pre-kill hide is off for 15 s."));
+                        return 1;
+                    }))
+                    // The Ledger checks itself against the stats again: anything the stats prove and the book lacks is
+                    // stamped, quietly. It never takes a stamp away.
+                    .then(ClientCommands.literal("ledger").then(ClientCommands.literal("recheck").executes(ctx -> {
+                        int n = ButcherStats.get().recheck();
+                        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7The Ledger was checked against "
+                                + "your stats: " + (n == 0 ? "nothing was missing." : n + " stamp" + (n == 1 ? "" : "s")
+                                + " or grade" + (n == 1 ? "" : "s") + " added.")));
+                        return 1;
+                    })))
                     // What the mod knows about the worm's real texture, and a way to make
                     // it forget - useful if it ever latches onto the wrong nearby head.
                     .then(ClientCommands.literal("skins")
@@ -1428,6 +1455,7 @@ public class ButcherClient implements ClientModInitializer {
 
     /** Opens Eruption in the HUD (CutsceneHud); {@code drop} null for a real kill whose drop is still to come. */
     public static void openEruption(com.butcher.anim.EruptionTimeline.Creature creature, com.butcher.anim.EruptionTimeline.Drop drop, boolean test) {
+        if (!mayOpen("lava", test)) return;
         com.butcher.gui.EruptionScreen screen = new com.butcher.gui.EruptionScreen(creature, drop, test);
         currentEruption = screen;
         com.butcher.render.CutsceneHud.show(screen);
@@ -1449,6 +1477,7 @@ public class ButcherClient implements ClientModInitializer {
 
     /** Opens the Seraph's Glyph in the HUD (CutsceneHud); {@code drop} null for a real kill whose drop is still to come. */
     public static void openSeraph(com.butcher.anim.SeraphTimeline.Drop drop, boolean test) {
+        if (!mayOpen("seraph", test)) return;
         com.butcher.gui.SeraphScreen screen = new com.butcher.gui.SeraphScreen(drop, test);
         currentSeraph = screen;
         com.butcher.render.CutsceneHud.show(screen);
@@ -1456,6 +1485,7 @@ public class ButcherClient implements ClientModInitializer {
 
     /** Opens Hellion in the HUD (CutsceneHud); {@code drop} null for a real kill whose drop is still to come. */
     public static void openHellion(com.butcher.anim.HellionTimeline.Drop drop, boolean test) {
+        if (!mayOpen("blaze", test)) return;
         com.butcher.gui.HellionScreen screen = new com.butcher.gui.HellionScreen(drop, test);
         currentHellion = screen;
         com.butcher.render.CutsceneHud.show(screen);
@@ -1546,14 +1576,20 @@ public class ButcherClient implements ClientModInitializer {
             return;
         }
         graphics.nextStratum();
-        if (stamp) com.butcher.render.StampPopup.draw(graphics);
+        // Every animation draws inside Safety.run: one that throws is stopped and the screen handed back, never
+        // the game's frame taken down with it.
+        if (stamp) Safety.run("ledger", () -> com.butcher.render.StampPopup.draw(graphics));
         if (fin) {
-            com.butcher.render.FinPopup.draw(graphics);
-            com.butcher.render.GhostPopup.draw(graphics);
+            Safety.run("shark", () -> com.butcher.render.FinPopup.draw(graphics));
+            Safety.run("ghost", () -> com.butcher.render.GhostPopup.draw(graphics));
         }
         int before = com.butcher.render.HudFade.added;
-        ButcherHudRenderer.render(graphics, 0f);
-        com.butcher.render.CutsceneHud.draw(graphics, delta);
+        if (animationManager.isPlaying()) Safety.run("scatha", () -> ButcherHudRenderer.render(graphics, 0f));
+        if (cutscene != null) {
+            long t0 = System.nanoTime();
+            Safety.run(safetyKey(cutscene), () -> com.butcher.render.CutsceneHud.draw(graphics, delta));
+            Safety.frame(cutscene, System.nanoTime() - t0);
+        }
         // Sounds without a picture was the 0.2.37 bug: say so if it ever happens again.
         if (cutscene != null && com.butcher.render.HudFade.added == before && cutscene != silentCutscene) {
             silentCutscene = cutscene;
@@ -1637,21 +1673,16 @@ public class ButcherClient implements ClientModInitializer {
         // Our own lines (the chat summary, test notes) are never evidence of anything: not recorded, not detected.
         if (message.getString().replaceAll("§.", "").startsWith("[Butcher]")) return true;
         if (!overlay) com.butcher.detect.DropRecorder.chatLine(message.getString());
-        // Game lines only: a player typing "RARE DROP! Chimera" is not a drop.
-        if (!overlay && !player && config != null && config.dianaAnimation) {
-            dianaWatcher.onChatLine(message.getString());
-        }
-        if (!overlay && !player && config != null && config.lavaAnimation) {
-            lavaWatcher.onChatLine(message.getString());
-        }
-        if (!overlay && !player && config != null && seraphOn()) {
-            seraphWatcher.onChatLine(message.getString());
-        }
-        if (!overlay && !player && config != null && config.blazeAnimation) {
-            hellionWatcher.onChatLine(message.getString());
-        }
-        if (!overlay && !player && config != null && config.fishingAnnounce) {
-            sharkWatcher.onChatLine(message.getString());
+        // Game lines only: a player typing "RARE DROP! Chimera" is not a drop. And on Hypixel only - another
+        // server's lookalike line is not one either (Safety.onHypixel).
+        boolean game = !overlay && !player && config != null && Safety.onHypixel();
+        String text = message.getString();
+        if (game && config.dianaAnimation) Safety.run("diana", () -> dianaWatcher.onChatLine(text));
+        if (game && config.lavaAnimation) Safety.run("lava", () -> lavaWatcher.onChatLine(text));
+        if (game && seraphOn()) Safety.run("seraph", () -> seraphWatcher.onChatLine(text));
+        if (game && config.blazeAnimation) Safety.run("blaze", () -> hellionWatcher.onChatLine(text));
+        if (game && config.fishingAnnounce && Safety.on("shark")) {
+            Safety.run("shark", () -> sharkWatcher.onChatLine(text));
             com.butcher.detect.SharkDrops.Drop shark = com.butcher.detect.SharkDrops.of(message.getString());
             if (shark != null) {
                 decisions.note("§7Fishing: " + shark.title + " - \"" + message.getString() + "\"");
@@ -1662,7 +1693,7 @@ public class ButcherClient implements ClientModInitializer {
                 com.butcher.render.FinPopup.show(shark);
             }
         }
-        if (!overlay && !player && config != null && config.ghostAnnounce) {
+        if (game && config.ghostAnnounce && Safety.on("ghost")) {
             com.butcher.detect.GhostDrops.Drop ghost = com.butcher.detect.GhostDrops.of(message.getString());
             if (ghost != null) {
                 decisions.note("§7Ghost: " + ghost.title + " - \"" + message.getString() + "\"");
@@ -1670,8 +1701,15 @@ public class ButcherClient implements ClientModInitializer {
                 com.butcher.render.GhostPopup.show(ghost);
             }
         }
-        if (config != null && config.vanguardAnimation && vanguardWatcher.onChatLine(message.getString())) {
-            return !config.vanguardHideChat;
+        if (config != null && config.vanguardAnimation && Safety.onHypixel() && Safety.on("vanguard")) {
+            boolean corpse;
+            try {
+                corpse = vanguardWatcher.onChatLine(text);
+            } catch (Throwable t) {
+                Safety.failed("vanguard", t);
+                corpse = false;
+            }
+            if (corpse) return !config.vanguardHideChat;
         }
         // The action bar never reaches the chat box, so ChatHold cannot hold it; it is kept
         // off during a cutscene here, as everything used to be. It replaces itself every
@@ -1772,6 +1810,7 @@ public class ButcherClient implements ClientModInitializer {
      * chat screen straight after running it, which would stomp a setScreen made now.
      */
     private static void openThaw(Minecraft client, CorpseHaul haul, int streakBefore) {
+        if (!mayOpen("vanguard", true)) return;
         com.butcher.gui.ThawScreen screen = new com.butcher.gui.ThawScreen(haul, streakBefore);
         currentThaw = screen;
         com.butcher.render.CutsceneHud.show(screen);
@@ -1955,6 +1994,7 @@ public class ButcherClient implements ClientModInitializer {
     }
 
     private static void openScope(Minecraft client, DropResult result, boolean deferSetScreen, boolean test) {
+        if (!mayOpen("scatha", test)) return;
         ScopeMinigameScreen screen = new ScopeMinigameScreen(result, test);
         currentScope = screen;
         // Drawn in the HUD (CutsceneHud), never opened as a screen, so the player keeps
@@ -1971,6 +2011,115 @@ public class ButcherClient implements ClientModInitializer {
      * happen.
      */
     private static long forceHideUntil = -1;
+
+    /** The pre-kill hide is held off until this time: the watchdog found it stuck, or /butcher stop was used. */
+    private static long hideSuppressedUntil = -1;
+
+    // ------------------------------------------------------------------ the fail-safes (see Safety)
+
+    /** A cutscene still up after this long is stuck: the longest ending (the Thaw's Dye, ~20 s) at half speed is 40. */
+    static final long WATCHDOG_MS = 90_000;
+    /** The pre-kill hide on this long with nothing playing is stuck (a boss parked at low health can do it)... */
+    static final long HIDE_STUCK_MS = 45_000;
+    /** ...and is then held off this long, the HUD the player's again. */
+    static final long HIDE_PAUSE_MS = 60_000;
+    private static Object watchedPlay;
+    private static long watchedSince = -1, hidingSince = -1;
+
+    /** Whether a cutscene of {@code key} may open: not switched off after errors, and (a real one) not a burst. */
+    private static boolean mayOpen(String key, boolean test) {
+        if (!Safety.on(key)) {
+            decisions.note("§8" + Safety.name(key) + " is switched off after repeated errors - not opened");
+            if (test) Safety.say("§c" + Safety.name(key) + " is switched off until you restart the game, after repeated errors.");
+            return false;
+        }
+        return test || Safety.allowOpen(key);
+    }
+
+    /** Which animation a cutscene screen belongs to, by the stats' keys. */
+    private static String safetyKey(net.minecraft.client.gui.screens.Screen s) {
+        if (s instanceof com.butcher.gui.ChopScreen) return "diana";
+        if (s instanceof com.butcher.gui.HellionScreen) return "blaze";
+        if (s instanceof com.butcher.gui.SeraphScreen) return "seraph";
+        if (s instanceof com.butcher.gui.EruptionScreen) return "lava";
+        if (s instanceof com.butcher.gui.ThawScreen) return "vanguard";
+        return "scatha";
+    }
+
+    /** Every tick: a cutscene that never ends, or a pre-kill hide that never lets go, is ended here. */
+    private static void watchdog() {
+        long now = System.currentTimeMillis();
+        Object playing = com.butcher.render.CutsceneHud.shown();
+        if (playing == null && animationManager.isPlaying()) playing = animationManager.getCurrent();
+        if (playing == null && isAnimationPlaying()) playing = "a screen that is not drawn";
+        if (playing != watchedPlay) {
+            watchedPlay = playing;
+            watchedSince = now;
+        } else if (playing != null && now - watchedSince > WATCHDOG_MS) {
+            decisions.note("§cSafety: a cutscene was still up after " + WATCHDOG_MS / 1000 + " s - stopped");
+            stopAll(false);
+            Safety.say("A cutscene ran for over " + WATCHDOG_MS / 1000 + " s and was stopped. /butcher log has the details.");
+            watchedPlay = null;
+        }
+        if (playing != null || !shouldHidePreKill()) {
+            hidingSince = -1;
+        } else if (hidingSince < 0) {
+            hidingSince = now;
+        } else if (now - hidingSince > HIDE_STUCK_MS) {
+            hidingSince = -1;
+            hideSuppressedUntil = now + HIDE_PAUSE_MS;
+            forceHideUntil = -1;
+            decisions.note("§eSafety: the pre-kill hide was on for " + HIDE_STUCK_MS / 1000
+                    + " s with nothing playing - HUD back for " + HIDE_PAUSE_MS / 1000 + " s");
+        }
+    }
+
+    /**
+     * Ends everything at once and hands the screen back: every cutscene and pop-up, the sound, the hide. Held chat
+     * comes back on the next tick by itself (nothing covers it). /butcher stop, the watchdog and Safety.failed.
+     * Each step on its own, so one that throws cannot keep the rest up.
+     *
+     * @param byPlayer /butcher stop: also forgets the corpses waiting their turn
+     */
+    public static void stopAll(boolean byPlayer) {
+        com.butcher.gui.Cutscene c = currentCutscene();
+        quietly(() -> { if (c != null) c.interrupt(); });
+        quietly(() -> {
+            if (currentScope != null && currentScope.isActive()) {
+                if (!currentScope.isResolved()) {
+                    skippedScope = currentScope;
+                    skippedScopeAt = System.currentTimeMillis();
+                }
+                currentScope.onClose();
+            }
+        });
+        quietly(() -> { if (thawActive()) currentThaw.onClose(); });
+        quietly(animationManager::stop);
+        quietly(com.butcher.render.FinPopup::stop);
+        quietly(com.butcher.render.GhostPopup::stop);
+        quietly(com.butcher.render.StampPopup::stop);
+        quietly(com.butcher.audio.ButcherAudio::silence);
+        com.butcher.render.CutsceneHud.clear();
+        currentChop = null;
+        currentHellion = null;
+        currentSeraph = null;
+        currentEruption = null;
+        currentScope = null;
+        currentThaw = null;
+        hellionKillScreen = seraphKillScreen = lavaKillScreen = null;
+        waiting.clear();
+        if (byPlayer) thawQueue.clear();
+        forceHideUntil = -1;
+        hideSuppressedUntil = System.currentTimeMillis() + (byPlayer ? 15_000 : 5_000);
+    }
+
+    private static void quietly(Runnable r) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            LOGGER.warn("[Butcher] while stopping", t);
+        }
+    }
 
     public static void testPreKillHide(long ms) {
         forceHideUntil = System.currentTimeMillis() + ms;
@@ -1999,6 +2148,8 @@ public class ButcherClient implements ClientModInitializer {
      *  {@link com.butcher.mixin.ItemInHandRendererMixin} can read it. */
     public static boolean shouldHidePreKill() {
         if (isAnimationPlaying()) return false;
+        // The watchdog found it stuck on, or /butcher stop was used: the HUD stays the player's for a while.
+        if (System.currentTimeMillis() < hideSuppressedUntil) return false;
         // Diana: a creature that may be ours is nearly dead (DianaWatcher.armed, SkyMaxx's way).
         if (config.dianaAnimation && dianaWatcher.armed()) return true;
         // Hellion: your Demonlord is nearly dead (HellionWatcher.armed, the same rule).

@@ -912,6 +912,33 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
   `ledgerVolume`; `ledgerPopups` under General. Offline: the scratchpad's `menu/src/CardPreview.java`.
 - `PANEL_W` is 392 for five tabs; a tab too narrow for its name draws its icon alone.
 
+## Fail-safes (2026-10-16)
+
+The user asked for fail-safes across the mod; these are the fifteen they approved. `com.butcher.Safety` holds most:
+- **Errors**: every animation draw (`drawOwnHud`), watcher tick and watcher chat call runs in `Safety.run(key, ...)`
+  (keys are the stats' source keys plus "ledger"). A throw goes to `Safety.failed`: logged, `stopAll(false)`, one chat
+  line; `STRIKES` (3) and `Safety.on(key)` is false for the session - its watcher stops and `mayOpen` refuses it.
+- **`ButcherClient.stopAll(byPlayer)`**: interrupts the newer cutscene, closes the Scope/Thaw (an unresolved Scope goes
+  to `skippedScope` like a skip), stops the guillotine, Fin, Wisp and the stamp pop-up, silences the synth,
+  `CutsceneHud.clear()`, nulls every `current*`, clears `waiting`, and holds the pre-kill hide off
+  (`hideSuppressedUntil`, 15 s for `/butcher stop`, 5 s otherwise). Each step in its own try.
+- **`watchdog()`** every tick: the same thing up for `WATCHDOG_MS` 90 s (per screen - back-to-back Thaws each start
+  afresh) is stopped; the pre-kill hide on with nothing playing for `HIDE_STUCK_MS` 45 s is held off 60 s.
+- **Hypixel only**: `Safety.onHypixel()` (`getCurrentServer().ip` contains hypixel.net, read with SkyMaxx's bytecode;
+  a development run always passes) gates every watcher tick and chat line. Tests and the menu are unaffected.
+- **Bursts**: `Safety.allowOpen` - a fourth real open of one source in 10 s is refused. Stats: `ButcherStats.refused`
+  drops the same (source, drop) win within 2 s (never for corpses) and anything past 20 counted events a second.
+- **Slow frames**: `CutsceneHud.draw` is timed; averaging over 50 ms for a second sets `Safety.slow()` until the next
+  cutscene, which `ChopScene.calm` and `GameplayView.corner()` read.
+- **Optional hooks**: `DroppedItemHideMixin`, `PickupHideMixin`, `HudHiddenMixin` are `require = 0` and call
+  `Safety.hook(i)` (one array read on the hot path); `/butcher log` ends with which ran, what is off, and off-Hypixel.
+- **Stats**: `load()` copies `stats.json.YYYY-MM-DD.bak` once a day (newest `BACKUPS` 3 kept) and
+  `stats.json.pre-ledger` once. `/butcher ledger recheck` = `ButcherStats.recheck()` (refresh with pre, count added).
+- **Ledger**: `Ledger.drop` runs the clock-based awards (`timed`: hot streak, night shift) only when now is past the
+  last recent drop; `LedgerData.fix()` caps grades at the stamp's, drops empty entries, zeroes negatives, caps
+  `recent`, keeps unknown ids. `StampPopup.CAP` 3 in a row, then `StampCard.paintMore` "+N more stamps".
+  LedgerTest has the clock and clean-load checks (233).
+
 ## Under maintenance: the Seraph (2026-10-15)
 
 The user is reworking the Seraph's Glyph before players see it. `Maintenance.SERAPH` (pure, no Minecraft) is the

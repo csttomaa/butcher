@@ -218,7 +218,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
             }
         }
         this.g = g;
-        ChopScene.calm = ButcherClient.config != null && ButcherClient.config.calmEffects;
+        ChopScene.calm = (ButcherClient.config != null && ButcherClient.config.calmEffects) || com.butcher.Safety.slow();
         ChopScene.draw(this, tl, t, width, height);
         bustLine(t);
         this.g = null;

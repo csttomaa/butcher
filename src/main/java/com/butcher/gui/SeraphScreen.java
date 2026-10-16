@@ -181,7 +181,7 @@ public class SeraphScreen extends Screen implements ChopScene.Canvas, Cutscene {
         }
         SeraphScene.bannerWord = tier;
         SeraphScene.nthNote = nth;
-        ChopScene.calm = ButcherClient.config != null && ButcherClient.config.calmEffects;
+        ChopScene.calm = (ButcherClient.config != null && ButcherClient.config.calmEffects) || com.butcher.Safety.slow();
         SeraphScene.showBanner = ButcherClient.config == null || ButcherClient.config.seraphBanner;
         this.g = g;
         GROUND.begin(width, height, SeraphScene.unitFor(height));

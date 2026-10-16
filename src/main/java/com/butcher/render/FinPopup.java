@@ -93,6 +93,12 @@ public final class FinPopup {
         return (long) ((System.currentTimeMillis() - startedAt) * speed);
     }
 
+    /** Takes it off at once (/butcher stop, or after an error). */
+    public static void stop() {
+        drop = null;
+        bust = false;
+    }
+
     public static boolean active() {
         if (bust) return elapsed() < BUST_END;
         return drop != null && elapsed() < END;

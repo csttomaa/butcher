@@ -65,4 +65,25 @@ public final class StampCard {
         d.text(s, 0, 0, (Math.max(5, a) << 24) | (col & 0xFFFFFF), bold, false);
         d.pop();
     }
+
+    /**
+     * The card that stands for every stamp past the third in one go (a backfill-sized burst would otherwise keep the
+     * screen busy for a minute): no stamp, just the count, pointing at the book.
+     */
+    public static void paintMore(Draw d, int w, int h, long t, int n) {
+        float fade = t < FADE ? 1f : 1f - (t - FADE) / (float) (END - FADE);
+        int cx = w / 2, cy = Math.round(h * 0.22f) + 22;
+        int cardA = Math.round(0xE0 * fade * Math.min(1f, t / 120f));
+        if (cardA > 4) {
+            int cw = 80, top = cy - 18, bottom = cy + 26;
+            d.fill(cx - cw + 2, top + 2, cx + cw + 2, bottom + 2, (cardA / 3) << 24);
+            d.fill(cx - cw, top, cx + cw, bottom, (cardA << 24) | (StampArt.PAPER & 0xFFFFFF));
+            d.fill(cx - cw, top, cx + cw, top + 1, (cardA << 24) | 0xA0302A);
+        }
+        int textA = Math.round(255 * fade);
+        if (textA > 8) {
+            words(d, "+" + n + " more stamp" + (n == 1 ? "" : "s"), cx, cy - 10, 1.3f, 0xFFA0302A, textA, true);
+            words(d, "in the Ledger - /butcher", cx, cy + 8, 1f, StampArt.PENCIL, textA, false);
+        }
+    }
 }

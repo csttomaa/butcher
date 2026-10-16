@@ -42,6 +42,8 @@ public final class GameplayView {
 
     /** Which corner, from the config: 0 off, 1 top right, 2 top left, 3 bottom right, 4 bottom left. */
     public static int corner() {
+        // A cutscene that is running slowly gives up its window first (Safety.slow).
+        if (com.butcher.Safety.slow()) return 0;
         return ButcherClient.config == null ? 1 : ButcherClient.config.gameplayCorner;
     }
 

@@ -19,6 +19,24 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   over it. Switch it off under General, set its volume under Sound.
 - Stamps outlive every stats reset.
 
+### Safety nets
+- **`/butcher stop`**, for everyone: ends any cutscene or pop-up at once, gives back the HUD, chat and sound, and
+  keeps the pre-kill hide off for 15 seconds.
+- **An animation that hits an error stops** instead of taking the game with it: the screen is handed back, the error
+  goes to the log and `/butcher log`, and chat says so once. Three errors and that animation is off until restart.
+- **A watchdog**: a cutscene still up after 90 seconds is ended; a pre-kill hide stuck on for 45 seconds with nothing
+  playing lets the HUD back for a minute.
+- **Hypixel only**: nothing is detected on other servers or in singleplayer. The menu and "Try it" work anywhere.
+- **No floods**: more than 3 cutscenes of one kind in 10 seconds, the same drop counted twice within 2 seconds, or
+  more than 20 kills in a second is a detection bug, and is logged and ignored instead of played or counted.
+- **Slow frames**: a cutscene running under ~20 FPS switches to calm effects and drops the gameplay window.
+- The hooks that hide dropped items and tell other mods the HUD is hidden can no longer stop the game from starting
+  if a game update moves them; `/butcher log` says whether each is active.
+- **Stats backups**: a copy of `stats.json` per day (the newest three), and one from before the Ledger, kept for good.
+- The Ledger trusts nothing time-based while the computer's clock is behind the last drop, cleans up a hand-edited
+  file on load, shows at most three stamp pop-ups in a row (then "+N more"), and `/butcher ledger recheck` stamps
+  anything your stats prove that the book is missing.
+
 ### Changed
 - On a narrow window the menu's tabs show their icons only.
 

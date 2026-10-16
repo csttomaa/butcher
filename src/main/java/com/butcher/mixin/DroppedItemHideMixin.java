@@ -20,9 +20,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(EntityRenderDispatcher.class)
 public class DroppedItemHideMixin {
 
-    @Inject(method = "shouldRender", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "shouldRender", at = @At("HEAD"), cancellable = true, require = 0)
     private <E extends Entity> void butcher$hideDrops(E entity, Frustum frustum, double x, double y, double z,
                                                      CallbackInfoReturnable<Boolean> cir) {
+        com.butcher.Safety.hook(0);
         if (entity instanceof ItemEntity && ButcherClient.hideDroppedItems()) cir.setReturnValue(false);
     }
 }

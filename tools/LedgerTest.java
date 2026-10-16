@@ -46,7 +46,11 @@ public class LedgerTest {
     static final ZoneId UTC = ZoneOffset.UTC;
 
     static long at(int hour, int minute) {
-        return LocalDateTime.of(2026, 10, 16, hour, minute).atZone(UTC).toInstant().toEpochMilli();
+        return at(16, hour, minute);
+    }
+
+    static long at(int day, int hour, int minute) {
+        return LocalDateTime.of(2026, 10, day, hour, minute).atZone(UTC).toInstant().toEpochMilli();
     }
 
     public static void main(String[] a) throws Exception {
@@ -140,12 +144,12 @@ public class LedgerTest {
         Ledger.drop(luck2, "blaze", "Archfiend Dice", 11, at(14, 11), UTC);
         check("eleven minutes apart is no streak", !luck2.flags.containsKey("house_hot_streak"));
         check("2 PM is not the night shift", !luck2.flags.containsKey("house_night_shift"));
-        Ledger.drop(luck2, "diana", "Brain Food", 3, at(3, 30), UTC);
+        Ledger.drop(luck2, "diana", "Brain Food", 3, at(17, 3, 30), UTC);
         check("3:30 AM is the night shift", luck2.flags.containsKey("house_night_shift"));
-        Ledger.drop(luck2, "diana", "Brain Food", 4, at(5, 0), UTC);
-        Ledger.drop(luck2, "lava", "Flash I", 777, at(12, 0), UTC);
+        Ledger.drop(luck2, "diana", "Brain Food", 4, at(17, 5, 0), UTC);
+        Ledger.drop(luck2, "lava", "Flash I", 777, at(17, 12, 0), UTC);
         check("777th kill", luck2.flags.get("house_jackpot_777") == 777L);
-        Ledger.drop(luck2, "ghost", "Sorrow", 0, at(13, 0), UTC);
+        Ledger.drop(luck2, "ghost", "Sorrow", 0, at(17, 13, 0), UTC);
         check("a ghost drop has no kill to be 777th", luck2.flags.get("house_jackpot_777") == 777L);
 
         long within = Ledger.byId("scatha_back_to_back").number(50);
@@ -181,6 +185,46 @@ public class LedgerTest {
         check("in the black", worth.flags.get("vg_in_the_black") == 4L);
         check("coins counted", worth.coins == 40_000 + black.number(0) + 50_000);
         check("recent is capped", capped());
+
+        // ---- fail-safes: a clock that went back, and a file that was edited by hand
+        LedgerData clock = new LedgerData();
+        Ledger.drop(clock, "blaze", "Archfiend Dice", 10, at(14, 0), UTC);
+        Ledger.drop(clock, "diana", "Brain Food", 3, at(3, 30), UTC);     // earlier than the last drop
+        check("clock back: no night shift", !clock.flags.containsKey("house_night_shift"));
+        check("clock back: no hot streak", !clock.flags.containsKey("house_hot_streak"));
+        check("clock back: the drop is still kept", clock.recent.size() == 2);
+        Ledger.drop(clock, "lava", "Flash I", 777, at(3, 35), UTC);       // past the last drop again
+        check("clock back: the count needs no clock", clock.flags.get("house_jackpot_777") == 777L);
+        check("clock fine again: night shift", clock.flags.containsKey("house_night_shift"));
+        check("clock fine again: hot streak", clock.flags.containsKey("house_hot_streak"));
+
+        LedgerData bad = new LedgerData();
+        LedgerData.Entry over = new LedgerData.Entry();
+        over.grade = 99;
+        over.at = -5;
+        bad.stamps.put(worm.id(), over);
+        LedgerData.Entry zero = new LedgerData.Entry();
+        bad.stamps.put(Ledger.STAMPS.get(1).id(), zero);
+        bad.stamps.put("no_such_stamp", new LedgerData.Entry());
+        bad.stamps.get("no_such_stamp").grade = 2;
+        bad.stamps.put("null_entry", null);
+        bad.flags.put("house_night_shift", -3L);
+        bad.recent.add(null);
+        for (int i = 0; i < Ledger.RECENT + 9; i++) bad.recent.add(new LedgerData.Drop());
+        bad.cutscenes = -4;
+        bad.bustRun = 7;
+        bad.worstBustRun = 2;
+        bad.coins = -100;
+        bad.fix();
+        check("clean load: grade capped at the stamp's", bad.stamps.get(worm.id()).grade == worm.grades());
+        check("clean load: no negative date", bad.stamps.get(worm.id()).at == 0);
+        check("clean load: empty entries dropped", !bad.stamps.containsKey(Ledger.STAMPS.get(1).id())
+                && !bad.stamps.containsKey("null_entry"));
+        check("clean load: unknown ids kept", bad.stamps.containsKey("no_such_stamp"));
+        check("clean load: no negative flag", bad.flags.get("house_night_shift") == 0L);
+        check("clean load: recent capped, no nulls", bad.recent.size() == Ledger.RECENT && !bad.recent.contains(null));
+        check("clean load: counters", bad.cutscenes == 0 && bad.coins == 0 && bad.worstBustRun == 7);
+        check("clean load: the book still counts", Ledger.earnedGrades(bad) >= worm.grades());
 
         System.out.println(pass + " passed, " + fail + " failed");
         if (fail > 0) System.exit(1);

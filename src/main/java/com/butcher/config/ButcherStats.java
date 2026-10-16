@@ -99,6 +99,7 @@ public final class ButcherStats {
 
     /** One Chopping Block played for real: a kill of {@code creature}, and {@code drop} if something dropped. */
     public void onDiana(String creature, String drop) {
+        if (refused("diana", drop)) return;
         if (dianaKills == null) dianaKills = new java.util.HashMap<>();
         if (dianaDrops == null) dianaDrops = new java.util.HashMap<>();
         if (creature != null) dianaKills.merge(creature, 1, Integer::sum);
@@ -163,6 +164,7 @@ public final class ButcherStats {
 
     /** One real run of {@code key}: {@code drop} the win's name, or null for a bust. */
     public void onSource(String key, String drop) {
+        if (refused(key, drop)) return;
         Source s = source(key);
         s.kills++;
         if (drop != null) {
@@ -182,6 +184,7 @@ public final class ButcherStats {
 
     /** A drop from a source with no kill to count (the Ghosts): only the drop is tallied. */
     public void onSourceDrop(String key, String drop) {
+        if (refused(key, drop)) return;
         source(key).drops.merge(drop, 1, Integer::sum);
         LedgerData l = ledger();
         Ledger.run(l, true);
@@ -266,6 +269,64 @@ public final class ButcherStats {
             }
         }
         return f;
+    }
+
+    // ---------------------------------------------------------------- the fail-safes (2026-10-16)
+
+    /** The same win from the same source this soon after the last is one line seen twice, not two drops. */
+    static final long DUPLICATE_MS = 2_000;
+    /** More counted events than this in one second is a detection bug, not luck. */
+    static final int FLOOD = 20;
+    private static final java.util.ArrayDeque<Long> counted = new java.util.ArrayDeque<>();
+    private static String lastWin;
+    private static long lastWinAt = -1;
+
+    /**
+     * Whether this run must not be counted: a duplicate of the win just counted, or one of a flood. Either is logged
+     * and dropped, so a detection bug can never fill the stats and the Ledger with drops nobody got.
+     */
+    private static boolean refused(String source, String drop) {
+        long now = System.currentTimeMillis();
+        if (drop != null && !"vanguard".equals(source)) {
+            String key = source + "|" + drop;
+            if (key.equals(lastWin) && now - lastWinAt >= 0 && now - lastWinAt < DUPLICATE_MS) {
+                note("§eSafety: " + drop + " (" + source + ") counted twice within " + DUPLICATE_MS / 1000
+                        + " s - the second is not counted");
+                return true;
+            }
+            lastWin = key;
+            lastWinAt = now;
+        }
+        while (!counted.isEmpty() && now - counted.peekFirst() > 1_000) counted.pollFirst();
+        if (counted.size() >= FLOOD) {
+            note("§cSafety: more than " + FLOOD + " kills or drops in a second - not counted (a detection bug?)");
+            return true;
+        }
+        counted.addLast(now);
+        return false;
+    }
+
+    private static void note(String line) {
+        try {
+            ButcherClient.decisions.note(line);
+        } catch (Throwable ignored) {
+            // Offline (LedgerTest): there is no client.
+        }
+    }
+
+    /**
+     * /butcher ledger recheck: the Ledger against the stats again. Whatever they prove and the book lacks is stamped,
+     * undated and without a pop-up, as the first backfill was. Never takes anything away.
+     *
+     * @return how many stamps or grades were added
+     */
+    public int recheck() {
+        LedgerData l = ledger();
+        int before = Ledger.earnedGrades(l);
+        Ledger.refresh(facts(), l, System.currentTimeMillis(), true);
+        int added = Ledger.earnedGrades(l) - before;
+        if (added > 0) save();
+        return added;
     }
 
     /** Earns whatever the numbers now reach and tells the pop-up. The caller saves. */
@@ -355,6 +416,7 @@ public final class ButcherStats {
      * @param blocked true for Dwarven O's rather than gemstones
      */
     public void onDrop(String rarity, boolean blocked) {
+        if (refused("scatha", rarity)) return;
         if (rarity != null) {
             switch (rarity) {
                 case "legendary" -> petsLegendary++;
@@ -384,6 +446,8 @@ public final class ButcherStats {
      * know what a {@code CorpseHaul} is - the stats file outlives any one feature's types.
      */
     public void onCorpse(int commons, int uncommons, int legendaries, int specials) {
+        // Never de-duplicated: corpses are read one loot message each, and two can be opened close together.
+        if (refused("vanguard", null)) return;
         corpses++;
         corpseRolls += commons + uncommons + legendaries + specials;
         corpseCommons += commons;
@@ -486,8 +550,13 @@ public final class ButcherStats {
     private static ButcherStats load() {
         try {
             if (Files.exists(PATH)) {
+                backUp();
                 ButcherStats read = GSON.fromJson(Files.readString(PATH), ButcherStats.class);
-                if (read != null) return read;
+                if (read != null) {
+                    // Before the Ledger first touches the file, a copy of it as it was - kept for good.
+                    if (read.ledger == null) copyOnce(PATH.resolveSibling("stats.json.pre-ledger"));
+                    return read;
+                }
             }
         } catch (Exception e) {
             // Moved aside, never overwritten: the first save would otherwise wipe every streak for good.
@@ -498,6 +567,33 @@ public final class ButcherStats {
             }
         }
         return new ButcherStats();
+    }
+
+    /** Daily backups kept beside stats.json: one per day the game is started, the newest few. */
+    static final int BACKUPS = 3;
+
+    /** Copies stats.json to stats.json.YYYY-MM-DD.bak once a day, and keeps only the newest {@link #BACKUPS}. */
+    private static void backUp() {
+        try {
+            copyOnce(PATH.resolveSibling("stats.json." + java.time.LocalDate.now() + ".bak"));
+            java.util.List<Path> old = new java.util.ArrayList<>();
+            try (java.util.stream.Stream<Path> files = Files.list(PATH.getParent())) {
+                files.filter(f -> f.getFileName().toString().matches("stats\\.json\\.\\d{4}-\\d{2}-\\d{2}\\.bak"))
+                        .forEach(old::add);
+            }
+            old.sort(java.util.Comparator.comparing(f -> f.getFileName().toString()));
+            for (int i = 0; i < old.size() - BACKUPS; i++) Files.deleteIfExists(old.get(i));
+        } catch (Exception e) {
+            ButcherClient.LOGGER.warn("[Butcher] could not back up stats.json", e);
+        }
+    }
+
+    private static void copyOnce(Path to) {
+        try {
+            if (!Files.exists(to)) Files.copy(PATH, to);
+        } catch (Exception e) {
+            ButcherClient.LOGGER.warn("[Butcher] could not copy stats.json to " + to.getFileName(), e);
+        }
     }
 
     public void save() {

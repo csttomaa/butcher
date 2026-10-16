@@ -34,6 +34,11 @@ public final class CutsceneHud {
         if (shown == screen) shown = null;
     }
 
+    /** Takes whatever is showing off, whoever it is (/butcher stop, or after an error). */
+    public static void clear() {
+        shown = null;
+    }
+
     public static Screen shown() {
         return shown;
     }

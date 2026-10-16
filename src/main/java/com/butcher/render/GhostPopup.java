@@ -64,6 +64,11 @@ public final class GhostPopup {
         return (long) ((System.currentTimeMillis() - startedAt) * speed);
     }
 
+    /** Takes it off at once (/butcher stop, or after an error). */
+    public static void stop() {
+        drop = null;
+    }
+
     public static boolean active() {
         return drop != null && elapsed() < END;
     }

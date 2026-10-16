@@ -22,8 +22,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Hud.class)
 public class HudHiddenMixin {
 
-    @Inject(method = "isHidden", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "isHidden", at = @At("HEAD"), cancellable = true, require = 0)
     private void butcher$hiddenWhileWeHide(CallbackInfoReturnable<Boolean> cir) {
+        com.butcher.Safety.hook(2);
         if (ButcherClient.shouldHideHud()) cir.setReturnValue(true);
     }
 }

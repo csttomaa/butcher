@@ -82,7 +82,9 @@ showcase, so you still get to see it.
 | --- | --- |
 | `/butcher` | Opens the settings |
 | `/butcher reload` | Re-reads the config and redraws the generated art |
+| `/butcher stop` | Ends whatever is playing right now and gives you your screen back |
 | `/butcher log` | The last 40 detection decisions: every kill accepted or refused, and why |
+| `/butcher ledger recheck` | Stamps anything your stats prove that the Ledger is missing |
 | `/butcher skins` | Whether the Scatha's skin has been captured yet (`forget` to recapture it) |
 | `/butcher records` | How many drop records are saved (only if *Drop records* is on) |
 
@@ -115,7 +117,8 @@ Everything lives under `.minecraft/config/`:
 
 - `butcher.json`: your settings. If it ever becomes unreadable it's moved aside to `butcher.json.broken` and the
   defaults are used, so a bad edit never stops the game from starting.
-- `butcher/`: stats, the captured Scatha skin, a skin cache, and the generated textures.
+- `butcher/`: stats (with a daily backup of the last three days beside them), the captured Scatha skin, a skin cache,
+  and the generated textures.
 - `butcher-drops.jsonl`: only if you turn on *Drop records* (off by default). A local log of real kills and drops
   with the chat around them, handy for bug reports. It never leaves your computer.
 

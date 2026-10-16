@@ -200,14 +200,10 @@ public final class Ledger {
      * @param kill that source's kill count with this kill (0 for a source with no kills)
      */
     public static void drop(LedgerData d, String source, String title, long kill, long now, ZoneId zone) {
-        for (LedgerData.Drop prev : d.recent) {
-            if (now - prev.at <= HOT_STREAK_MS && now >= prev.at) {
-                award(d, "house_hot_streak", kill);
-                break;
-            }
-        }
-        int hour = Instant.ofEpochMilli(now).atZone(zone).getHour();
-        if (hour >= 3 && hour < 5) award(d, "house_night_shift", kill);
+        // The computer's clock went back (a new time zone, a fixed clock, a dead BIOS battery): nothing that needs
+        // the time is trusted until it is past the last drop again - no hot streak against "future" drops, no 3 AM.
+        boolean clockOk = d.recent.isEmpty() || now >= d.recent.get(d.recent.size() - 1).at;
+        if (clockOk) timed(d, kill, now, zone);
         Stamp jackpot = byId("house_jackpot_777");
         if (kill > 0 && kill == (jackpot == null ? 777 : jackpot.number(777))) award(d, "house_jackpot_777", kill);
         if ("scatha".equals(source)) {
@@ -228,6 +224,18 @@ public final class Ledger {
         dr.at = now;
         d.recent.add(dr);
         while (d.recent.size() > RECENT) d.recent.remove(0);
+    }
+
+    /** The awards that read the clock: the hot streak and the night shift. */
+    private static void timed(LedgerData d, long kill, long now, ZoneId zone) {
+        for (LedgerData.Drop prev : d.recent) {
+            if (now - prev.at <= HOT_STREAK_MS && now >= prev.at) {
+                award(d, "house_hot_streak", kill);
+                break;
+            }
+        }
+        int hour = Instant.ofEpochMilli(now).atZone(zone).getHour();
+        if (hour >= 3 && hour < 5) award(d, "house_night_shift", kill);
     }
 
     /** A Vanguard corpse's worth, once every price is in: In the Black and Negative Equity. */

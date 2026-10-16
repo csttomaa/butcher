@@ -46,6 +46,11 @@ public class AnimationManager {
         }
     }
 
+    /** Ends it at once, unannounced (/butcher stop, or after an error). */
+    public void stop() {
+        current = null;
+    }
+
     public boolean isPlaying() {
         return current != null;
     }

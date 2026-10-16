@@ -164,7 +164,7 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
         sounds(t);
         textures();
         EruptionScene.nthNote = nth;
-        ChopScene.calm = ButcherClient.config != null && ButcherClient.config.calmEffects;
+        ChopScene.calm = (ButcherClient.config != null && ButcherClient.config.calmEffects) || com.butcher.Safety.slow();
         EruptionScene.showBanner = ButcherClient.config == null || ButcherClient.config.lavaBanner;
         EruptionScene.rasterScale = Math.max(1, Math.min(2, Minecraft.getInstance().getWindow().getGuiScale()));
         this.g = g;

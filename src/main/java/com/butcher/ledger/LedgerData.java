@@ -53,12 +53,36 @@ public final class LedgerData {
     /** The stats have been read into the Ledger once (the "pre-ledger" stamps). */
     public boolean backfilled;
 
-    /** Gson leaves fields of an older file null: puts back the empty ones. */
+    /**
+     * Gson leaves fields of an older file null: puts back the empty ones. And a hand-edited or half-written file is
+     * made sane rather than trusted: no grade above what its stamp has (or below 1), no negative counter, no empty
+     * entry, the recent drops capped. A stamp id the table no longer has is kept (a later version may know it again)
+     * - the book only draws the ones it knows.
+     */
     public LedgerData fix() {
         if (stamps == null) stamps = new LinkedHashMap<>();
         if (flags == null) flags = new LinkedHashMap<>();
         if (seen == null) seen = new HashSet<>();
         if (recent == null) recent = new ArrayList<>();
+        stamps.values().removeIf(e -> e == null || e.grade <= 0);
+        for (Map.Entry<String, Entry> me : stamps.entrySet()) {
+            Entry e = me.getValue();
+            Stamp s = Ledger.byId(me.getKey());
+            if (s != null) e.grade = Math.min(e.grade, s.grades());
+            if (e.at < 0) e.at = 0;
+            if (e.value < 0) e.value = 0;
+        }
+        flags.values().removeIf(v -> v == null);
+        flags.replaceAll((k, v) -> Math.max(0L, v));
+        seen.removeIf(s -> s == null);
+        recent.removeIf(d -> d == null || d.at < 0);
+        while (recent.size() > Ledger.RECENT) recent.remove(0);
+        cutscenes = Math.max(0, cutscenes);
+        bustRun = Math.max(0, bustRun);
+        worstBustRun = Math.max(bustRun, Math.max(0, worstBustRun));
+        skips = Math.max(0, skips);
+        coins = Math.max(0, coins);
+        firstPetKill = Math.max(0, firstPetKill);
         return this;
     }
 }
