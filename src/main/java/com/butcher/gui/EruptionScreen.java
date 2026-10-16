@@ -43,6 +43,8 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
     /** Opened on a kill with the drop not known yet: the drop line fills it in ({@link #resolve}). */
     private boolean pending;
     private final boolean test;
+    /** Short busts apply: every real run, and a test from the menu's "Try it" (not /butcher test). */
+    private final boolean followsBusts = com.butcher.ButcherClient.tryingIt;
     /** Not final: the skip key moves it back, so the clock jumps to the showcase. */
     /** The scene's clock, at the player's speed for this animation (the menu's Speed). */
     private final com.butcher.anim.SceneClock clock = new com.butcher.anim.SceneClock(
@@ -439,7 +441,7 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
     private boolean shortened;
 
     private void shortBust() {
-        if (shortened || test || pending || drop.win() || ButcherClient.bustStyle("lava") != 1) return;
+        if (shortened || (test && !followsBusts) || pending || drop.win() || ButcherClient.bustStyle("lava") != 1) return;
         shortened = true;
         long t = clock.t(), target = EruptionTimeline.REVEAL - 450;
         if (t >= target) return;

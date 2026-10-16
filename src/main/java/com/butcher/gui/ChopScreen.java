@@ -38,6 +38,8 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     private boolean pending;
     private final com.butcher.render.MeshRenderer meshes = new com.butcher.render.MeshRenderer();
     private final boolean test;
+    /** Short busts apply: every real run, and a test from the menu's "Try it" (not /butcher test). */
+    private final boolean followsBusts = com.butcher.ButcherClient.tryingIt;
     /** Not final: the skip key moves it back, so the clock jumps to the showcase. */
     /** The scene's clock, at the player's speed for this animation (the menu's Speed). */
     private final com.butcher.anim.SceneClock clock = new com.butcher.anim.SceneClock(
@@ -720,7 +722,7 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
 
     /** "Busts: short": a bust known before the split jumps to just before it, silently. */
     private void shortBust() {
-        if (shortened || test || pending || verdict.win() || ButcherClient.bustStyle("diana") != 1) return;
+        if (shortened || (test && !followsBusts) || pending || verdict.win() || ButcherClient.bustStyle("diana") != 1) return;
         shortened = true;
         long t = clock.t(), target = ChopTimeline.SPLIT - 450;
         if (t >= target) return;

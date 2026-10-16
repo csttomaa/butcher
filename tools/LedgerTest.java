@@ -41,7 +41,8 @@ public class LedgerTest {
     /** The stamps whose value is an event, kept by award() - the rest are counted from the stats. */
     static final Set<String> EVENTS = Set.of("house_hot_streak", "house_night_shift", "house_jackpot_777",
             "scatha_back_to_back", "vg_negative_equity", "vg_in_the_black", "diana_shared_custody", "lava_jaw_dropping",
-            "fin_bigger_fish");
+            "fin_bigger_fish", "house_big_ticket", "fin_feeding_frenzy", "wisp_double_haunting", "wisp_poltergeist",
+            "wisp_matched_pair", "wisp_witching_hour");
 
     static final ZoneId UTC = ZoneOffset.UTC;
 
@@ -92,11 +93,17 @@ public class LedgerTest {
         String shark = Files.readString(Path.of("src/main/java/com/butcher/detect/SharkDrops.java"));
         String ghost = Files.readString(Path.of("src/main/java/com/butcher/detect/GhostDrops.java"));
         String diana = Files.readString(Path.of("src/main/java/com/butcher/render/DianaItems.java"));
-        for (String n : List.of("Duplex I", "Archfiend Dice", "High Class Archfiend Dice", "Flame Dye")) {
-            check("Hellion names " + n, hellion.contains("\"" + n + "\""));
+        for (String n : HELLION) check("Hellion names " + n, hellion.contains("\"" + n + "\""));
+        for (String n : ERUPTION) check("Eruption names " + n, eruption.contains("\"" + n + "\""));
+        String vanguard = Files.readString(Path.of("src/main/java/com/butcher/detect/vanguard/VanguardLoot.java"));
+        for (String n : List.of("Caged Wisp", "Frozen Scute", "Skeleton Key")) {
+            check("Vanguard names " + n, vanguard.contains("\"" + n + "\""));
         }
-        for (String n : List.of("Flash I", "Radioactive Vial", "Burnt Texts", "Carmine Dye")) {
-            check("Eruption names " + n, eruption.contains("\"" + n + "\""));
+        String chop = Files.readString(Path.of("src/main/java/com/butcher/anim/ChopTimeline.java"));
+        check("Diana creature INQUISITOR", chop.contains("INQUISITOR"));
+        for (com.butcher.ledger.Chapter c : com.butcher.ledger.Chapter.values()) {
+            if (c == com.butcher.ledger.Chapter.SERAPH) continue;
+            check("10 or more stamps in " + c, Ledger.chapter(c).size() >= 10, Ledger.chapter(c).size() + "");
         }
         for (String n : List.of("Megalodon", "Great White Shark Tooth")) check("Fin names " + n, shark.contains("\"" + n + "\""));
         for (String n : List.of("Sorrow", "Plasma")) check("Wisp names " + n, ghost.contains("\"" + n + "\""));
@@ -186,6 +193,28 @@ public class LedgerTest {
         check("coins counted", worth.coins == 40_000 + black.number(0) + 50_000);
         check("recent is capped", capped());
 
+        // ---- the Fin and Wisp runs of luck
+        LedgerData runs2 = new LedgerData();
+        Ledger.drop(runs2, "shark", "Megalodon", 10, at(14, 0), UTC);
+        check("one shark drop is no frenzy", !runs2.flags.containsKey("fin_feeding_frenzy"));
+        Ledger.drop(runs2, "lava", "Flash I", 5, at(14, 2), UTC);
+        check("another source's drop is no frenzy", !runs2.flags.containsKey("fin_feeding_frenzy"));
+        Ledger.drop(runs2, "shark", "Great White Shark Tooth", 12, at(14, 8), UTC);
+        check("two shark drops in 10 minutes", runs2.flags.containsKey("fin_feeding_frenzy"));
+        LedgerData g = new LedgerData();
+        Ledger.drop(g, "ghost", "Sorrow", 0, at(13, 0), UTC);
+        Ledger.drop(g, "ghost", "Sorrow", 0, at(13, 20), UTC);
+        check("20 minutes apart is no double haunting", !g.flags.containsKey("wisp_double_haunting"));
+        check("two Sorrows are no matched pair", !g.flags.containsKey("wisp_matched_pair"));
+        check("two in an hour is no poltergeist", !g.flags.containsKey("wisp_poltergeist"));
+        Ledger.drop(g, "ghost", "Plasma", 0, at(13, 25), UTC);
+        check("double haunting", g.flags.containsKey("wisp_double_haunting"));
+        check("poltergeist", g.flags.containsKey("wisp_poltergeist"));
+        check("matched pair", g.flags.containsKey("wisp_matched_pair"));
+        check("1 PM is no witching hour", !g.flags.containsKey("wisp_witching_hour"));
+        Ledger.drop(g, "ghost", "Sorrow", 0, at(17, 0, 30), UTC);
+        check("witching hour", g.flags.containsKey("wisp_witching_hour"));
+
         // ---- fail-safes: a clock that went back, and a file that was edited by hand
         LedgerData clock = new LedgerData();
         Ledger.drop(clock, "blaze", "Archfiend Dice", 10, at(14, 0), UTC);
@@ -237,15 +266,23 @@ public class LedgerTest {
     }
 
     /** Every number high and every drop had. */
+    static final String[] HELLION = {"Duplex I", "Scorched Power Crystal", "Subzero Inverter", "Wilson's Engineering Plans",
+            "Paragon Shard", "Archfiend Dice", "High Class Archfiend Dice", "Flame Dye"};
+    static final String[] ERUPTION = {"Chain of the End Times", "Severed Pincer", "Flash I", "Brimstone Handle",
+            "Radioactive Vial", "Scuttler Shell", "Burnt Texts", "Carmine Dye"};
+
     static Facts rich() {
         Facts f = new Facts();
         f.scathaKills = f.petsRare = f.petsEpic = f.petsLegendary = f.scathaWorstDry = f.scathaMisses = 99_999;
         f.corpses = f.corpseLegendaries = f.corpseDyes = f.lockets = f.corpseWorstDry = 99_999;
         f.dianaKills = 99_999;
+        f.dwarvenOs = f.corpseRolls = 99_999;
+        for (String n : List.of("Caged Wisp", "Frozen Scute", "Skeleton Key")) f.corpseItems.put(n, 3);
+        f.dianaKillsBy.put("INQUISITOR", 99_999);
         for (String n : List.of("Brain Food", "Chimera I", "Fateful Stinger", "Manti-core", "Crown of Greed",
                 "Shimmering Wool", "Minos Relic", "Mythological Dye")) f.dianaDrops.put(n, 5);
-        put(f, "blaze", "Duplex I", "Archfiend Dice", "High Class Archfiend Dice", "Flame Dye");
-        put(f, "lava", "Flash I", "Radioactive Vial", "Burnt Texts", "Carmine Dye");
+        put(f, "blaze", HELLION);
+        put(f, "lava", ERUPTION);
         put(f, "shark", "Megalodon", "Great White Shark Tooth");
         put(f, "ghost", "Sorrow", "Plasma");
         f.drops.get("ghost").put("Sorrow", 99_999);

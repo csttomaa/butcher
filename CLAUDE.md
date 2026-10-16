@@ -770,6 +770,9 @@ holds the full priority list; Tier 1 is built and **confirmed working in game (t
   55%; the Scatha's shake knob reads it too. `vanguardQuick`: ThawScreen jumps a CRASH corpse from the intro to
   finaleStart - 1500, events fired muted. `ButcherClient.resetSettings` (stats untouched). `playTest` for the
   menu's "Try it" rows.
+- **"Try it" follows the bust setting (2026-10-16, the user)**: `playTest` sets `ButcherClient.tryingIt` while it opens
+  a screen, which the screen keeps as `followsBusts`, so `shortBust` applies to it; with busts off a bust "Try it"
+  plays nothing and says so in chat (`testWins`). `/butcher test` still plays everything in full.
 - Menu: tab "Animations"; Live prices + the floor under General > Prices; every volume also on the Sound tab
   (`snd_*` slider ids); `bustsRow`, `tryRows`.
 - Tier 3: Kuudra's carmine capped at 105 units and End Times' terracotta at 30 + 75*terra (both were floor washes);
@@ -926,6 +929,12 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
 - **Pencil** on the pages: a quip and a 2x doodle per chapter at the foot of the title page (`note`, `DOODLES` in
   Chapter order), a double squiggle under the title, a coffee ring on two chapters in three, tally marks of the
   chapter's stamps on the right page.
+- **92 stamps (2026-10-16, the user: "10 per page at least")**: 12 a chapter, 10 for Fin and Wisp (the Seraph's
+  chapter stays taped, with none). The 33 added are marked in the sheet's notes column. They count from `Facts`
+  fields added for them (`dwarvenOs`, `corpseRolls`, `corpseItems` by name, `dianaKillsBy` by creature,
+  `allDrops()`, `dropSources()`), except the events: Big Ticket (`ButcherStats.onCoins`, one drop >= 10M), and Fin's
+  Feeding Frenzy and Wisp's Double Haunting, Poltergeist, Matched Pair and Witching Hour, which `Ledger.timed` reads
+  from the source's own recent drops (only when the clock is sane). LedgerTest (388) checks every chapter has 10+.
 - **`/butcher test ledger`** (developers only - it hangs off `test`, so `Dev.allowed()`; `ButcherClient.ledgerTestNode`):
   `popup <id> [grade]` (only the pop-up, `StampPopup.queueTest`, shown even with pop-ups off; `popup burst` queues
   six to see the cap), `give <id> [grade]` / `take <id>`, `info <id>` (what `Ledger.value` counts now, the grade it

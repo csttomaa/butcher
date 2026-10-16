@@ -19,6 +19,10 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   over it. Switch it off under General, set its volume under Sound.
 - Stamps outlive every stats reset.
 
+- **33 more stamps**, so every chapter fills a page: drop counts, every Demonlord and lava drop, Caged Wisp, Frozen
+  Scute and Skeleton Key from corpses, Inquisitor kills, Dwarven O's busts, a drop worth 10M+ in one go, and the Ghosts'
+  and sharks' runs of luck (two drops in ten minutes, three in an hour, Sorrow and Plasma together, one at midnight).
+
 ### Safety nets
 - **`/butcher stop`**, for everyone: ends any cutscene or pop-up at once, gives back the HUD, chat and sound, and
   keeps the pre-kill hide off for 15 seconds.
@@ -43,6 +47,8 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   tabs - a page lifts and goes over the spine. Pencil notes, doodles, tally marks and the odd coffee ring on the
   pages. Esc, the back button or the ribbon put it away.
 - The menu is roomier: a wider, taller panel with more space between rows.
+- "Try it" plays busts the way your Busts setting does: short when it is short, and not at all (with a note in chat)
+  when it is off.
 - On a narrow window the menu's tabs show their icons only.
 
 ## 0.3.3-alpha - the first public release (2026-10-15)

@@ -25,6 +25,8 @@ public final class Ledger {
     public static final int RECENT = 60;
     /** "Hot Streak": two rare drops this close together. */
     public static final long HOT_STREAK_MS = 10 * 60_000L;
+    /** The window for the Ghosts' hour-long runs (Poltergeist, Matched Pair). */
+    public static final long HOUR_MS = 60 * 60_000L;
 
     private static final Map<String, Stamp> BY_ID = new HashMap<>();
     private static final Map<Chapter, List<Stamp>> BY_CHAPTER = new EnumMap<>(Chapter.class);
@@ -76,6 +78,8 @@ public final class Ledger {
             case "house_always_wins" -> d.worstBustRun;
             case "house_tycoon" -> d.coins;
             case "house_places_to_be" -> d.skips;
+            case "house_well_done" -> f.allDrops();
+            case "house_collector" -> f.dropSources();
 
             case "scatha_worm_food" -> f.scathaKills;
             case "scatha_rare_cut" -> f.petsRare;
@@ -87,14 +91,21 @@ public final class Ledger {
             case "scatha_dry_aged", "scatha_dry_aged_45" -> f.scathaWorstDry;
             case "scatha_slippery" -> f.scathaMisses;
             case "scatha_dozen" -> f.pets();
+            case "scatha_cereal" -> f.dwarvenOs;
 
             case "vg_thawed_out" -> f.corpses;
             case "vg_cold_hands" -> f.corpseLegendaries;
             case "vg_heart_of_glass" -> f.lockets;
             case "vg_frostbitten" -> f.corpseDyes;
             case "vg_ice_cold" -> f.corpseWorstDry;
+            case "vg_skeleton_crew" -> f.corpseRolls;
+            case "vg_cold_storage" -> f.corpseLegendaries;
+            case "vg_will_o_wisp" -> f.item("Caged Wisp");
+            case "vg_tough_skin" -> f.item("Frozen Scute");
+            case "vg_master_key" -> f.item("Skeleton Key");
 
             case "diana_heads" -> f.dianaKills;
+            case "diana_inquisition" -> f.dianaKillsBy.getOrDefault("INQUISITOR", 0);
             case "diana_brain_food" -> f.dianaDrop("Brain Food");
             case "diana_chimera" -> f.dianaDrop("Chimera I");
             case "diana_stinger" -> f.dianaDrop("Fateful Stinger");
@@ -115,6 +126,16 @@ public final class Ledger {
             case "hellion_high_roller" -> f.drops("blaze", "High Class Archfiend Dice");
             case "hellion_playing_fire" -> f.drops("blaze", "Flame Dye");
             case "hellion_ashes" -> f.worstDry("blaze");
+            case "hellion_power_trip" -> f.drops("blaze", "Scorched Power Crystal");
+            case "hellion_cold_feet" -> f.drops("blaze", "Subzero Inverter");
+            case "hellion_blueprints" -> f.drops("blaze", "Wilson's Engineering Plans");
+            case "hellion_paragon" -> f.drops("blaze", "Paragon Shard");
+            case "hellion_hellfire_club" -> f.drops("blaze");
+            case "hellion_seventh_circle" -> {
+                long min = Long.MAX_VALUE;
+                for (String n : HELLION_DROPS) min = Math.min(min, f.drops("blaze", n));
+                yield min;
+            }
 
             case "lava_magma_maker" -> f.kills("lava");
             case "lava_flash" -> f.drops("lava", "Flash I");
@@ -122,15 +143,27 @@ public final class Ledger {
             case "lava_end_times" -> f.drops("lava", "Burnt Texts");
             case "lava_kuudra" -> f.drops("lava", "Carmine Dye");
             case "lava_thermal_runaway" -> f.worstDry("lava");
+            case "lava_chained" -> f.drops("lava", "Chain of the End Times");
+            case "lava_pinch_me" -> f.drops("lava", "Severed Pincer");
+            case "lava_forged" -> f.drops("lava", "Brimstone Handle");
+            case "lava_shell_shocked" -> f.drops("lava", "Scuttler Shell");
+            case "lava_hot_catch" -> f.drops("lava");
 
             case "fin_shark_week" -> f.kills("shark");
             case "fin_big_fish" -> f.drops("shark", "Megalodon");
             case "fin_tooth_fairy" -> f.drops("shark", "Great White Shark Tooth");
             case "fin_off_the_hook" -> Math.max(0, f.kills("shark") - f.drops("shark"));
+            case "fin_dentist" -> f.drops("shark", "Great White Shark Tooth");
+            case "fin_school" -> f.drops("shark", "Megalodon");
+            case "fin_dry_dock" -> f.worstDry("shark");
+            case "fin_both_ends" -> Math.min(f.drops("shark", "Megalodon"), f.drops("shark", "Great White Shark Tooth"));
 
             case "wisp_sorrowful" -> f.drops("ghost", "Sorrow");
             case "wisp_plasma" -> f.drops("ghost", "Plasma");
             case "wisp_spirit_level" -> f.drops("ghost");
+            case "wisp_drowning" -> f.drops("ghost", "Sorrow");
+            case "wisp_high_voltage" -> f.drops("ghost", "Plasma");
+            case "wisp_bittersweet" -> Math.min(f.drops("ghost", "Sorrow"), f.drops("ghost", "Plasma"));
 
             // Everything else is an event: it happened (award) or it did not.
             default -> d.flags.containsKey(s.id()) ? 1 : 0;
@@ -138,6 +171,9 @@ public final class Ledger {
     }
 
     /** Diana's eight drops, as the stats name them. */
+    /** Every Demonlord drop with its own ending, as the stats name them (Seventh Circle). */
+    static final String[] HELLION_DROPS = {"Duplex I", "Scorched Power Crystal", "Subzero Inverter",
+            "Wilson's Engineering Plans", "Paragon Shard", "Archfiend Dice", "High Class Archfiend Dice", "Flame Dye"};
     static final String[] DIANA_DROPS = {"Brain Food", "Chimera I", "Fateful Stinger", "Manti-core", "Crown of Greed",
             "Shimmering Wool", "Minos Relic", "Mythological Dye"};
 
@@ -203,7 +239,7 @@ public final class Ledger {
         // The computer's clock went back (a new time zone, a fixed clock, a dead BIOS battery): nothing that needs
         // the time is trusted until it is past the last drop again - no hot streak against "future" drops, no 3 AM.
         boolean clockOk = d.recent.isEmpty() || now >= d.recent.get(d.recent.size() - 1).at;
-        if (clockOk) timed(d, kill, now, zone);
+        if (clockOk) timed(d, source, title, kill, now, zone);
         Stamp jackpot = byId("house_jackpot_777");
         if (kill > 0 && kill == (jackpot == null ? 777 : jackpot.number(777))) award(d, "house_jackpot_777", kill);
         if ("scatha".equals(source)) {
@@ -226,8 +262,8 @@ public final class Ledger {
         while (d.recent.size() > RECENT) d.recent.remove(0);
     }
 
-    /** The awards that read the clock: the hot streak and the night shift. */
-    private static void timed(LedgerData d, long kill, long now, ZoneId zone) {
+    /** The awards that read the clock: the hot streak, the night shift, and the Fin and Wisp runs of luck. */
+    private static void timed(LedgerData d, String source, String title, long kill, long now, ZoneId zone) {
         for (LedgerData.Drop prev : d.recent) {
             if (now - prev.at <= HOT_STREAK_MS && now >= prev.at) {
                 award(d, "house_hot_streak", kill);
@@ -236,6 +272,25 @@ public final class Ledger {
         }
         int hour = Instant.ofEpochMilli(now).atZone(zone).getHour();
         if (hour >= 3 && hour < 5) award(d, "house_night_shift", kill);
+        // A source's own runs of luck, against its earlier drops (this one is not in the list yet).
+        int sameHour = 0;
+        boolean sameTen = false, otherKindHour = false;
+        for (LedgerData.Drop prev : d.recent) {
+            if (!source.equals(prev.source) || prev.at > now) continue;
+            long ago = now - prev.at;
+            if (ago <= HOT_STREAK_MS) sameTen = true;
+            if (ago <= HOUR_MS) {
+                sameHour++;
+                if (!title.equals(prev.title)) otherKindHour = true;
+            }
+        }
+        if ("shark".equals(source) && sameTen) award(d, "fin_feeding_frenzy", kill);
+        if ("ghost".equals(source)) {
+            if (sameTen) award(d, "wisp_double_haunting", kill);
+            if (sameHour >= 2) award(d, "wisp_poltergeist", kill);
+            if (otherKindHour) award(d, "wisp_matched_pair", kill);
+            if (hour == 0) award(d, "wisp_witching_hour", kill);
+        }
     }
 
     /** A Vanguard corpse's worth, once every price is in: In the Black and Negative Equity. */

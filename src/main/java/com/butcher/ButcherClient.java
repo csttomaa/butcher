@@ -1261,6 +1261,40 @@ public class ButcherClient implements ClientModInitializer {
         com.butcher.gui.Cutscene c = currentCutscene();
         if (c != null) c.interrupt();
         clearFinished();
+        // "Try it" shows what the player will get, so it follows the bust setting (the user, 2026-10-16): short busts
+        // play short, and with busts off a bust plays nothing - said in chat, so the button does not look broken.
+        // /butcher test still plays everything in full.
+        if (bustStyle(group) == 2 && !testWins(group, name)) {
+            Safety.say("Busts are set to §fNone§r for this animation, so a bust plays nothing. Change it under Busts.");
+            return;
+        }
+        tryingIt = true;
+        try {
+            playTry(group, name);
+        } finally {
+            tryingIt = false;
+        }
+    }
+
+    /** True while "Try it" is opening a screen: that screen follows the bust setting (ShortBust), as a real run does. */
+    public static boolean tryingIt;
+
+    /** Whether the drop a Try it row names is a win. */
+    private static boolean testWins(String group, String name) {
+        try {
+            return switch (group) {
+                case "diana" -> com.butcher.anim.ChopTimeline.Verdict.valueOf(name).win();
+                case "blaze" -> com.butcher.anim.HellionTimeline.Drop.valueOf(name).win();
+                case "seraph" -> com.butcher.anim.SeraphTimeline.Drop.valueOf(name).win();
+                case "lava" -> com.butcher.anim.EruptionTimeline.Drop.valueOf(name).win();
+                default -> true;
+            };
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
+    }
+
+    private static void playTry(String group, String name) {
         switch (group) {
             case "diana" -> openChop(com.butcher.anim.ChopTimeline.Verdict.valueOf(name), null, true);
             case "blaze" -> openHellion(com.butcher.anim.HellionTimeline.Drop.valueOf(name), true);

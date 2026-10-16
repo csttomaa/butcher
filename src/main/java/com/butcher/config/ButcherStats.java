@@ -253,6 +253,10 @@ public final class ButcherStats {
         f.petsLegendary = petsLegendary;
         f.scathaWorstDry = Math.max(worstDryStreak, dryStreak);
         f.scathaMisses = misses;
+        f.dwarvenOs = dwarvenOs;
+        f.corpseRolls = corpseRolls;
+        if (corpseItems != null) f.corpseItems.putAll(corpseItems);
+        if (dianaKills != null) f.dianaKillsBy.putAll(dianaKills);
         f.corpses = corpses;
         f.corpseLegendaries = corpseLegendaries;
         f.corpseDyes = corpseSpecials;
@@ -391,10 +395,14 @@ public final class ButcherStats {
         save();
     }
 
+    /** One drop worth this much earns the House's Big Ticket. */
+    static final long BIG_TICKET = 10_000_000;
+
     /** A real drop revealed with its price: the House's Tycoon. */
     public void onCoins(long coins) {
         if (coins <= 0) return;
         ledger().coins += coins;
+        if (coins >= BIG_TICKET) Ledger.award(ledger(), "house_big_ticket", 0);
         stampCheck();
         save();
     }

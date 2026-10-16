@@ -9,11 +9,13 @@ import java.util.Map;
  */
 public final class Facts {
     // The Scatha.
-    public long scathaKills, petsRare, petsEpic, petsLegendary, scathaWorstDry, scathaMisses;
-    // Vanguard.
-    public long corpses, corpseLegendaries, corpseDyes, lockets, corpseWorstDry;
-    // Diana: kills of every creature together, drops by name.
+    public long scathaKills, petsRare, petsEpic, petsLegendary, scathaWorstDry, scathaMisses, dwarvenOs;
+    // Vanguard: and every item by its name, as the corpse message names it.
+    public long corpses, corpseLegendaries, corpseDyes, lockets, corpseWorstDry, corpseRolls;
+    public Map<String, Integer> corpseItems = new HashMap<>();
+    // Diana: kills of every creature together and by creature (its enum name, "INQUISITOR"), drops by name.
     public long dianaKills;
+    public Map<String, Integer> dianaKillsBy = new HashMap<>();
     public Map<String, Integer> dianaDrops = new HashMap<>();
     // The later sources ("blaze", "lava", "shark", "ghost", "seraph"): kills, worst dry run, drops by name.
     public Map<String, Long> kills = new HashMap<>();
@@ -41,6 +43,28 @@ public final class Facts {
         Map<String, Integer> m = drops.get(source);
         long n = 0;
         if (m != null) for (int v : m.values()) n += v;
+        return n;
+    }
+
+    public long item(String name) {
+        return corpseItems.getOrDefault(name, 0);
+    }
+
+    /** Every rare drop counted anywhere: pets, legendary and dye rolls, Diana's, and the later sources'. */
+    public long allDrops() {
+        long n = pets() + corpseLegendaries + corpseDyes;
+        for (int v : dianaDrops.values()) n += v;
+        for (String k : drops.keySet()) n += drops(k);
+        return n;
+    }
+
+    /** How many animations have given at least one rare drop. */
+    public long dropSources() {
+        long n = (pets() > 0 ? 1 : 0) + (corpseLegendaries + corpseDyes > 0 ? 1 : 0);
+        long diana = 0;
+        for (int v : dianaDrops.values()) diana += v;
+        if (diana > 0) n++;
+        for (String k : drops.keySet()) if (drops(k) > 0) n++;
         return n;
     }
 
