@@ -407,13 +407,26 @@ final class LedgerView {
 
     private void cover(Draw d, LedgerData data, int x, int w, float mx, float my, boolean full) {
         if (w <= 0) return;
+        // The cover keeps its face while it swings: drawn whole, squeezed towards the spine it is hinged on, and
+        // darker the further it has turned from the light - it never goes blank mid-turn (the user, 2026-10-16).
+        int fullW = BOOK_R - SPINE_X;
+        d.push();
+        d.translate(x, 0);
+        d.scale(w / (float) fullW, 1f);
+        d.translate(-x, 0);
+        coverFace(d, data, x, fullW, mx, my, full);
+        int shade = Math.round(150 * (1f - w / (float) fullW));
+        if (shade > 0) d.fill(x, 0, x + fullW, H, shade << 24);
+        d.pop();
+    }
+
+    private void coverFace(Draw d, LedgerData data, int x, int w, float mx, float my, boolean full) {
         boolean hover = full && mx >= x && mx < x + w && my >= 0 && my < H;
         d.fill(x, 0, x + w, H, hover ? 0xFF65331F : LEATHER);
         d.fill(x, 0, x + Math.min(w, 10), H, LEATHER_DARK);                // the spine side, rounded over
         d.fill(x + w - 2, 0, x + w, H, LEATHER_EDGE);
         d.fill(x, 0, x + w, 1, 0x30FFFFFF);
         d.fill(x, H - 1, x + w, H, LEATHER_EDGE);
-        if (!full) return;
         // A tooled gold border.
         int sx = x + w - 20;
         int bx0 = x + 16, bx1 = sx - 4, by0 = 10, by1 = H - 10;

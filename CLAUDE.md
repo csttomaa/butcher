@@ -940,6 +940,13 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
   - an event, not backfilled. Dentist 25/50/200/500. The Ghosts' windows are `HAUNT_MS` 30 s (Double Haunting) and
   `GHOST_RUN_MS` 60 s (Poltergeist, Matched Pair). **An awarded event reads as its own number** (`need(grades)`):
   read as 1, Back to Back (50) and In the Black (30M) were flagged but never stamped. LedgerTest 409.
+- **Every stamp looks different (2026-10-16, the user)**: `StampArt.ITEMS` gives each its own vanilla item (each must
+  also be a case in `GuiDraw.stack`, or it draws as paper - those `Items.*` names were not checked against the 26.2
+  jar here; a wrong one is a compile error naming it), and `StampArt.shape` one of six `Shape`s (circle, octagon,
+  rounded square, shield, diamond, scalloped seal) by its place in the chapter, so neighbours never match.
+  `inside(shape, x, y, r)` is the one definition; `fill`/`outline` draw it a row of runs at a time, and empty slots
+  pencil the same outline dashed. **The cover keeps its face while it swings**: `cover` draws `coverFace` whole,
+  squeezed towards the spine with `Draw.scale(sx, 1)` and darkened as it turns, opening and closing alike.
 - Saving the sheet with openpyxl drops Excel's extension-form dropdowns (the Chapter list): re-add it as a plain
   `DataValidation` (`=Chapters!$A$2:$A$10`, B2:B140) after any scripted edit.
 - **`/butcher test ledger`** (developers only - it hangs off `test`, so `Dev.allowed()`; `ButcherClient.ledgerTestNode`):

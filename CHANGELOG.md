@@ -19,6 +19,8 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   over it. Switch it off under General, set its volume under Sound.
 - Stamps outlive every stats reset.
 
+- Every stamp has its own item and one of six shapes (circle, octagon, square, shield, diamond, seal), so a page
+  never repeats itself. The book's cover keeps its title and badge as it swings open and shut.
 - Beginner's Luck is now a pet within your first 10 Scatha kills **of the day**, so it is never out of reach.
 - Fixed: Back to Back and In the Black were earned but never stamped. They now are, and anyone who already earned them
   gets them the next time a stamp is checked.
