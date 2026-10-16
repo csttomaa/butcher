@@ -5,6 +5,11 @@ import com.google.gson.GsonBuilder;
 import com.butcher.ButcherClient;
 import net.fabricmc.loader.api.FabricLoader;
 
+import com.butcher.ledger.Facts;
+import com.butcher.ledger.Ledger;
+import com.butcher.ledger.LedgerData;
+import com.butcher.ledger.Stamp;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -105,6 +110,17 @@ public final class ButcherStats {
             dianaDryStreak++;
             worstDianaDryStreak = Math.max(worstDianaDryStreak, dianaDryStreak);
         }
+        LedgerData l = ledger();
+        Ledger.run(l, drop != null);
+        if (drop != null) {
+            long now = System.currentTimeMillis();
+            long kills = 0;
+            for (int n : dianaKills.values()) kills += n;
+            Ledger.drop(l, "diana", drop, kills, now, java.time.ZoneId.systemDefault());
+            long shared = dianaShareAt.getAsLong();
+            if (shared > 0 && now - shared <= SHARE_MS) Ledger.award(l, "diana_shared_custody", kills);
+        }
+        stampCheck();
         save();
     }
 
@@ -157,12 +173,20 @@ public final class ButcherStats {
             s.dry++;
             s.worstDry = Math.max(s.worstDry, s.dry);
         }
+        LedgerData l = ledger();
+        Ledger.run(l, drop != null);
+        if (drop != null) Ledger.drop(l, key, drop, s.kills, System.currentTimeMillis(), java.time.ZoneId.systemDefault());
+        stampCheck();
         save();
     }
 
     /** A drop from a source with no kill to count (the Ghosts): only the drop is tallied. */
     public void onSourceDrop(String key, String drop) {
         source(key).drops.merge(drop, 1, Integer::sum);
+        LedgerData l = ledger();
+        Ledger.run(l, true);
+        Ledger.drop(l, key, drop, 0, System.currentTimeMillis(), java.time.ZoneId.systemDefault());
+        stampCheck();
         save();
     }
 
@@ -173,6 +197,116 @@ public final class ButcherStats {
     public void resetSource(String key) {
         if (sources != null) sources.remove(key);
         save();
+    }
+
+    // ---------------------------------------------------------------- the Ledger
+
+    /** The Ledger's own data: the stamps, and the few numbers only it keeps. Survives every stats reset. */
+    public LedgerData ledger;
+
+    /** Who hears about a stamp earned or raised a grade (the pop-up). Called on the thread that counted it. */
+    public static volatile java.util.function.Consumer<Stamp> stamped;
+
+    /** When the last Diana loot share line came (DianaWatcher), for "Shared Custody"; -1 for never. */
+    public static volatile java.util.function.LongSupplier dianaShareAt = () -> -1;
+    /** A Diana win this soon after a loot share line is a loot-shared one. */
+    private static final long SHARE_MS = 10_000;
+
+    /** The Ledger, read in from the stats the first time: everything they already prove is stamped, undated. */
+    public LedgerData ledger() {
+        if (ledger == null) ledger = new LedgerData();
+        ledger.fix();
+        if (!ledger.backfilled) {
+            ledger.backfilled = true;
+            long runs = cutscenes + corpses;
+            if (dianaKills != null) for (int n : dianaKills.values()) runs += n;
+            if (sources != null) {
+                for (java.util.Map.Entry<String, Source> e : sources.entrySet()) {
+                    runs += "ghost".equals(e.getKey()) ? total(e.getValue().drops) : e.getValue().kills;
+                }
+            }
+            ledger.cutscenes = Math.max(ledger.cutscenes, runs);
+            // Only an upper bound - the first pet came on this kill or before - so it can earn Beginner's Luck only
+            // when it is already within reach.
+            if (pets() > 0 && ledger.firstPetKill <= 0) ledger.firstPetKill = kills;
+            Ledger.refresh(facts(), ledger, System.currentTimeMillis(), true);
+            save();
+        }
+        return ledger;
+    }
+
+    private static long total(java.util.Map<String, Integer> m) {
+        long n = 0;
+        if (m != null) for (int v : m.values()) n += v;
+        return n;
+    }
+
+    /** What the stats say, for the Ledger's rules. */
+    public Facts facts() {
+        Facts f = new Facts();
+        f.scathaKills = kills;
+        f.petsRare = petsRare;
+        f.petsEpic = petsEpic;
+        f.petsLegendary = petsLegendary;
+        f.scathaWorstDry = Math.max(worstDryStreak, dryStreak);
+        f.scathaMisses = misses;
+        f.corpses = corpses;
+        f.corpseLegendaries = corpseLegendaries;
+        f.corpseDyes = corpseSpecials;
+        f.lockets = itemCount("Shattered Locket");
+        f.corpseWorstDry = Math.max(worstCorpseDryStreak, corpseDryStreak);
+        if (dianaKills != null) for (int n : dianaKills.values()) f.dianaKills += n;
+        if (dianaDrops != null) f.dianaDrops.putAll(dianaDrops);
+        if (sources != null) {
+            for (java.util.Map.Entry<String, Source> e : sources.entrySet()) {
+                Source s = e.getValue();
+                f.kills.put(e.getKey(), (long) s.kills);
+                f.worstDry.put(e.getKey(), (long) Math.max(s.worstDry, s.dry));
+                if (s.drops != null) f.drops.put(e.getKey(), new java.util.HashMap<>(s.drops));
+            }
+        }
+        return f;
+    }
+
+    /** Earns whatever the numbers now reach and tells the pop-up. The caller saves. */
+    private void stampCheck() {
+        java.util.List<Stamp> fresh = Ledger.refresh(facts(), ledger(), System.currentTimeMillis(), false);
+        java.util.function.Consumer<Stamp> out = stamped;
+        if (out != null) for (Stamp s : fresh) out.accept(s);
+    }
+
+    /** A real cutscene skipped (the skip key). */
+    public void onSkip() {
+        ledger().skips++;
+        stampCheck();
+        save();
+    }
+
+    /** A real drop revealed with its price: the House's Tycoon. */
+    public void onCoins(long coins) {
+        if (coins <= 0) return;
+        ledger().coins += coins;
+        stampCheck();
+        save();
+    }
+
+    /** A real Vanguard corpse's worth, once every price is in. */
+    public void onCorpseWorth(long net, long items) {
+        Ledger.corpseWorth(ledger(), net, items, corpses);
+        stampCheck();
+        save();
+    }
+
+    /** An event stamp seen happening somewhere only the caller knows about (a Jawbus win, a legendary Megalodon). */
+    public void award(String id, long kill) {
+        Ledger.award(ledger(), id, kill);
+        stampCheck();
+        save();
+    }
+
+    /** The book showed these stamps: their fresh ink dries. */
+    public void seen(java.util.Collection<String> ids) {
+        if (ledger().seen.addAll(ids)) save();
     }
 
     private static ButcherStats instance;
@@ -236,6 +370,10 @@ public final class ButcherStats {
             dryStreak++;
             worstDryStreak = Math.max(worstDryStreak, dryStreak);
         }
+        LedgerData l = ledger();
+        Ledger.run(l, rarity != null);
+        if (rarity != null) Ledger.drop(l, "scatha", rarity, kills, System.currentTimeMillis(), java.time.ZoneId.systemDefault());
+        stampCheck();
         save();
     }
 
@@ -262,6 +400,12 @@ public final class ButcherStats {
             corpseDryStreak++;
             worstCorpseDryStreak = Math.max(worstCorpseDryStreak, corpseDryStreak);
         }
+        LedgerData l = ledger();
+        boolean win = legendaries + specials > 0;
+        Ledger.run(l, win);
+        if (win) Ledger.drop(l, "vanguard", specials > 0 ? "Frostbitten Dye" : "legendary", corpses,
+                System.currentTimeMillis(), java.time.ZoneId.systemDefault());
+        stampCheck();
         save();
     }
 

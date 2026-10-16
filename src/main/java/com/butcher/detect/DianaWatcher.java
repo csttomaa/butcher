@@ -122,6 +122,11 @@ public final class DianaWatcher {
 
     /** The last loot share line of any kind, never consumed - for arming, SkyMaxx's way. */
     private long lastAnyShareAt = -1;
+
+    /** When the last loot share line came, -1 for never: the Ledger's "Shared Custody". */
+    public long lastShareAt() {
+        return lastAnyShareAt;
+    }
     /** Arming holds this long after its reason last held (SkyMaxx: 2.5 s). */
     private static final long ARM_MS = 2_500;
     /** Having had loot share this recently means any nearby creature may be one (SkyMaxx: 5 min). */

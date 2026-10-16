@@ -3,6 +3,25 @@
 One entry per jar that was actually handed out for testing. The version number bumps on
 every build, so the gaps between entries are builds nobody ran - not missing notes.
 
+## Unreleased - The Butcher's Ledger
+
+### Added
+- **The Ledger tab**: The Butcher's Ledger, a leather-bound book of ink stamps. Shut, its cover shows how many
+  stamps are in it; opened, each animation is a chapter behind its own coloured divider tab, with a title page
+  (its numbers and the stamp you are closest to) and a page of stamps. Click a stamp for its own page: what it is
+  for, its grades, how far along you are, when you earned it.
+- **59 stamps**, tiered ones graded Select, Choice, Prime and A5 Wagyu: kill counts, every rare drop, and luck -
+  Beginner's Luck, Back to Back, Dry Aged, Night Shift, Hot Streak, Jackpot 777, Tycoon. Hidden ones show as "???"
+  until earned.
+- **Your old stats count.** The first launch stamps everything they already prove, marked "pre-ledger" with no
+  date. The stamps that need history the stats never kept start counting now.
+- **A stamp pop-up**: earned in game, a stamp thumps down on screen with its own sound - after the cutscene, never
+  over it. Switch it off under General, set its volume under Sound.
+- Stamps outlive every stats reset.
+
+### Changed
+- On a narrow window the menu's tabs show their icons only.
+
 ## 0.3.3-alpha - the first public release (2026-10-15)
 
 ### The menu, redesigned

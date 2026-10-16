@@ -865,8 +865,52 @@ so the words clear the bottom; the Dye's `showScale` is 1.3 (at 1.45 with the 13
 ## Release (2026-10-15)
 
 0.3.3-alpha is the first build published to Modrinth. `docs/modrinth.md` holds the page's fields (summary, categories,
-dependencies) and the release notes; the project description is the README. **Next rework: the Stats tab** (the user,
-2026-10-15) - the plan is still to be made with them; do not start it unasked.
+dependencies) and the release notes; the project description is the README. The Stats rework the user asked for next
+became the Ledger (below).
+
+## The Butcher's Ledger (2026-10-16)
+
+The user's achievement system: local only, a new "Ledger" tab beside Stats, "like an openable book ... with stamps,
+maybe like a binder", a chapter per animation, old stats backfilled. They edited the stamp list as a spreadsheet.
+
+- **`docs/ledger_stamps.xlsx` is the source of the stamp list** (ID, chapter, name, what earns it, kind, four tier
+  numbers, hidden, keep). `tools/gen_ledger.py` writes `ledger/StampTable.java` from it - edit the sheet and re-run,
+  never the Java. IDs are stable; what each one *counts* is code, `Ledger.value` (a switch on the ID; unknown IDs are
+  events). The user's numbers: Scatha Worm Food 50/100/500/1000, Dry Aged 100 (45 Days 200, hidden), Beginner's Luck
+  20; Vanguard 5/25/50/100, Ice Cold 25 (without a legendary - what the stats count), In the Black 30M; Thermal
+  Runaway 50; Spirit Level 100/250/500 Ghost drops. Fin's Big Fish is any Megalodon (the stats never kept the pet's
+  rarity; both are titled "Megalodon"); Bigger Fish, the legendary, is an event from the update on.
+- **`com.butcher.ledger` is pure** (no Minecraft, no files): `Chapter` (colour for the tab, a darker `ink` for the
+  page), `Grade` (Select, Choice, Prime, A5 Wagyu and their ring colours), `Stamp`, `Facts` (what the stats say -
+  `ButcherStats.facts()` fills it), `LedgerData` (saved inside stats.json as `ledger`: entries {grade, at, value},
+  event `flags` {id -> kill}, `seen`, the House's own counters, the last 60 drops), `Ledger` (value, gradeFor,
+  refresh, award, run, drop, corpseWorth). `tools/LedgerTest` (219 checks) also reads the drop enums' source to
+  check every name a stamp looks for is spelled as the stats write it.
+- **Counted in ButcherStats**: every `on*` ends in `Ledger.run` (the House's cutscenes and bust run), `Ledger.drop`
+  for a win (hot streak, night shift 3-5 AM local, the 777th kill of a source, Scatha back to back, the first pet's
+  kill) and `stampCheck()` (refresh, then `ButcherStats.stamped` -> `StampPopup.queue`). `ledger()` backfills once
+  (`backfilled`): the House's cutscene count from every source, `firstPetKill` as an upper bound, then a refresh with
+  `pre` - undated, not announced. Resets never touch the Ledger. Events fed from outside: `onSkip` (skipTick, never a
+  test), `onCoins` (the Chop/Hellion/Seraph/Eruption `summary()`, a real win's price), `onCorpseWorth`
+  (`ledgerWorthTick`: the last real corpse once `CorpseValue` is complete, 60 s at most, live prices on), `award` for
+  a Jawbus win (EruptionScreen.count) and a legendary Megalodon; Diana's loot share is `DianaWatcher.lastShareAt`
+  within 10 s of the win.
+- **The book is `gui/menu/LedgerView`**, laid out at 360 x 228 and scaled into the tab (mouse turned back the same
+  way): shut, a leather cover (gold border, the icon, "THE BUTCHER'S LEDGER", stamps and new ones, a strap); open,
+  the cover swings to the left (the front narrows to the spine, then the left page grows out of it), divider tabs
+  down the right edge (a red dot for unseen stamps; the Seraph's taped), ruled pages with a red margin, a red ribbon
+  that shuts it. Left page: the chapter's title page (stamps, grades, its numbers, the closest stamp with a bar) or a
+  stamp's own page (the stamp large, grade, description, tiers, progress, "Stamped <date>" or pre-ledger, the kill).
+  Right page: 4 x 3 stamps a page, "< n / m >" past twelve, "NEW" in red on fresh ink (dried when the chapter is
+  left, the book shut or the stamp clicked). A page flip runs when the chapter changes. `StampArt` draws stamps (a
+  grade ring, a paper ring, the ink disc, the chapter's item, pips, worn flecks fixed per id, a tilt per id) and the
+  hazard tape (the Seraph's menu card uses it too). The tab's footer and `TAB_ICONS` have a book.
+- **The pop-up** is `render/StampPopup` (the queue; shown from `drawOwnHud` only when no cutscene, pop-up or pre-kill
+  hide is up - `tick(free)`) over `gui/menu/StampCard` (pure: a paper card, the stamp falling from 2.6x and turned,
+  the thump at 170 ms with ink flecks and a jolt, "STAMPED!", the name, the grade; 2.95 s). `GuiDraw` is the menu's
+  in-game `Draw`, shared. `Voices.stamp` (thump, edge click, paper, two bell notes, a third for a raised grade) on
+  `ledgerVolume`; `ledgerPopups` under General. Offline: the scratchpad's `menu/src/CardPreview.java`.
+- `PANEL_W` is 392 for five tabs; a tab too narrow for its name draws its icon alone.
 
 ## Under maintenance: the Seraph (2026-10-15)
 

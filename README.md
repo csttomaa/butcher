@@ -70,6 +70,10 @@ Type **`/butcher`** (or use Mod Menu's *Configure* button) to open the settings.
   who'd rather their screen didn't shake.
 - **Stats**: your dry streaks and drops, per source. Only real kills count, so the number of Scathas since your
   last pet is, unfortunately, accurate.
+- **Ledger**: The Butcher's Ledger, a leather-bound book of ink stamps with a chapter per animation. Kill
+  counts, every rare drop, and the luck you'd rather not talk about: a pet in your first 20 kills, two in a row, a
+  drop at 3 AM, 100 kills without a pet. Tiered stamps are graded like beef: Select, Choice, Prime and A5 Wagyu.
+  Some are hidden until you earn them. Everything your stats already prove is stamped the first time you open it.
 
 **Hold Backspace** to skip a cutscene (rebindable under *Controls → Butcher*). A win skips straight to the
 showcase, so you still get to see it.

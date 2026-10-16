@@ -1290,6 +1290,29 @@ public final class Voices {
         };
     }
 
+    // ================================================================== The Ledger
+
+    /**
+     * A rubber stamp coming down on paper: a low thump with a knock of wood in it, the click of the stamp's edge, a
+     * breath of paper - then two soft bell notes, a fifth apart, for having earned it. A raised grade rings a third
+     * note.
+     */
+    public static Voice[] stamp(boolean upgrade, long seed) {
+        float[] bell = {1f, 0.3f, 0.12f};
+        Voice[] base = {
+                tone(150f, 62f, 0.16f, 0.55f, 0.002f, new float[]{1f, 0.45f, 0.15f}, 0.25f),
+                tone(330f, 190f, 0.06f, 0.22f, 0.001f, new float[]{1f, 0.3f}, 0.2f),
+                noise(2400f, 1.3f, 0.05f, 0.22f, 0.001f, 0.2f, seed),
+                after(0.04f, noise(4200f, 0.8f, 0.14f, 0.05f, 0.01f, 0.4f, seed + 1)),
+                after(0.24f, tone(783.99f, 783.99f, 0.9f, 0.13f, 0.004f, bell, 0.7f)),       // G5
+                after(0.36f, tone(1174.66f, 1174.66f, 1.1f, 0.11f, 0.004f, bell, 0.8f)),     // D6
+        };
+        if (!upgrade) return base;
+        Voice[] out = java.util.Arrays.copyOf(base, base.length + 1);
+        out[base.length] = after(0.48f, tone(1567.98f, 1567.98f, 1.2f, 0.09f, 0.004f, bell, 0.85f));  // G6
+        return out;
+    }
+
     // ================================================================== The Seraph's Glyph (Enderman slayer)
     //
     // C# minor, an End drone under it, and the enderman's own "vwoop" for every teleport. Each hit on the

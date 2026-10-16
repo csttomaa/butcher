@@ -324,6 +324,13 @@ public final class ButcherAudio {
         return Math.max(0f, Math.min(1.5f, pct / 100f));
     }
 
+    /** The Ledger: a stamp coming down, on its own volume. */
+    public static void onStamp(boolean upgrade, long seed) {
+        int pct = ButcherClient.config == null ? 100 : ButcherClient.config.ledgerVolume;
+        float gain = Math.max(0f, Math.min(1.5f, pct / 100f));
+        if (gain > 0.001f) for (Voice v : Voices.stamp(upgrade, seed)) play(gained(v, gain));
+    }
+
     /** Wisp: the Ghost rising. */
     public static void onGhostRise(long seed) {
         float gain = ghostGain();

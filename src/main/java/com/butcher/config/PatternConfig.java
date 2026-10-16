@@ -216,6 +216,9 @@ public class PatternConfig {
     public boolean ghostAnnounce = true;
     public boolean ghostPrice = true;
     public int ghostVolume = 100;
+    /** The Ledger: a stamp pops up over the game when one is earned (after any cutscene), and its sound's volume. */
+    public boolean ledgerPopups = true;
+    public int ledgerVolume = 100;
     /** How fast Wisp plays, in percent (50-200): the whole of it, picture and cues together. */
     public int ghostSpeed = 100;
 
@@ -408,6 +411,7 @@ public class PatternConfig {
         fishingVolume = clamp(fishingVolume, 0, 150);
         fishingSpeed = clamp(fishingSpeed, 50, 200);
         ghostVolume = clamp(ghostVolume, 0, 150);
+        ledgerVolume = clamp(ledgerVolume, 0, 150);
         ghostSpeed = clamp(ghostSpeed, 50, 200);
         dianaHidePct = clamp(dianaHidePct, 0, 20);
         blazeHidePct = clamp(blazeHidePct, 0, 30);

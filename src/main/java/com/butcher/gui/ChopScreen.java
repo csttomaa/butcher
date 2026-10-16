@@ -732,6 +732,8 @@ public class ChopScreen extends Screen implements ChopScene.Canvas, Cutscene {
     private void summary() {
         if (summarised || pending) return;
         summarised = true;
+        // The Ledger's Tycoon: what this drop was worth, once.
+        if (!test && verdict.win() && tl.price() > 0) com.butcher.config.ButcherStats.get().onCoins(tl.price());
         String who = switch (creature) {
             case SPHINX -> "Sphinx";
             case INQUISITOR -> "Minos Inquisitor";

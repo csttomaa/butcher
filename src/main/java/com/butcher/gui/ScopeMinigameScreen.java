@@ -185,6 +185,11 @@ public class ScopeMinigameScreen extends Screen {
     }
 
     /** @param test true for /butcher test, which is never counted in the stats */
+    /** A "Try it" or /butcher test run: counted nowhere. */
+    public boolean isTest() {
+        return test;
+    }
+
     public ScopeMinigameScreen(DropResult result, boolean test) {
         super(Component.literal("Butcher"));
         this.test = test;

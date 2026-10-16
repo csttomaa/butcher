@@ -96,6 +96,7 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
         com.butcher.config.ButcherStats st = com.butcher.config.ButcherStats.get();
         st.onSource(SOURCE, drop.win() ? drop.title : null);
         if (drop.win()) nth = "your " + ChopScreen.ordinal(st.sourceDropCount(SOURCE, drop.title));
+        if (drop.win() && creature == Creature.JAWBUS) st.award("lava_jaw_dropping", st.source(SOURCE).kills);
     }
 
     private static final String SOURCE = "lava";
@@ -453,6 +454,8 @@ public class EruptionScreen extends Screen implements ChopScene.Canvas, Cutscene
     private void summary() {
         if (summarised || pending) return;
         summarised = true;
+        // The Ledger's Tycoon: what this drop was worth, once.
+        if (!test && drop.win() && tl.price() > 0) com.butcher.config.ButcherStats.get().onCoins(tl.price());
         String what = drop.win() ? drop.title : "no rare drop";
         String price = drop.win() && tl.price() > 0 ? " - " + String.format("%,d", tl.price()) + " coins" : "";
         String extra = test ? " (test)" : nth != null ? " (" + nth + ")" : "";

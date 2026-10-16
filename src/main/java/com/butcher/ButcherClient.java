@@ -519,6 +519,10 @@ public class ButcherClient implements ClientModInitializer {
         adoptOldConfig();
         config = PatternConfig.loadOrCreate();
         LOGGER.info("Butcher loaded, animation mode: {}", config.animationMode);
+        // The Ledger: read the stats into it once (the pre-ledger stamps), and hear about stamps as they are earned.
+        ButcherStats.get().ledger();
+        ButcherStats.dianaShareAt = dianaWatcher::lastShareAt;
+        ButcherStats.stamped = com.butcher.render.StampPopup::queue;
         skipKey = net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping(new net.minecraft.client.KeyMapping(
                 "key.butcher.skip", com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM, org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE,
                 net.minecraft.client.KeyMapping.Category.register(net.minecraft.resources.Identifier.fromNamespaceAndPath(MOD_ID, "main"))));
@@ -696,6 +700,7 @@ public class ButcherClient implements ClientModInitializer {
             showPendingProfit(client);
             expireUnopenedDiana();
             skipTick();
+            ledgerWorthTick();
             floorPrices();
             if (currentThaw != null && !currentThaw.isActive()) currentThaw = null;
             clearFinished();
@@ -1362,6 +1367,26 @@ public class ButcherClient implements ClientModInitializer {
     private static long skipHeldSince = -1;
     private static boolean skipFired;
 
+    /** The last real corpse, until its worth is known (the Ledger's In the Black and Negative Equity). */
+    private static CorpseHaul worthHaul;
+    private static long worthSince;
+    /** How long a corpse's prices may take before the Ledger stops waiting for them. */
+    private static final long WORTH_WAIT_MS = 60_000;
+
+    /** Every tick: once the last corpse's prices are all in, its worth goes to the Ledger. */
+    private static void ledgerWorthTick() {
+        CorpseHaul haul = worthHaul;
+        if (haul == null) return;
+        if (config == null || !config.livePrices || System.currentTimeMillis() - worthSince > WORTH_WAIT_MS) {
+            worthHaul = null;
+            return;
+        }
+        com.butcher.market.CorpseValue.Result r = com.butcher.market.CorpseValue.of(haul);
+        if (!r.complete() || r.key() < 0) return;
+        worthHaul = null;
+        ButcherStats.get().onCorpseWorth(r.net(), r.items());
+    }
+
     private static void skipTick() {
         if (skipKey == null || !skipKey.isDown()) {
             skipHeldSince = -1;
@@ -1374,8 +1399,10 @@ public class ButcherClient implements ClientModInitializer {
         skipFired = true;
         com.butcher.gui.Cutscene c = currentCutscene();
         if (c != null) {
+            if (!c.isTest()) ButcherStats.get().onSkip();
             c.skip();
         } else if (currentScope != null && currentScope.isActive()) {
+            if (!currentScope.isTest()) ButcherStats.get().onSkip();
             // Skipped before its drop was known: the drop, when it comes, is counted for this run and opens nothing.
             if (!currentScope.isResolved()) {
                 skippedScope = currentScope;
@@ -1510,11 +1537,16 @@ public class ButcherClient implements ClientModInitializer {
         net.minecraft.client.gui.screens.Screen cutscene = com.butcher.render.CutsceneHud.shown();
         boolean fin = com.butcher.render.FinPopup.active() || com.butcher.render.GhostPopup.active();
         boolean vitals = keepVitals();
-        if (cutscene == null && !animationManager.isPlaying() && !fin) {
+        // A Ledger stamp waits for the screen to be the game's again: no cutscene, no pre-kill hide, no pop-up.
+        com.butcher.render.StampPopup.tick(cutscene == null && !animationManager.isPlaying() && !fin
+                && !isAnimationPlaying() && !shouldHidePreKill() && Minecraft.getInstance().player != null);
+        boolean stamp = com.butcher.render.StampPopup.active();
+        if (cutscene == null && !animationManager.isPlaying() && !fin && !stamp) {
             if (vitals) drawVitals(graphics, delta);
             return;
         }
         graphics.nextStratum();
+        if (stamp) com.butcher.render.StampPopup.draw(graphics);
         if (fin) {
             com.butcher.render.FinPopup.draw(graphics);
             com.butcher.render.GhostPopup.draw(graphics);
@@ -1624,6 +1656,9 @@ public class ButcherClient implements ClientModInitializer {
             if (shark != null) {
                 decisions.note("§7Fishing: " + shark.title + " - \"" + message.getString() + "\"");
                 ButcherStats.get().onSource("shark", shark.title);
+                if (shark == com.butcher.detect.SharkDrops.Drop.MEGALODON_LEGENDARY) {
+                    ButcherStats.get().award("fin_bigger_fish", ButcherStats.get().source("shark").kills);
+                }
                 com.butcher.render.FinPopup.show(shark);
             }
         }
@@ -1693,6 +1728,9 @@ public class ButcherClient implements ClientModInitializer {
             for (CorpseHaul.Drop drop : haul.drops()) names.add(drop.name());
             stats.countItems(names);
             stats.onCorpse(commons, uncommons, legendaries, specials);
+            // Its worth, for the Ledger, once every price is in (ledgerWorthTick).
+            worthHaul = haul;
+            worthSince = System.currentTimeMillis();
         }
         // Every price asked for now, while the strikes are still to play: the profit window
         // and the Locket's counter need them in ten seconds or so, and by then they are back.

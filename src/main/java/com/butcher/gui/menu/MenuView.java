@@ -59,15 +59,18 @@ public final class MenuView {
 
     // ------------------------------------------------------------------ layout
 
-    private static final int PANEL_W = 360, PANEL_H_MAX = 340;
+    private static final int PANEL_W = 392, PANEL_H_MAX = 340;
     /** The icon is 32 x 32 pixel art: drawn at 32 GUI pixels, every art pixel lands on whole screen pixels. */
     public static final int ICON_SIZE = 32;
     private static final int TITLE_H = 40, TAB_H = 26, FOOTER_H = 16, PAD = 10;
     private static final int GAP = 3;
     private static final int SCROLLBAR_W = 3, SCROLLBAR_GRAB = 6;
 
-    private static final String[] TAB_NAMES = {"Animations", "Sound", "General", "Stats"};
-    private static final int TAB_ANIM = 0, TAB_SOUND = 1, TAB_GENERAL = 2, TAB_STATS = 3;
+    private static final String[] TAB_NAMES = {"Animations", "Sound", "General", "Stats", "Ledger"};
+    private static final int TAB_ANIM = 0, TAB_SOUND = 1, TAB_GENERAL = 2, TAB_STATS = 3, TAB_LEDGER = 4;
+
+    /** The Ledger tab's book. */
+    private final LedgerView ledger = new LedgerView();
 
     // ------------------------------------------------------------------ palette
 
@@ -156,7 +159,7 @@ public final class MenuView {
         float open = openT();
 
         layout(d);
-        float wanted = Math.max(150, Math.min(maxPanelH(), contentHeight + CHROME));
+        float wanted = tab == TAB_LEDGER ? maxPanelH() : Math.max(150, Math.min(maxPanelH(), contentHeight + CHROME));
         shownH = shownH < 0 ? wanted : shownH + (wanted - shownH) * Math.min(1f, dt * 14f);
         if (Math.abs(shownH - wanted) < 0.5f) shownH = wanted;
 
@@ -174,6 +177,7 @@ public final class MenuView {
         int vt = viewTop(), vb = viewBottom();
         d.clip(px + 1, vt, px + pw - 1, vb);
         int left = rowsLeft(), w = rowsWidth();
+        if (tab == TAB_LEDGER) ledger.draw(d, px + 6, vt + 2, pw - 12, vb - vt - 4, mouseX, mouseY);
         for (Placed p : placed) {
             int ry = vt + p.y - Math.round(scroll);
             int h = p.row.height();
@@ -274,6 +278,7 @@ public final class MenuView {
             {"...#...", "..##.#.", "####..#", "####..#", "####..#", "..##.#.", "...#..."},
             {"..#.#..", ".#####.", "##...##", ".#...#.", "##...##", ".#####.", "..#.#.."},
             {"......#", "......#", "....#.#", "....#.#", "..#.#.#", "..#.#.#", "#.#.#.#"},
+            {"#######", "##....#", "##.##.#", "##....#", "##.##.#", "##....#", "#######"},
     };
 
     private void tabs(Draw d, int px, int py, int pw, int mx, int my) {
@@ -288,7 +293,13 @@ public final class MenuView {
             String label = TAB_NAMES[i];
             int lw = d.width(label, false);
             int cx = (x0 + x1) / 2, total = 7 + 5 + lw;
-            int ix = cx - total / 2, iy = py + TAB_H / 2 - 4;
+            int iy = py + TAB_H / 2 - 4;
+            if (total > x1 - x0 - 6) {
+                // Too narrow for its name: the icon alone.
+                glyph(d, TAB_ICONS[i], cx - 3, iy, active ? GOLD : col);
+                continue;
+            }
+            int ix = cx - total / 2;
             glyph(d, TAB_ICONS[i], ix, iy, active ? GOLD : col);
             d.text(label, ix + 12, iy, col, false, active);
         }
@@ -341,7 +352,8 @@ public final class MenuView {
         String version = "v" + host.version();
         int vw = d.width(version, false);
         d.text(version, px + pw - PAD - vw, y + 5, FAINT, false, false);
-        String hint = "Click to change · Right-click back · Esc to close";
+        String hint = tab == TAB_LEDGER ? "Click the tabs to turn to a chapter · Esc to close"
+                : "Click to change · Right-click back · Esc to close";
         if (d.width(hint, false) > pw - PAD * 3 - vw) hint = "Right-click goes back";
         d.text(hint, px + PAD, y + 5, FAINT, false, false);
     }
@@ -414,6 +426,7 @@ public final class MenuView {
             case TAB_SOUND -> soundRows(rows, cfg);
             case TAB_GENERAL -> generalRows(rows, cfg);
             case TAB_STATS -> statsRows(rows);
+            case TAB_LEDGER -> { }
             default -> {
                 // One card after another, each building only itself: chained, a closed card's early return hid the
                 // next (Wisp vanished whenever Fin was shut).
@@ -729,6 +742,7 @@ public final class MenuView {
         }
         soundSlider(rows, "snd_fishing", "Fishing Festival - Fin", FIN, cfg.fishingVolume, v -> cfg.fishingVolume = v);
         soundSlider(rows, "snd_ghost", "Dwarven Mines Ghosts - Wisp", WISP, cfg.ghostVolume, v -> cfg.ghostVolume = v);
+        soundSlider(rows, "snd_ledger", "The Ledger's stamps", GOLD, cfg.ledgerVolume, v -> cfg.ledgerVolume = v);
         rows.add(new NoticeRow("The same sliders as in each animation's own card."));
         rows.add(new SectionRow("Switches"));
         rows.add(toggle("Cutscene sound", cfg.cutsceneAudio, () -> cfg.cutsceneAudio = !cfg.cutsceneAudio, cfg));
@@ -757,6 +771,9 @@ public final class MenuView {
         rows.add(new NoticeRow("Your hotbar, hearts, hunger, armour and XP stay on screen, over the cutscene, so a fight is never blind."));
         rows.add(new NoticeRow("Hold Backspace to skip a cutscene: a win jumps to its showcase, a bust ends. Rebind it in Controls, under Butcher."));
 
+        rows.add(new SectionRow("The Ledger"));
+        rows.add(toggle("Stamp pop-ups", cfg.ledgerPopups, () -> cfg.ledgerPopups = !cfg.ledgerPopups, cfg));
+        rows.add(new NoticeRow("A stamp comes down on screen when you earn one - after the cutscene, never over it. The Ledger tab keeps them all."));
         rows.add(new SectionRow("Effects"));
         rows.add(toggle("Calmer effects", cfg.calmEffects, () -> cfg.calmEffects = !cfg.calmEffects, cfg));
         rows.add(new NoticeRow("No screen shake and softer flashes, in every animation."));
@@ -1005,7 +1022,6 @@ public final class MenuView {
      * switch and does not open. The tape sways a little while the mouse is on it.
      */
     private final class TapedRow extends Row {
-        static final int TAPE = 0xFFF2C21B, INK = 0xFF16161A;
         final String title, sub, icon;
 
         TapedRow(String title, String sub, String icon) { this.title = title; this.sub = sub; this.icon = icon; }
@@ -1030,28 +1046,7 @@ public final class MenuView {
             // The tape: a band a little longer than the card, turned a few degrees, slanted black stripes on yellow.
             float sway = approach("tape:" + title, hover ? 1f : 0f)
                     * (float) Math.sin(System.currentTimeMillis() / 140.0) * 0.012f;
-            int half = w / 2 + 4, top = -6, bottom = 7, period = 12;
-            d.push();
-            d.translate(x + w / 2f, y + h / 2f + 1);
-            d.rotate(-0.04f + sway);
-            d.fill(-half + 1, top + 2, half + 1, bottom + 2, 0x70000000);   // its shadow on the card
-            d.fill(-half, top, half, bottom, TAPE);
-            for (int r = top; r < bottom; r++) {
-                int shift = bottom - r;                                     // each row a pixel along: "/" stripes
-                for (int sx = -half - period; sx < half; sx += period) {
-                    int a = Math.max(-half, sx + shift), b = Math.min(half, sx + shift + period / 2);
-                    if (a < b) d.fill(a, r, b, r + 1, INK);
-                }
-            }
-            d.fill(-half, top, half, top + 1, 0x40FFFFFF);                  // a sheen along its top edge
-            // The words on a plate of their own, so the stripes do not run through them.
-            String label = "UNDER MAINTENANCE";
-            int lw = d.width(label, true), px = lw / 2 + 6;
-            d.fill(-px, top + 1, px, bottom - 1, TAPE);
-            d.fill(-px, top + 1, -px + 1, bottom - 1, INK);
-            d.fill(px - 1, top + 1, px, bottom - 1, INK);
-            d.text(label, -lw / 2, top + 3, INK, true, false);
-            d.pop();
+            StampArt.hazardTape(d, x + w / 2f, y + h / 2f + 1, w / 2 + 4, -0.04f + sway, "UNDER MAINTENANCE");
         }
     }
 
@@ -1381,6 +1376,10 @@ public final class MenuView {
             return true;
         }
         if (!within(mx, my, px, vt, px + pw, vb)) return within(mx, my, px, py - TITLE_H, px + pw, py + panelH());
+        if (tab == TAB_LEDGER) {
+            ledger.click(mx, my);
+            return true;
+        }
         int x0 = rowsLeft(), w = rowsWidth();
         for (Placed p : placed) {
             int[] g = geometry(p, x0, w);
