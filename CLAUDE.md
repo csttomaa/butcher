@@ -941,8 +941,11 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
   `GHOST_RUN_MS` 60 s (Poltergeist, Matched Pair). **An awarded event reads as its own number** (`need(grades)`):
   read as 1, Back to Back (50) and In the Black (30M) were flagged but never stamped. LedgerTest 409.
 - **Every stamp looks different (2026-10-16, the user)**: `StampArt.ITEMS` gives each its own vanilla item (each must
-  also be a case in `GuiDraw.stack`, or it draws as paper - those `Items.*` names were not checked against the 26.2
-  jar here; a wrong one is a compile error naming it), and `StampArt.shape` one of six `Shape`s (circle, octagon,
+  also be a case in `GuiDraw.stack`, or it draws as paper). **On 26.2 coloured items are collections**: there is no
+  `Items.GREEN_DYE` or `YELLOW_WOOL` - wool is `Items.WOOL.pick(DyeColor.X)` (dyes are presumably the same, unverified),
+  and the copper family (lightning rods, copper lanterns...) are `WeatheringCopperCollection`s: one of those in the
+  `stack` switch makes the whole `new ItemStack(switch ...)` fail to compile. Every other name there was confirmed by
+  the user's build (javac reports all missing names at once, and only those three were)), and `StampArt.shape` one of six `Shape`s (circle, octagon,
   rounded square, shield, diamond, scalloped seal) by its place in the chapter, so neighbours never match.
   `inside(shape, x, y, r)` is the one definition; `fill`/`outline` draw it a row of runs at a time, and empty slots
   pencil the same outline dashed. **The cover keeps its face while it swings**: `cover` draws `coverFace` whole,

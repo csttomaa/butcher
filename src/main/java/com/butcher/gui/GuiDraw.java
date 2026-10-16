@@ -112,7 +112,7 @@ public final class GuiDraw implements Draw {
             case "gold_ingot" -> Items.GOLD_INGOT;
             case "golden_helmet" -> Items.GOLDEN_HELMET;
             case "golden_sword" -> Items.GOLDEN_SWORD;
-            case "green_dye" -> Items.GREEN_DYE;
+            case "green_wool" -> Items.WOOL.pick(net.minecraft.world.item.DyeColor.GREEN);
             case "gunpowder" -> Items.GUNPOWDER;
             case "heart_of_the_sea" -> Items.HEART_OF_THE_SEA;
             case "honey_bottle" -> Items.HONEY_BOTTLE;
@@ -125,7 +125,7 @@ public final class GuiDraw implements Draw {
             case "lapis_lazuli" -> Items.LAPIS_LAZULI;
             case "lava_bucket" -> Items.LAVA_BUCKET;
             case "lead" -> Items.LEAD;
-            case "lightning_rod" -> Items.LIGHTNING_ROD;
+            case "end_rod" -> Items.END_ROD;
             case "magma_block" -> Items.MAGMA_BLOCK;
             case "map" -> Items.MAP;
             case "name_tag" -> Items.NAME_TAG;
@@ -139,7 +139,7 @@ public final class GuiDraw implements Draw {
             case "prismarine_shard" -> Items.PRISMARINE_SHARD;
             case "pufferfish" -> Items.PUFFERFISH;
             case "rabbit_foot" -> Items.RABBIT_FOOT;
-            case "red_dye" -> Items.RED_DYE;
+            case "red_wool" -> Items.WOOL.pick(net.minecraft.world.item.DyeColor.RED);
             case "redstone" -> Items.REDSTONE;
             case "rotten_flesh" -> Items.ROTTEN_FLESH;
             case "salmon" -> Items.SALMON;
@@ -156,7 +156,7 @@ public final class GuiDraw implements Draw {
             case "water_bucket" -> Items.WATER_BUCKET;
             case "wheat" -> Items.WHEAT;
             case "writable_book" -> Items.WRITABLE_BOOK;
-            case "yellow_wool" -> Items.YELLOW_WOOL;
+            case "yellow_wool" -> Items.WOOL.pick(net.minecraft.world.item.DyeColor.YELLOW);
             default -> Items.PAPER;
         }));
     }

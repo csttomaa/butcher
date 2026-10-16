@@ -38,7 +38,9 @@ public final class StampArt {
         return ITEMS.getOrDefault(s.id(), s.chapter().icon);
     }
 
-    /** One item per stamp. Each must also be in GuiDraw's list, or it draws as paper. */
+    /** One item per stamp. Each must also be in GuiDraw's list, or it draws as paper. On 26.2 coloured items (wool,
+     *  dyes) and copper ones (lightning rods...) are collections, not single items: wool is {@code WOOL.pick(colour)}
+     *  in GuiDraw, and the copper family is avoided - one of them in the switch breaks GuiDraw's ItemStack. */
     static final Map<String, String> ITEMS = Map.ofEntries(
             Map.entry("house_open", "bell"), Map.entry("house_regular", "clock"),
             Map.entry("house_full_menu", "cake"), Map.entry("house_always_wins", "skeleton_skull"),
@@ -65,7 +67,7 @@ public final class StampArt {
             Map.entry("diana_chimera", "enchanted_book"), Map.entry("diana_stinger", "spider_eye"),
             Map.entry("diana_manticore", "nether_star"), Map.entry("diana_crown", "golden_helmet"),
             Map.entry("diana_wool", "yellow_wool"), Map.entry("diana_relic", "compass"),
-            Map.entry("diana_dye", "green_dye"), Map.entry("diana_pantheon", "totem_of_undying"),
+            Map.entry("diana_dye", "green_wool"), Map.entry("diana_pantheon", "totem_of_undying"),
             Map.entry("diana_shared_custody", "name_tag"), Map.entry("diana_inquisition", "golden_sword"),
 
             Map.entry("hellion_fire_watch", "blaze_rod"), Map.entry("hellion_double_down", "enchanted_book"),
@@ -77,7 +79,7 @@ public final class StampArt {
 
             Map.entry("lava_magma_maker", "magma_block"), Map.entry("lava_flash", "glowstone_dust"),
             Map.entry("lava_meltdown", "experience_bottle"), Map.entry("lava_end_times", "writable_book"),
-            Map.entry("lava_kuudra", "red_dye"), Map.entry("lava_jaw_dropping", "iron_block"),
+            Map.entry("lava_kuudra", "red_wool"), Map.entry("lava_jaw_dropping", "iron_block"),
             Map.entry("lava_thermal_runaway", "lava_bucket"), Map.entry("lava_chained", "lead"),
             Map.entry("lava_pinch_me", "nautilus_shell"), Map.entry("lava_forged", "anvil"),
             Map.entry("lava_shell_shocked", "turtle_helmet"), Map.entry("lava_hot_catch", "fishing_rod"),
@@ -90,7 +92,7 @@ public final class StampArt {
 
             Map.entry("wisp_sorrowful", "ghast_tear"), Map.entry("wisp_plasma", "ender_eye"),
             Map.entry("wisp_spirit_level", "phantom_membrane"), Map.entry("wisp_drowning", "water_bucket"),
-            Map.entry("wisp_high_voltage", "lightning_rod"), Map.entry("wisp_bittersweet", "honey_bottle"),
+            Map.entry("wisp_high_voltage", "end_rod"), Map.entry("wisp_bittersweet", "honey_bottle"),
             Map.entry("wisp_double_haunting", "soul_lantern"), Map.entry("wisp_poltergeist", "echo_shard"),
             Map.entry("wisp_matched_pair", "glass_bottle"), Map.entry("wisp_witching_hour", "jack_o_lantern"));
 
