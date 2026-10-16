@@ -17,74 +17,148 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The Ledger tab: a leather-bound butcher's ledger of stamps, one chapter per animation.
+ * The Butcher's Ledger: a leather-bound book of stamps, one chapter per animation, shown on its own over the darkened
+ * game (MenuView hides the menu while it is up).
  *
- * Shut, it is a cover with the title in gold and how many stamps are in it. Opened (the cover swings over to the
- * left), it is a spread: the left page is the chapter's title page - or, once a stamp is clicked, that stamp's own
- * page - and the right page the chapter's stamps, four to a row. Coloured divider tabs stand out of the right edge, one
- * per chapter, and a red ribbon on the left page shuts the book again. Pages are ruled like a ledger, with a red margin.
+ * It drops in shut, a little turned like a book put down on a desk, and swings open. The left page is the chapter's
+ * title page - or, once a stamp is clicked, that stamp's own page - and the right page the chapter's stamps, four to a
+ * row. Coloured divider tabs stand out of the right edge, one per chapter, and a red ribbon on the left page shuts the
+ * book and puts it away. The pages turn: click or drag a folded corner, or scroll, and a sheet lifts off the page and
+ * over the spine, showing the next page on its back. Turning runs through the whole book, page after page and chapter
+ * after chapter. Pages are ruled like a ledger, with a red margin and somebody's pencil notes.
  *
- * Laid out at a fixed size ({@link #W} x {@link #H}) and scaled to the space the menu gives it, so it looks the same
- * at every GUI scale; the mouse is turned back into book coordinates the same way. No Minecraft in here, like the rest
- * of the menu, so it renders offline.
+ * Laid out at a fixed size ({@link #W} x {@link #H}) and scaled to the screen in quarter steps, so it looks the same
+ * at every GUI scale; the mouse is turned back into book coordinates the same way, tilt and all. No Minecraft in here,
+ * like the rest of the menu, so it renders offline.
  */
 final class LedgerView {
 
     /** The book's own size, before it is scaled to fit. */
-    static final int W = 360, H = 228;
-    private static final int COVER = 5, PAGE_W = 166, SPINE = 10;
+    static final int W = 412, H = 250;
+    private static final int COVER = 5, PAGE_W = 190, SPINE = 10;
     private static final int LEFT = COVER, SPINE_X = COVER + PAGE_W, RIGHT = SPINE_X + SPINE, BOOK_R = RIGHT + PAGE_W + COVER;
-    private static final int TAB_X = BOOK_R - 6, TAB_W = 15, TAB_H = 21, TAB_GAP = 2, TAB_TOP = 10;
+    private static final int TAB_X = BOOK_R - 6, TAB_W = 15, TAB_H = 24, TAB_GAP = 2, TAB_TOP = 10;
     private static final int COLS = 4, ROWS = 3, PER_PAGE = COLS * ROWS;
+    /** A folded page corner, and how far round it a click or a drag picks the page up. */
+    private static final int CORNER = 7, CORNER_HOVER = 12, CORNER_HIT = 26;
+
+    /** How far the book sits from straight when it is still: a book put down on a desk. */
+    static final float TILT = -0.02f;
+    private static final long ENTER_MS = 460, LEAVE_MS = 300;
+    /** Seconds for a whole page turn, and how far a dragged page must go to turn rather than fall back. */
+    private static final float TURN_TIME = 0.5f, TURN_COMMIT = 0.3f;
 
     private static final int LEATHER = 0xFF5A2D1B, LEATHER_DARK = 0xFF3A1C10, LEATHER_EDGE = 0xFF2A140B;
     private static final int GOLD = 0xFFE3B456, GOLD_DIM = 0xFF9C7430;
     private static final int PAPER = StampArt.PAPER, PAPER_SHADE = 0xFFDCCFAF, RULE = 0x2A6B5432, MARGIN = 0x55B0302A;
     private static final int INK = 0xFF3A2A1A, PENCIL = StampArt.PENCIL, RED_INK = 0xFFB0302A, RIBBON = 0xFF9E1E24;
+    private static final int COFFEE = 0x6B4A2A;
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
 
-    // The book is where it was left, like the tab and the open cards.
+    // The book is where it was left: the chapter, the page, the stamp being read.
     private static boolean open;
     private static Chapter chapter = Chapter.HOUSE;
     private static String selected;
     private static int page;
     /** 0 = shut, 1 = open; eased towards {@link #open}. */
     private static float openness;
-    private static long flipAt = -1;
+    /** When it came on screen and when it was sent away (-1: not). */
+    private static long enteredAt = -1, leftAt = -1;
+    /** The ribbon shut it: once the cover is down, the book is put away. */
+    private static boolean shutByRibbon, leaveWanted;
+
+    /** A place in the book: a chapter and one of its pages of stamps. */
+    private record Spot(Chapter chapter, int page) { }
+
+    /** A page being turned: from where, to where, which way, how far (0..1), and whether a hand holds it. */
+    private static Spot turnFrom, turnTo;
+    private static boolean turnForward, turnHeld, turnMoved;
+    private static float turnP, turnTarget;
+    private static double pressX, pressY;
 
     private long lastFrame = System.nanoTime();
     // The transform of the last frame, for the mouse.
-    private float ox, oy, scale = 1f;
+    private float cx, cy, k = 1f, tilt;
+
+    /** On screen: it drops in shut and swings open. */
+    void enter() {
+        enteredAt = System.currentTimeMillis();
+        leftAt = -1;
+        open = true;
+        openness = 0f;
+        shutByRibbon = leaveWanted = false;
+        turnFrom = turnTo = null;
+    }
+
+    /** Sent away (Esc, the back button): it drops out of sight. */
+    void leave() {
+        if (leftAt >= 0) return;
+        markSeen();
+        leftAt = System.currentTimeMillis();
+        finishTurn(true);
+    }
+
+    /** Gone after {@link #leave}: the menu can come back. */
+    boolean gone() {
+        return leftAt >= 0 && System.currentTimeMillis() - leftAt >= LEAVE_MS;
+    }
+
+    /** The ribbon shut it and the cover is down: time to put it away. */
+    boolean wantsLeave() {
+        return leaveWanted && leftAt < 0;
+    }
 
     // ------------------------------------------------------------------ drawing
 
-    void draw(Draw d, int ax, int ay, int aw, int ah, int mx, int my) {
+    /** Draws the book over a {@code sw} x {@code sh} screen, between a strip at the top and one at the bottom. */
+    void draw(Draw d, int sw, int sh, int top, int bottom, int mx, int my) {
         long nowNs = System.nanoTime();
         float dt = Math.min(0.1f, (nowNs - lastFrame) / 1e9f);
         lastFrame = nowNs;
-        float target = open ? 1f : 0f;
-        openness += Math.signum(target - openness) * Math.min(Math.abs(target - openness), dt / 0.42f);
+        long now = System.currentTimeMillis();
+        if (enteredAt < 0) enter();
+        float enter = clamp01((now - enteredAt) / (float) ENTER_MS);
+        float in = backOut(enter);
+        float out = leftAt < 0 ? 0f : ease(clamp01((now - leftAt) / (float) LEAVE_MS));
 
-        scale = Math.min(aw / (float) W, ah / (float) H);
-        scale = Math.min(scale, 1.6f);
-        ox = ax + (aw - W * scale) / 2f;
-        oy = ay + (ah - H * scale) / 2f;
-        float bx = (mx - ox) / scale, by = (my - oy) / scale;
+        // It opens once it has landed; the ribbon's shut puts it away once the cover is down.
+        if (enter > 0.65f) {
+            float target = open ? 1f : 0f;
+            openness += Math.signum(target - openness) * Math.min(Math.abs(target - openness), dt / 0.42f);
+        }
+        if (!open && openness <= 0f && shutByRibbon) leaveWanted = true;
+        turnTick(dt);
 
-        ButcherStats st = ButcherStats.get();
-        LedgerData data = st.ledger();
-        Facts facts = st.facts();
-
+        // As big as the screen allows, in quarter steps so the text keeps an even size.
+        float fit = Math.min((sw - 24f) / W, (sh - top - bottom - 8f) / H);
+        float scale = Math.max(0.75f, Math.min(4f, (float) Math.floor(fit * 4f) / 4f));
+        if (scale > fit) scale = Math.max(0.5f, fit);
+        cx = sw / 2f;
+        cy = top + (sh - top - bottom) / 2f + (1f - in) * sh * 0.55f + out * sh * 0.75f;
         float o = ease(openness);
-        // Shut, the cover sits in the middle; open, the spread does.
-        float sx = closedShift() * (1f - o);
+        // Turned a little at rest; more while it lands, leaves, opens or a page goes over.
+        tilt = TILT - (1f - in) * 0.1f + out * 0.09f + 0.012f * (float) Math.sin(Math.PI * o)
+                + (turnFrom == null ? 0f : (turnForward ? 0.008f : -0.008f) * (float) Math.sin(Math.PI * turnP));
+        k = scale * (0.9f + 0.1f * Math.min(1f, in)) * (1f - 0.08f * out);
+
+        float[] b = toBook(mx, my);
         d.push();
-        d.translate(ox, oy);
-        d.scale(scale);
+        d.translate(cx, cy);
+        d.rotate(tilt);
+        d.scale(k);
+        d.translate(-W / 2f, -H / 2f);
+        float sx = closedShift() * (1f - o);
         d.translate(sx, 0);
-        float px = bx - sx;
-        book(d, data, facts, o, px, by);
+        ButcherStats st = ButcherStats.get();
+        book(d, st.ledger(), st.facts(), o, b[0], b[1]);
         d.pop();
+    }
+
+    /** A point on the screen, in the book's own coordinates (the shut book's shift taken off). */
+    private float[] toBook(double mx, double my) {
+        double x = mx - cx, y = my - cy, c = Math.cos(tilt), s = Math.sin(tilt);
+        float bx = (float) ((x * c + y * s) / k + W / 2.0), by = (float) ((-x * s + y * c) / k + H / 2.0);
+        return new float[]{bx - closedShift() * (1f - ease(openness)), by};
     }
 
     /** How far the shut book moves to sit in the middle (only the front cover shows). */
@@ -95,26 +169,32 @@ final class LedgerView {
     private void book(Draw d, LedgerData data, Facts facts, float o, float mx, float my) {
         // Shadow under the whole book, as wide as what is showing.
         int leftEdge = o < 0.5f ? SPINE_X : Math.round(SPINE_X - (SPINE_X) * ((o - 0.5f) * 2f));
-        d.fill(leftEdge + 3, 4, BOOK_R + 4, H + 3, 0x50000000);
+        d.fill(leftEdge + 4, 5, BOOK_R + 5, H + 4, 0x60000000);
+        boolean live = o >= 0.999f && turnFrom == null && leftAt < 0;
 
         if (o > 0.001f) {
             // The back cover and the right page, always under everything.
             d.fill(SPINE_X - 2, 0, BOOK_R, H, LEATHER);
             d.fill(BOOK_R - 2, 0, BOOK_R, H, LEATHER_EDGE);
-            tabs(d, data, mx, my, o >= 0.999f);
+            tabs(d, data, mx, my, live);
             paper(d, RIGHT, true);
-            if (o > 0.5f) rightPage(d, data, mx, my, o >= 0.999f);
+            if (o > 0.5f) at(baseRight(), () -> rightPage(d, data, mx, my, live));
         }
         if (o >= 0.5f) {
             // The front cover has swung over: the left page grows out of the spine.
-            float k = (o - 0.5f) * 2f;
-            int w = Math.round((PAGE_W + COVER) * k);
+            float kk = (o - 0.5f) * 2f;
+            int w = Math.round((PAGE_W + COVER) * kk);
             d.fill(SPINE_X - w, 0, SPINE_X + 2, H, LEATHER);
             d.fill(SPINE_X - w, 0, SPINE_X - w + 2, H, LEATHER_EDGE);
-            if (k > 0.98f) {
+            if (kk > 0.98f) {
                 paper(d, LEFT, false);
                 spine(d);
-                leftPage(d, data, facts, mx, my);
+                at(baseLeft(), () -> {
+                    ribbon(d, mx, my, live);
+                    leftPage(d, data, facts, mx, my, live);
+                });
+                corners(d, mx, my, live);
+                sheet(d, data, facts);
             } else {
                 int pw = Math.max(0, w - COVER);
                 d.fill(SPINE_X - pw, COVER, SPINE_X, H - COVER, PAPER);
@@ -123,9 +203,183 @@ final class LedgerView {
             }
         } else {
             // The front cover, closed or lifting: hinged at the spine, narrowing as it turns towards the reader.
-            float k = 1f - o * 2f;
-            int w = Math.round((BOOK_R - SPINE_X) * k);
-            cover(d, data, SPINE_X, w, mx, my, k > 0.999f);
+            float kk = 1f - o * 2f;
+            int w = Math.round((BOOK_R - SPINE_X) * kk);
+            cover(d, data, SPINE_X, w, mx, my, kk > 0.999f);
+        }
+    }
+
+    // ------------------------------------------------------------------ turning the pages
+
+    private static Spot here() {
+        return new Spot(chapter, page);
+    }
+
+    /** What the left page shows: while a page turns forward, the old one until the sheet covers it. */
+    private static Spot baseLeft() {
+        return turnFrom == null ? here() : turnForward ? turnFrom : turnTo;
+    }
+
+    private static Spot baseRight() {
+        return turnFrom == null ? here() : turnForward ? turnTo : turnFrom;
+    }
+
+    /** Runs {@code r} with the book turned to {@code s} (a stamp being read only stays open on its own spread). */
+    private static void at(Spot s, Runnable r) {
+        Chapter c0 = chapter;
+        int p0 = page;
+        String sel0 = selected;
+        boolean same = s.chapter() == c0 && s.page() == p0;
+        chapter = s.chapter();
+        page = s.page();
+        if (!same) selected = null;
+        try {
+            r.run();
+        } finally {
+            chapter = c0;
+            page = p0;
+            selected = sel0;
+        }
+    }
+
+    private static int pages(Chapter c) {
+        if (c == Chapter.SERAPH && Maintenance.SERAPH) return 1;
+        return Math.max(1, (Ledger.chapter(c).size() + PER_PAGE - 1) / PER_PAGE);
+    }
+
+    /** The next page of stamps, or the next chapter's first; null at the back of the book. */
+    private static Spot next(Spot s) {
+        if (s.page() + 1 < pages(s.chapter())) return new Spot(s.chapter(), s.page() + 1);
+        Chapter[] all = Chapter.values();
+        int i = s.chapter().ordinal() + 1;
+        return i < all.length ? new Spot(all[i], 0) : null;
+    }
+
+    private static Spot prev(Spot s) {
+        if (s.page() > 0) return new Spot(s.chapter(), s.page() - 1);
+        Chapter[] all = Chapter.values();
+        int i = s.chapter().ordinal() - 1;
+        return i >= 0 ? new Spot(all[i], pages(all[i]) - 1) : null;
+    }
+
+    /** Starts a page over towards {@code to}; held, it follows the mouse until let go. */
+    private static void turn(Spot to, boolean forward, boolean held) {
+        if (to == null) return;
+        finishTurn(true);
+        if (to.equals(here())) return;
+        turnFrom = here();
+        turnTo = to;
+        turnForward = forward;
+        turnHeld = held;
+        turnMoved = false;
+        turnP = 0f;
+        turnTarget = held ? 0f : 1f;
+    }
+
+    /** Moves a page that is not held towards where it is going; one that gets there is turned (or back). */
+    private static void turnTick(float dt) {
+        if (turnFrom == null || turnHeld) return;
+        turnP += Math.signum(turnTarget - turnP) * Math.min(Math.abs(turnTarget - turnP), dt / TURN_TIME);
+        if (turnP == turnTarget) finishTurn(turnTarget >= 1f);
+    }
+
+    /** Ends a turn at once: over ({@code done}, as it was going) or back where it was. */
+    private static void finishTurn(boolean done) {
+        if (turnFrom == null) return;
+        if (done && turnTarget >= 1f) {
+            if (turnTo.chapter() != chapter) markSeen();
+            chapter = turnTo.chapter();
+            page = turnTo.page();
+            selected = null;
+        }
+        turnFrom = turnTo = null;
+        turnHeld = false;
+    }
+
+    /**
+     * The sheet in the air: off the page it was, narrowing towards the spine as it stands up, then down over the other
+     * side with the next page on its back - each face drawn squeezed sideways, which is what a page edge-on looks like.
+     */
+    private void sheet(Draw d, LedgerData data, Facts facts) {
+        if (turnFrom == null) return;
+        float p = clamp01(turnP);
+        boolean firstHalf = p < 0.5f;
+        float w = PAGE_W * Math.abs((float) Math.cos(Math.PI * p));
+        boolean onRight = turnForward == firstHalf;
+        Spot face = firstHalf ? turnFrom : turnTo;
+        int anchor = onRight ? RIGHT : SPINE_X;
+        if (w >= 0.5f) {
+            d.push();
+            d.translate(anchor, 0);
+            d.scale(w / PAGE_W, 1f);
+            d.translate(-anchor, 0);
+            if (onRight) {
+                paper(d, RIGHT, true);
+                at(face, () -> rightPage(d, data, -1, -1, false));
+            } else {
+                paper(d, LEFT, false);
+                at(face, () -> leftPage(d, data, facts, -1, -1, false));
+            }
+            // Darker the more it stands up off the page.
+            int shade = Math.round(110 * (1f - w / PAGE_W));
+            d.fill(onRight ? RIGHT : LEFT, COVER, onRight ? RIGHT + PAGE_W : SPINE_X, H - COVER, shade << 24);
+            d.pop();
+        }
+        // Its free edge throws a shadow on the page underneath.
+        int edge = Math.round(onRight ? RIGHT + w : SPINE_X - w);
+        int sa = Math.round(80 * (float) Math.sin(Math.PI * p));
+        for (int i = 0; i < 7; i++) {
+            int a = sa * (7 - i) / 7;
+            int x = onRight ? edge + i : edge - i - 1;
+            if (onRight ? x >= RIGHT + PAGE_W : x < LEFT) break;
+            d.fill(x, COVER, x + 1, H - COVER, a << 24);
+        }
+        if (w >= 1f) d.fill(onRight ? edge - 1 : edge, COVER, onRight ? edge : edge + 1, H - COVER, 0x50FFFFFF);
+    }
+
+    /** The folded corners that turn the page: bottom right goes on, bottom left goes back. */
+    private void corners(Draw d, float mx, float my, boolean live) {
+        Spot nx = next(here()), pv = prev(here());
+        if (turnFrom != null) return;
+        if (nx != null) corner(d, true, live && onCorner(mx, my, true), nx);
+        if (pv != null) corner(d, false, live && onCorner(mx, my, false), pv);
+    }
+
+    private static boolean onCorner(float mx, float my, boolean right) {
+        if (my < H - COVER - CORNER_HIT || my >= H) return false;
+        return right ? mx >= RIGHT + PAGE_W - CORNER_HIT && mx < BOOK_R : mx >= 0 && mx < LEFT + CORNER_HIT;
+    }
+
+    private static void corner(Draw d, boolean right, boolean hover, Spot to) {
+        int f = hover ? CORNER_HOVER : CORNER;
+        int y1 = H - COVER;
+        for (int j = 0; j < f; j++) {
+            int y = y1 - f + j;
+            if (right) {
+                int x1 = RIGHT + PAGE_W;
+                d.fill(x1 - j, y, x1, y + 1, LEATHER);                       // the corner folded away
+                d.fill(x1 - f, y, x1 - j, y + 1, j == 0 ? PAPER : PAPER_SHADE); // the flap folded over
+                d.fill(x1 - j - 1, y, x1 - j, y + 1, 0x40000000);              // its crease
+            } else {
+                int x0 = LEFT;
+                d.fill(x0, y, x0 + j, y + 1, LEATHER);
+                d.fill(x0 + j, y, x0 + f, y + 1, j == 0 ? PAPER : PAPER_SHADE);
+                d.fill(x0 + j, y, x0 + j + 1, y + 1, 0x40000000);
+            }
+        }
+        // Under the flap, a pencilled arrow - and where it goes, while the mouse is on it.
+        String arrow = right ? ">" : "<";
+        int ax = right ? RIGHT + PAGE_W - f - 8 : LEFT + f + 3, ay = y1 - 10;
+        d.text(arrow, ax, ay, hover ? INK : PENCIL, false, false);
+        if (hover) {
+            String where = to.chapter() != chapter ? to.chapter().title : "Page " + (to.page() + 1);
+            float s = 0.8f;
+            int w = Math.round(d.width(where, false) * s);
+            d.push();
+            d.translate(right ? ax - 4 - w : ax + 10, ay + 1);
+            d.scale(s);
+            d.text(where, 0, 0, INK, false, false);
+            d.pop();
         }
     }
 
@@ -234,11 +488,10 @@ final class LedgerView {
         if (chapter == Chapter.SERAPH && Maintenance.SERAPH) {
             StampArt.hazardTape(d, cx, H / 2f - 10, PAGE_W / 2 - 4, -0.12f, "UNDER MAINTENANCE");
             StampArt.hazardTape(d, cx, H / 2f + 22, PAGE_W / 2 - 4, 0.09f, "UNDER MAINTENANCE");
-            flip(d);
             return;
         }
 
-        int pages = Math.max(1, (stamps.size() + PER_PAGE - 1) / PER_PAGE);
+        int pages = pages(chapter);
         page = Math.min(page, pages - 1);
         Stamp hover = live ? stampAt(mx, my) : null;
         for (int i = 0; i < PER_PAGE; i++) {
@@ -249,57 +502,59 @@ final class LedgerView {
             int g = Ledger.grade(s, data);
             boolean hidden = s.hidden() && g == 0;
             if (s == hover || s.id().equals(selected)) {
-                d.fill(c[0] - 18, c[1] - 17, c[0] + 18, c[1] + 33, s.id().equals(selected) ? 0x26604020 : 0x14604020);
+                d.fill(c[0] - 19, c[1] - 18, c[0] + 19, c[1] + 40, s.id().equals(selected) ? 0x26604020 : 0x14604020);
             }
-            if (g > 0) StampArt.earned(d, c[0], c[1], 14, s, g, 1f, StampArt.tilt(s));
-            else StampArt.empty(d, c[0], c[1], 14, s, hidden, Math.round(mx), Math.round(my));
+            if (g > 0) StampArt.earned(d, c[0], c[1], 15, s, g, 1f, StampArt.tilt(s));
+            else StampArt.empty(d, c[0], c[1], 15, s, hidden, Math.round(mx), Math.round(my));
             String name = hidden ? "???" : s.name();
-            small(d, name, c[0], c[1] + 18, 34, g > 0 ? INK : PENCIL);
+            small(d, name, c[0], c[1] + 19, 36, g > 0 ? INK : PENCIL);
             if (g > 0 && !data.seen.contains(s.id())) {
                 d.push();
-                d.translate(c[0] + 8, c[1] - 17);
+                d.translate(c[0] + 8, c[1] - 19);
                 d.rotate(0.25f);
-                d.scale(0.55f);
+                d.scale(0.7f);
                 d.text("NEW", 0, 0, RED_INK, true, false);
                 d.pop();
             }
         }
         if (pages > 1) {
-            String p = "< " + (page + 1) + " / " + pages + " >";
+            String p = "page " + (page + 1) + " of " + pages;
             int pw = d.width(p, false);
-            d.text(p, cx - pw / 2, H - COVER - 14, PENCIL, false, false);
+            d.text(p, cx - pw / 2, H - COVER - 12, PENCIL, false, false);
         }
         int earned = 0;
         for (Stamp s : stamps) if (Ledger.grade(s, data) > 0) earned++;
-        String count = earned + " / " + stamps.size();
-        d.push();
-        d.translate(x + PAGE_W - 10 - d.width(count, false) * 0.7f, H - COVER - 11);
-        d.scale(0.7f);
-        d.text(count, 0, 0, PENCIL, false, false);
-        d.pop();
-        flip(d);
+        tally(d, earned, x + 16, H - COVER - 13);
     }
 
-    /** A page turning over the right page as the chapter changes: paper narrowing towards the spine. */
-    private static void flip(Draw d) {
-        if (flipAt < 0) return;
-        float f = (System.currentTimeMillis() - flipAt) / 260f;
-        if (f >= 1f) {
-            flipAt = -1;
-            return;
+    /** Somebody counting their stamps in the margin, five-bar gates and all. */
+    private static void tally(Draw d, int n, int x, int y) {
+        int col = 0xB0000000 | (PENCIL & 0xFFFFFF);
+        for (int i = 0; i < Math.min(n, 20); i++) {
+            int group = i / 5, inGroup = i % 5, gx = x + group * 13;
+            if (inGroup < 4) {
+                d.fill(gx + inGroup * 2, y + (i % 2), gx + inGroup * 2 + 1, y + 8, col);
+            } else {
+                for (int j = 0; j < 9; j++) d.fill(gx - 1 + j, y + 6 - j * 6 / 8, gx + j, y + 7 - j * 6 / 8, col);
+            }
         }
-        int w = Math.round(PAGE_W * (1f - ease(f)));
-        if (w <= 0) return;
-        d.fill(RIGHT, COVER, RIGHT + w, H - COVER, PAPER);
-        d.fill(RIGHT + w - 2, COVER, RIGHT + w, H - COVER, PAPER_SHADE);
-        d.fill(RIGHT + w, COVER, RIGHT + w + 4, H - COVER, 0x30000000);
+    }
+
+    /** A cup was put down on some title pages: a faint ring in the empty lower half, the same every time. */
+    private static void coffee(Draw d) {
+        int seed = chapter.ordinal() * 7 + 2;
+        if (seed % 3 == 0) return;
+        int rcx = SPINE_X - 52 - seed % 13, rcy = H - COVER - 66 - seed % 7;
+        StampArt.ring(d, rcx, rcy, 14, 2, 0x2E000000 | COFFEE);
+        StampArt.ring(d, rcx + 1, rcy + 1, 13, 1, 0x16000000 | COFFEE);
+        d.fill(rcx + 11, rcy + 12, rcx + 13, rcy + 14, 0x24000000 | COFFEE);
     }
 
     /** A grid cell's stamp centre: {x, y}. */
     private static int[] cell(int i) {
         int col = i % COLS, row = i / COLS;
         int cw = (PAGE_W - 22) / COLS;
-        return new int[]{RIGHT + 14 + cw * col + cw / 2, COVER + 38 + row * 62};
+        return new int[]{RIGHT + 14 + cw * col + cw / 2, COVER + 42 + row * 66};
     }
 
     private Stamp stampAt(float mx, float my) {
@@ -308,24 +563,23 @@ final class LedgerView {
             int idx = page * PER_PAGE + i;
             if (idx >= stamps.size()) break;
             int[] c = cell(i);
-            if (mx >= c[0] - 18 && mx < c[0] + 18 && my >= c[1] - 17 && my < c[1] + 33) return stamps.get(idx);
+            if (mx >= c[0] - 19 && mx < c[0] + 19 && my >= c[1] - 18 && my < c[1] + 40) return stamps.get(idx);
         }
         return null;
     }
 
     // ------------------------------------------------------------------ the left page
 
-    private void leftPage(Draw d, LedgerData data, Facts f, float mx, float my) {
-        ribbon(d, mx, my);
+    private void leftPage(Draw d, LedgerData data, Facts f, float mx, float my, boolean live) {
         Stamp s = selected == null ? null : Ledger.byId(selected);
         if (s != null && s.chapter() == chapter) stampPage(d, data, f, s, mx, my);
         else titlePage(d, data, f);
     }
 
     /** The red ribbon that keeps the place - and shuts the book. */
-    private static void ribbon(Draw d, float mx, float my) {
+    private static void ribbon(Draw d, float mx, float my, boolean live) {
         int x = SPINE_X - 16;
-        boolean hover = mx >= x - 2 && mx < x + 10 && my >= 0 && my < 40;
+        boolean hover = live && mx >= x - 2 && mx < x + 10 && my >= 0 && my < 40;
         int len = hover ? 40 : 34;
         d.fill(x + 1, 1, x + 9, len + 1, 0x40000000);
         d.fill(x, 0, x + 8, len, hover ? 0xFFC0282E : RIBBON);
@@ -333,15 +587,16 @@ final class LedgerView {
         d.fill(x + 5, len, x + 8, len + 3, hover ? 0xFFC0282E : RIBBON);
         if (hover) {
             d.push();
-            d.translate(x - 4 - d.width("Close", false) * 0.7f, 6);
-            d.scale(0.7f);
-            d.text("Close", 0, 0, RED_INK, false, false);
+            d.translate(x - 4 - d.width("Put away", false) * 0.85f, 6);
+            d.scale(0.85f);
+            d.text("Put away", 0, 0, RED_INK, false, false);
             d.pop();
         }
     }
 
     private void titlePage(Draw d, LedgerData data, Facts f) {
         int x = LEFT + 14, right = SPINE_X - 22;
+        coffee(d);
         d.push();
         d.translate(x, COVER + 12);
         d.scale(1.5f);
@@ -352,13 +607,16 @@ final class LedgerView {
         d.scale(1.3f);
         d.text(chapter.title, 0, 0, chapter.ink, true, false);
         d.pop();
-        d.text(chapter.subtitle, x + 30, COVER + 27, PENCIL, false, false);
-        d.fill(x, COVER + 42, right, COVER + 43, mix(chapter.ink, PAPER, 0.4f));
+        // Underlined twice in pencil, by someone pleased with the heading.
+        squiggle(d, x + 30, COVER + 26, Math.round(d.width(chapter.title, true) * 1.3f), chapter.ordinal());
+        d.text(chapter.subtitle, x + 30, COVER + 31, PENCIL, false, false);
+        d.fill(x, COVER + 45, right, COVER + 46, mix(chapter.ink, PAPER, 0.4f));
 
-        int y = COVER + 50;
+        int y = COVER + 53;
         List<Stamp> stamps = Ledger.chapter(chapter);
         if (chapter == Chapter.SERAPH && Maintenance.SERAPH) {
             y = wrap(d, "Being sharpened. Its stamps come back with it.", x, y, right - x, PENCIL);
+            note(d, x, right);
             return;
         }
         int earned = 0, grades = 0, all = 0;
@@ -373,9 +631,66 @@ final class LedgerView {
         y += 4;
         for (String[] l : stats(data, f)) y = line(d, l[0], l[1], x, right, y);
         closest(d, data, f, stamps, x, right, y + 8);
-        String hint = "Click a stamp to read it.";
-        d.text(hint, LEFT + (PAGE_W - d.width(hint, false)) / 2, H - COVER - 16, PENCIL, false, false);
+        note(d, x, right);
     }
+
+    // ------------------------------------------------------------------ the pencil
+
+    /** The chapter's note at the foot of its title page, in pencil and a little crooked, with a doodle beside it. */
+    private static void note(Draw d, int x, int right) {
+        String quip = switch (chapter) {
+            case HOUSE -> "the house always wins";
+            case SCATHA -> "worms. so many worms.";
+            case VANGUARD -> "bring a warmer coat";
+            case DIANA -> "dig. dig. dig.";
+            case HELLION -> "pack fire resistance!!";
+            case ERUPTION -> "do NOT swim here";
+            case FIN -> "need a bigger boat";
+            case WISP -> "boo.";
+            default -> "back soon";
+        };
+        d.push();
+        d.translate(x + 2, H - COVER - 30);
+        d.rotate(-0.06f);
+        d.text(quip, 0, 0, 0xC0000000 | (PENCIL & 0xFFFFFF), false, false);
+        d.fill(0, 10, Math.min(right - x - 34, d.width(quip, false)), 11, 0x50000000 | (PENCIL & 0xFFFFFF));
+        d.pop();
+        String[] art = DOODLES[Math.min(DOODLES.length - 1, chapter.ordinal())];
+        int w = 0;
+        for (String r : art) w = Math.max(w, r.length());
+        int dx = right - w * 2 - 2, dy = H - COVER - 22 - art.length * 2;
+        for (int r = 0; r < art.length; r++) {
+            for (int c = 0; c < art[r].length(); c++) {
+                if (art[r].charAt(c) == '#') {
+                    d.fill(dx + c * 2, dy + r * 2, dx + c * 2 + 2, dy + r * 2 + 2, 0x90000000 | (PENCIL & 0xFFFFFF));
+                }
+            }
+        }
+    }
+
+    /** A wavy pencil underline, never quite the same twice. */
+    private static void squiggle(Draw d, int x, int y, int w, int seed) {
+        int col = 0x90000000 | (PENCIL & 0xFFFFFF);
+        for (int i = 0; i < w; i++) {
+            int dy = (int) Math.round(Math.sin(i * 0.55 + seed) * 1.2);
+            d.fill(x + i, y + dy, x + i + 1, y + dy + 1, col);
+            if (i > w / 3) d.fill(x + i + 2, y + 3 + dy / 2, x + i + 3, y + 4 + dy / 2, 0x50000000 | (PENCIL & 0xFFFFFF));
+        }
+    }
+
+    /** One doodle per chapter, in Chapter order: dice, a worm, a snowflake, the moon, a flame, a volcano, a fin, a ghost,
+     *  an eye. */
+    private static final String[][] DOODLES = {
+            {"#########", "#.......#", "#.#...#.#", "#.......#", "#...#...#", "#.......#", "#.#...#.#", "#.......#", "#########"},
+            {"...........##", "..##......#.#", ".#..#....#...", "#....#..#....", "......##....."},
+            {"....#....", ".#..#..#.", "..#.#.#..", "...###...", "#########", "...###...", "..#.#.#..", ".#..#..#.", "....#...."},
+            {"...###...", ".##......", ".#.......", "#........", "#........", "#........", ".#.......", ".##......", "...###..."},
+            {"....#....", "...##....", "...#.#...", "..#..#...", "..#...#.#", ".#.#..#.#", ".#.##.#.#", ".#......#", "..######."},
+            {"..#.#.#....", "...#.#.....", "...#.#.....", "..#...#....", ".#.....#...", "#.......#..", "###########"},
+            {"....#......", "...##......", "..#.#......", ".#..#......", "#...#......", "#####......", ".#.#.#.#.#.", "#.#.#.#.#.#"},
+            {"..#####..", ".#.....#.", "#..#.#..#", "#.......#", "#.......#", "#.#.#.#.#", ".#.#.#.#."},
+            {"...#####...", ".##.....##.", "#...###...#", "#..#####..#", "#...###...#", ".##.....##.", "...#####..."},
+    };
 
     /** The counted stamp nearest its next grade, with its bar: something to go for. */
     private static void closest(Draw d, LedgerData data, Facts f, List<Stamp> stamps, int x, int right, int y) {
@@ -504,9 +819,9 @@ final class LedgerView {
         if (e != null) {
             String when = e.at == 0 ? "Pre-ledger - earned before the Ledger"
                     : "Stamped " + DATE.format(Instant.ofEpochMilli(e.at).atZone(ZoneId.systemDefault()));
-            wrap(d, when, x, H - COVER - 26, right - x, PENCIL);
+            wrap(d, when, x, H - COVER - 38, right - x, PENCIL);
             if (isEvent(s) && e.value > 0) {
-                d.text("On kill #" + String.format(Locale.ROOT, "%,d", e.value), x, H - COVER - 14, PENCIL, false, false);
+                d.text("On kill #" + String.format(Locale.ROOT, "%,d", e.value), x, H - COVER - 18, PENCIL, false, false);
             }
         }
     }
@@ -538,44 +853,52 @@ final class LedgerView {
         d.fill(x, y, x + Math.round((right - x) * k), y + 5, ink);
         String t = String.format(Locale.ROOT, "%,d / %,d", Math.min(v, need), need);
         d.push();
-        d.translate(right - d.width(t, false) * 0.7f, y + 7);
-        d.scale(0.7f);
+        d.translate(right - d.width(t, false) * 0.8f, y + 7);
+        d.scale(0.8f);
         d.text(t, 0, 0, PENCIL, false, false);
         d.pop();
-        return y + 16;
+        return y + 17;
     }
 
     // ------------------------------------------------------------------ the mouse
 
     /** @return whether the click was the book's */
     boolean click(double mx, double my) {
-        float o = ease(openness);
-        float bx = (float) ((mx - ox) / scale) - closedShift() * (1f - o), by = (float) ((my - oy) / scale);
+        if (leftAt >= 0) return true;
+        float[] b = toBook(mx, my);
+        float bx = b[0], by = b[1];
         if (!open) {
             if (bx >= SPINE_X && bx < BOOK_R && by >= 0 && by < H) {
                 open = true;
+                shutByRibbon = false;
                 return true;
             }
             return false;
         }
-        if (openness < 0.99f) return true;
-        // The ribbon shuts it.
+        if (openness < 0.99f || turnFrom != null) return true;
+        // The ribbon shuts it - and puts it away.
         int rx = SPINE_X - 16;
         if (bx >= rx - 2 && bx < rx + 10 && by >= 0 && by < 40) {
             markSeen();
             open = false;
+            shutByRibbon = true;
             selected = null;
+            return true;
+        }
+        // A folded corner: picked up, it follows the mouse; let go where it was, it turns by itself.
+        for (boolean right : new boolean[]{true, false}) {
+            if (!onCorner(bx, by, right)) continue;
+            Spot to = right ? next(here()) : prev(here());
+            if (to == null) continue;
+            turn(to, right, true);
+            pressX = mx;
+            pressY = my;
             return true;
         }
         Chapter t = tabAt(bx, by);
         if (t != null) {
-            if (t != chapter) {
-                markSeen();
-                chapter = t;
-                selected = null;
-                page = 0;
-                flipAt = System.currentTimeMillis();
-            }
+            if (t != chapter) turn(new Spot(t, 0), t.ordinal() > chapter.ordinal(), false);
+            else if (page != 0) turn(new Spot(t, 0), false, false);
             return true;
         }
         if (selected != null && bx >= LEFT + 12 && bx < LEFT + 56 && by >= COVER + 6 && by < COVER + 18) {
@@ -588,15 +911,34 @@ final class LedgerView {
             if (Ledger.grade(s, ButcherStats.get().ledger()) > 0) ButcherStats.get().seen(List.of(s.id()));
             return true;
         }
-        // The page counter: left half back, right half on.
-        List<Stamp> stamps = Ledger.chapter(chapter);
-        int pages = Math.max(1, (stamps.size() + PER_PAGE - 1) / PER_PAGE);
-        if (pages > 1 && by >= H - COVER - 18 && bx >= RIGHT && bx < RIGHT + PAGE_W) {
-            page = Math.floorMod(page + (bx < RIGHT + PAGE_W / 2f ? -1 : 1), pages);
-            flipAt = System.currentTimeMillis();
-            return true;
-        }
         return bx >= 0 && bx < W && by >= 0 && by < H;
+    }
+
+    /** A held page follows the mouse: how far across the book it is is how far over the page is. */
+    boolean drag(double mx, double my) {
+        if (turnFrom == null || !turnHeld) return false;
+        if (Math.abs(mx - pressX) + Math.abs(my - pressY) > 3) turnMoved = true;
+        float bx = toBook(mx, my)[0];
+        float span = RIGHT + PAGE_W - LEFT;
+        float p = turnForward ? (RIGHT + PAGE_W - bx) / span : (bx - LEFT) / span;
+        turnP = Math.max(0f, Math.min(0.98f, p));
+        return true;
+    }
+
+    /** Let go: a click on the corner turns the page, a drag turns it if it got far enough, else it falls back. */
+    boolean release() {
+        if (turnFrom == null || !turnHeld) return false;
+        turnHeld = false;
+        turnTarget = !turnMoved || turnP > TURN_COMMIT ? 1f : 0f;
+        return true;
+    }
+
+    /** The wheel turns the pages too: down for on, up for back. */
+    boolean scroll(double amount) {
+        if (!open || openness < 0.99f || turnFrom != null || leftAt >= 0) return true;
+        if (amount < 0) turn(next(here()), true, false);
+        else if (amount > 0) turn(prev(here()), false, false);
+        return true;
     }
 
     /** The chapter on show has been looked at: its fresh ink dries. */
@@ -635,12 +977,12 @@ final class LedgerView {
 
     /** A stamp's name under it: small, centred, three lines at most. */
     private static void small(Draw d, String s, int cx, int y, int maxW, int col) {
-        float k = 0.62f;
+        float k = 0.75f;
         List<String> lines = lines(d, s, Math.round(maxW / k));
         for (int i = 0; i < Math.min(3, lines.size()); i++) {
             String l = lines.get(i);
             d.push();
-            d.translate(cx - d.width(l, false) * k / 2f, y + i * 6.5f);
+            d.translate(cx - d.width(l, false) * k / 2f, y + i * 7.5f);
             d.scale(k);
             d.text(l, 0, 0, col, false, false);
             d.pop();
@@ -678,6 +1020,16 @@ final class LedgerView {
         d.fill(x0, y1 - 1, x1, y1, col);
         d.fill(x0, y0, x0 + 1, y1, col);
         d.fill(x1 - 1, y0, x1, y1, col);
+    }
+
+    private static float clamp01(float t) {
+        return Math.max(0f, Math.min(1f, t));
+    }
+
+    /** Overshoots a touch and settles: the book landing. */
+    private static float backOut(float t) {
+        t = clamp01(t) - 1f;
+        return 1f + t * t * (2.2f * t + 1.2f);
     }
 
     private static float ease(float t) {

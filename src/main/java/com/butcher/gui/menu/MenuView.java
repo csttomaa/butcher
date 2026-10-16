@@ -55,15 +55,17 @@ public final class MenuView {
 
     public MenuView(Host host) {
         this.host = host;
+        if (tab == TAB_LEDGER) tab = TAB_ANIM;
+        if (ledgerMode) ledger.enter();
     }
 
     // ------------------------------------------------------------------ layout
 
-    private static final int PANEL_W = 392, PANEL_H_MAX = 340;
+    private static final int PANEL_W = 440, PANEL_H_MAX = 400;
     /** The icon is 32 x 32 pixel art: drawn at 32 GUI pixels, every art pixel lands on whole screen pixels. */
     public static final int ICON_SIZE = 32;
-    private static final int TITLE_H = 40, TAB_H = 26, FOOTER_H = 16, PAD = 10;
-    private static final int GAP = 3;
+    private static final int TITLE_H = 44, TAB_H = 28, FOOTER_H = 17, PAD = 12;
+    private static final int GAP = 4;
     private static final int SCROLLBAR_W = 3, SCROLLBAR_GRAB = 6;
 
     private static final String[] TAB_NAMES = {"Animations", "Sound", "General", "Stats", "Ledger"};
@@ -89,6 +91,15 @@ public final class MenuView {
 
     /** The tab and the open cards survive closing the menu: it opens where it was left. */
     private static int tab = TAB_ANIM;
+    /**
+     * The Ledger is shown on its own: the menu goes and the book comes in over the darkened game. Static, so the menu
+     * reopens in the book if it was left there. {@link #tab} stays the tab underneath, for when the book is put away.
+     */
+    private static boolean ledgerMode;
+    /** When the Ledger came up or went away, for the menu's fade (-1: never this time). */
+    private long modeAt = -1;
+    /** The strips above and below the book, for the way back and the hints. */
+    private static final int LEDGER_TOP = 24, LEDGER_BOTTOM = 18;
     private static final Set<String> openGroups = new HashSet<>();
     /** What each group's "Try it" will play. */
     private static final Map<String, Integer> TRY = new HashMap<>();
@@ -159,11 +170,59 @@ public final class MenuView {
         float open = openT();
 
         layout(d);
-        float wanted = tab == TAB_LEDGER ? maxPanelH() : Math.max(150, Math.min(maxPanelH(), contentHeight + CHROME));
+        float wanted = Math.max(150, Math.min(maxPanelH(), contentHeight + CHROME));
         shownH = shownH < 0 ? wanted : shownH + (wanted - shownH) * Math.min(1f, dt * 14f);
         if (Math.abs(shownH - wanted) < 0.5f) shownH = wanted;
 
         backdrop(d, open);
+        long ms = System.currentTimeMillis();
+        if (ledgerMode && ledger.wantsLeave()) ledger.leave();
+        if (ledgerMode && ledger.gone()) {
+            ledgerMode = false;
+            modeAt = ms;
+        }
+        // The menu fades out as the book comes in, and back when it is put away.
+        float menuShown = ledgerMode ? 1f - clamp01((ms - modeAt) / 180f) : modeAt < 0 ? 1f : clamp01((ms - modeAt) / 220f);
+        if (menuShown > 0f) drawMenu(d, Math.min(open, ease(menuShown)), mouseX, mouseY, !ledgerMode);
+        if (ledgerMode) {
+            ledger.draw(d, width, height, LEDGER_TOP, LEDGER_BOTTOM, mouseX, mouseY);
+            ledgerChrome(d, mouseX, mouseY);
+        }
+    }
+
+    /** The way back to the menu above the book, and how to use it below. */
+    private void ledgerChrome(Draw d, int mx, int my) {
+        String back = "< Back to the menu";
+        int bw = d.width(back, false);
+        boolean hover = within(mx, my, 6, 4, 14 + bw, 20);
+        if (hover) d.fill(6, 4, 14 + bw, 20, 0x30FFFFFF);
+        d.text(back, 10, 8, hover ? GOLD_BRIGHT : DIM, false, false);
+        String hint = "Click a stamp to read it  ·  drag a corner or scroll to turn the page  ·  Esc for the menu";
+        if (d.width(hint, false) > width - 20) hint = "Drag a corner or scroll to turn  ·  Esc for the menu";
+        d.text(hint, (width - d.width(hint, false)) / 2, height - 13, FAINT, false, false);
+    }
+
+    private static boolean onBack(double mx, double my) {
+        return mx >= 6 && mx < 130 && my >= 4 && my < 20;
+    }
+
+    /** Opens the Ledger on its own. */
+    private void enterLedger() {
+        if (ledgerMode) return;
+        ledgerMode = true;
+        modeAt = System.currentTimeMillis();
+        ledger.enter();
+    }
+
+    /** Esc: out of the Ledger, back to the menu. @return whether that is what it did (else the screen closes) */
+    public boolean escape() {
+        if (!ledgerMode) return false;
+        ledger.leave();
+        return true;
+    }
+
+    private void drawMenu(Draw d, float open, int mouseX, int mouseY, boolean live) {
+        if (!live) mouseX = mouseY = -1000;
         int px = panelX(), py = panelY(), pw = panelW(), ph = panelH();
         title(d, px, py, pw);
         panel(d, px, py, pw, ph);
@@ -177,7 +236,6 @@ public final class MenuView {
         int vt = viewTop(), vb = viewBottom();
         d.clip(px + 1, vt, px + pw - 1, vb);
         int left = rowsLeft(), w = rowsWidth();
-        if (tab == TAB_LEDGER) ledger.draw(d, px + 6, vt + 2, pw - 12, vb - vt - 4, mouseX, mouseY);
         for (Placed p : placed) {
             int ry = vt + p.y - Math.round(scroll);
             int h = p.row.height();
@@ -352,8 +410,7 @@ public final class MenuView {
         String version = "v" + host.version();
         int vw = d.width(version, false);
         d.text(version, px + pw - PAD - vw, y + 5, FAINT, false, false);
-        String hint = tab == TAB_LEDGER ? "Click the tabs to turn to a chapter · Esc to close"
-                : "Click to change · Right-click back · Esc to close";
+        String hint = "Click to change · Right-click back · Esc to close";
         if (d.width(hint, false) > pw - PAD * 3 - vw) hint = "Right-click goes back";
         d.text(hint, px + PAD, y + 5, FAINT, false, false);
     }
@@ -1349,6 +1406,11 @@ public final class MenuView {
 
     /** @return whether the menu used the click */
     public boolean mouseClicked(double mx, double my, int button) {
+        if (ledgerMode) {
+            if (button == 0 && onBack(mx, my)) ledger.leave();
+            else if (button == 0) ledger.click(mx, my);
+            return true;
+        }
         int px = panelX(), py = panelY(), pw = panelW();
         int vt = viewTop(), vb = viewBottom();
         if (button == 1) {
@@ -1363,6 +1425,10 @@ public final class MenuView {
         if (button != 0) return false;
         if (my >= py && my < py + TAB_H && mx >= px && mx < px + pw) {
             int i = Math.min(TAB_NAMES.length - 1, (int) ((mx - px) / (pw / TAB_NAMES.length)));
+            if (i == TAB_LEDGER) {
+                enterLedger();
+                return true;
+            }
             if (i != tab) {
                 tab = i;
                 scroll = scrollTarget = 0f;
@@ -1376,10 +1442,6 @@ public final class MenuView {
             return true;
         }
         if (!within(mx, my, px, vt, px + pw, vb)) return within(mx, my, px, py - TITLE_H, px + pw, py + panelH());
-        if (tab == TAB_LEDGER) {
-            ledger.click(mx, my);
-            return true;
-        }
         int x0 = rowsLeft(), w = rowsWidth();
         for (Placed p : placed) {
             int[] g = geometry(p, x0, w);
@@ -1411,6 +1473,7 @@ public final class MenuView {
 
     public boolean mouseDragged(double mx, double my, int button) {
         if (button != 0) return false;
+        if (ledgerMode) return ledger.drag(mx, my);
         if (draggingBar) {
             barTo(my);
             return true;
@@ -1430,6 +1493,7 @@ public final class MenuView {
     /** @return whether a slider was let go (its value is then saved) */
     public boolean mouseReleased(double mx, double my, int button) {
         if (button != 0) return false;
+        if (ledgerMode) return ledger.release();
         if (draggingBar) {
             draggingBar = false;
             return true;
@@ -1443,6 +1507,7 @@ public final class MenuView {
     }
 
     public boolean mouseScrolled(double mx, double my, double amount) {
+        if (ledgerMode) return ledger.scroll(amount);
         if (!scrollable()) return false;
         scrollTarget = clampScroll(scrollTarget - (float) amount * 22f);
         return true;

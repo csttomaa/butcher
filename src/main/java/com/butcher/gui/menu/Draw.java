@@ -35,6 +35,9 @@ public interface Draw {
 
     void scale(float s);
 
+    /** Stretches what follows by {@code sx} across and {@code sy} down - a page turning edge-on. */
+    void scale(float sx, float sy);
+
     /** Turns what follows by {@code radians} about the current origin (positive is clockwise on screen). */
     void rotate(float radians);
 

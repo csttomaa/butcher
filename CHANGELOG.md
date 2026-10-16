@@ -38,6 +38,11 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   anything your stats prove that the book is missing.
 
 ### Changed
+- **The Ledger opens on its own**: the menu steps aside and the book drops in, larger, a little crooked on the desk,
+  and swings open. Turn its pages by clicking or dragging a folded corner, with the scroll wheel, or with the chapter
+  tabs - a page lifts and goes over the spine. Pencil notes, doodles, tally marks and the odd coffee ring on the
+  pages. Esc, the back button or the ribbon put it away.
+- The menu is roomier: a wider, taller panel with more space between rows.
 - On a narrow window the menu's tabs show their icons only.
 
 ## 0.3.3-alpha - the first public release (2026-10-15)

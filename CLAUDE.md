@@ -910,7 +910,22 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
   the thump at 170 ms with ink flecks and a jolt, "STAMPED!", the name, the grade; 2.95 s). `GuiDraw` is the menu's
   in-game `Draw`, shared. `Voices.stamp` (thump, edge click, paper, two bell notes, a third for a raised grade) on
   `ledgerVolume`; `ledgerPopups` under General. Offline: the scratchpad's `menu/src/CardPreview.java`.
-- `PANEL_W` is 392 for five tabs; a tab too narrow for its name draws its icon alone.
+- `PANEL_W` is 440 (`PANEL_H_MAX` 400, `PAD` 12, `GAP` 4 - the user found 392 crowded); a tab too narrow for its name
+  draws its icon alone.
+- **The book is shown on its own (2026-10-16, the user)**: the Ledger tab sets `MenuView.ledgerMode` (static, so the
+  menu reopens in it); the menu fades out over 180 ms and the book drops in (`LedgerView.enter`, `backOut`), shut, and
+  swings open. "< Back to the menu" top left, a hint line at the bottom, Esc (`MenuView.escape` from
+  `ButcherMenuScreen.onClose`) and the ribbon (`shutByRibbon` -> `wantsLeave`) put it away (`leave`, `gone`). `tab`
+  never becomes `TAB_LEDGER` any more. The book is 412 x 250, scaled to the screen in quarter steps (2.0 at a 960 x 540
+  GUI), resting at `TILT` -0.02 rad with more while it lands, leaves, opens and turns; `toBook` undoes the transform for
+  the mouse. Stamp names are 0.75x, wrapped at 36.
+- **Pages turn** (`Spot` = chapter + page; `next`/`prev` run through the whole book): the folded corners (click, or drag -
+  `drag`/`release`, over at `TURN_COMMIT` 0.3), the wheel, and the divider tabs. While a page turns the statics stay at
+  `turnFrom`; `at(spot, r)` draws a page as another spot. The sheet is that page squeezed sideways
+  (`Draw.scale(sx, sy)`, added for this) towards the spine, darkening as it stands up, with the next page on its back.
+- **Pencil** on the pages: a quip and a 2x doodle per chapter at the foot of the title page (`note`, `DOODLES` in
+  Chapter order), a double squiggle under the title, a coffee ring on two chapters in three, tally marks of the
+  chapter's stamps on the right page.
 - **`/butcher test ledger`** (developers only - it hangs off `test`, so `Dev.allowed()`; `ButcherClient.ledgerTestNode`):
   `popup <id> [grade]` (only the pop-up, `StampPopup.queueTest`, shown even with pop-ups off; `popup burst` queues
   six to see the cap), `give <id> [grade]` / `take <id>`, `info <id>` (what `Ledger.value` counts now, the grade it

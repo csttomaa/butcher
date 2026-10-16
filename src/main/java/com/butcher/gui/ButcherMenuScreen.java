@@ -59,6 +59,8 @@ public class ButcherMenuScreen extends Screen {
 
     @Override
     public void onClose() {
+        // Esc in the Ledger puts the book away first; the next one closes the menu.
+        if (view.escape()) return;
         if (minecraft != null) minecraft.gui.setScreen(parent);
     }
 

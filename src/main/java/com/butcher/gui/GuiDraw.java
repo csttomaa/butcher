@@ -59,6 +59,7 @@ public final class GuiDraw implements Draw {
     @Override public void push() { g.pose().pushMatrix(); }
     @Override public void translate(float x, float y) { g.pose().translate(x, y); }
     @Override public void scale(float s) { g.pose().scale(s, s); }
+    @Override public void scale(float sx, float sy) { g.pose().scale(sx, sy); }
     @Override public void rotate(float radians) { g.pose().rotate(radians); }
     @Override public void pop() { g.pose().popMatrix(); }
 
