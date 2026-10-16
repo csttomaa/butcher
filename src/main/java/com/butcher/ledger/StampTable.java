@@ -27,7 +27,7 @@ final class StampTable {
             new Stamp("scatha_choice_cut", Chapter.SCATHA, "Choice Cut", "An epic Scatha pet", false, new long[]{}, false),
             new Stamp("scatha_prime_cut", Chapter.SCATHA, "Prime Cut", "A legendary Scatha pet", false, new long[]{}, false),
             new Stamp("scatha_full_set", Chapter.SCATHA, "Full Set", "All three pet rarities", false, new long[]{}, false),
-            new Stamp("scatha_beginners_luck", Chapter.SCATHA, "Beginner's Luck", "A pet within your first N kills", false, new long[]{20L}, false),
+            new Stamp("scatha_beginners_luck", Chapter.SCATHA, "Beginner's Luck", "A pet within your first N kills of the day", false, new long[]{10L}, false),
             new Stamp("scatha_dry_aged", Chapter.SCATHA, "Dry Aged", "Kills in a row without a pet", false, new long[]{100L}, false),
             new Stamp("scatha_dry_aged_45", Chapter.SCATHA, "Dry Aged 45 Days", "Kills in a row without a pet", false, new long[]{200L}, true),
             new Stamp("scatha_slippery", Chapter.SCATHA, "Slippery", "Times the Scatha ducks your last swing", false, new long[]{50L}, false),
@@ -87,7 +87,7 @@ final class StampTable {
             new Stamp("fin_bigger_fish", Chapter.FIN, "Bigger Fish", "Legendary Megalodon", false, new long[]{}, false),
             new Stamp("fin_tooth_fairy", Chapter.FIN, "Tooth Fairy", "Great White Shark Tooth", false, new long[]{}, false),
             new Stamp("fin_off_the_hook", Chapter.FIN, "Off the Hook", "Sharks that dropped neither", false, new long[]{50L}, false),
-            new Stamp("fin_dentist", Chapter.FIN, "Dentist", "Great White Shark Teeth in total", true, new long[]{5L, 10L, 25L, 50L}, false),
+            new Stamp("fin_dentist", Chapter.FIN, "Dentist", "Great White Shark Teeth in total", true, new long[]{25L, 50L, 200L, 500L}, false),
             new Stamp("fin_school", Chapter.FIN, "School is In", "Megalodons in total", true, new long[]{2L, 3L, 5L, 10L}, false),
             new Stamp("fin_dry_dock", Chapter.FIN, "Dry Dock", "Sharks in a row with no drop", true, new long[]{25L, 50L, 100L, 200L}, false),
             new Stamp("fin_feeding_frenzy", Chapter.FIN, "Feeding Frenzy", "Two shark drops within 10 minutes", false, new long[]{}, false),
@@ -98,9 +98,9 @@ final class StampTable {
             new Stamp("wisp_drowning", Chapter.WISP, "Drowning in Sorrow", "Sorrow drops in total", true, new long[]{5L, 25L, 50L, 100L}, false),
             new Stamp("wisp_high_voltage", Chapter.WISP, "High Voltage", "Plasma drops in total", true, new long[]{5L, 25L, 50L, 100L}, false),
             new Stamp("wisp_bittersweet", Chapter.WISP, "Bittersweet", "Both Sorrow and Plasma", false, new long[]{}, false),
-            new Stamp("wisp_double_haunting", Chapter.WISP, "Double Haunting", "Two Ghost drops within 10 minutes", false, new long[]{}, false),
-            new Stamp("wisp_poltergeist", Chapter.WISP, "Poltergeist", "Three Ghost drops within an hour", false, new long[]{}, false),
-            new Stamp("wisp_matched_pair", Chapter.WISP, "Matched Pair", "Sorrow and Plasma within an hour of each other", false, new long[]{}, false),
+            new Stamp("wisp_double_haunting", Chapter.WISP, "Double Haunting", "Two Ghost drops within 30 seconds", false, new long[]{}, false),
+            new Stamp("wisp_poltergeist", Chapter.WISP, "Poltergeist", "Three Ghost drops within a minute", false, new long[]{}, false),
+            new Stamp("wisp_matched_pair", Chapter.WISP, "Matched Pair", "Sorrow and Plasma within a minute of each other", false, new long[]{}, false),
             new Stamp("wisp_witching_hour", Chapter.WISP, "Witching Hour", "A Ghost drop between midnight and 1 AM", false, new long[]{}, true)
     );
 }

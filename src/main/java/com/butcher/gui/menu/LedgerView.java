@@ -832,7 +832,7 @@ final class LedgerView {
         if (!s.tiered() && s.tiers().length > 0 && !isEvent(s)) {
             return desc + ": " + String.format(Locale.ROOT, "%,d", s.need(1)) + ".";
         }
-        if (s.id().equals("scatha_beginners_luck")) return "A pet within your first " + s.need(1) + " kills.";
+        if (s.id().equals("scatha_beginners_luck")) return "A pet within your first " + s.need(1) + " Scatha kills of the day.";
         if (s.id().equals("scatha_back_to_back")) return "Two pets within " + s.need(1) + " kills.";
         if (s.id().equals("vg_in_the_black")) return "A corpse worth " + String.format(Locale.ROOT, "%,d", s.need(1)) + " coins or more.";
         return desc.endsWith(".") ? desc : desc + ".";

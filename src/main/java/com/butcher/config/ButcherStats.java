@@ -446,6 +446,7 @@ public final class ButcherStats {
 
     public void onKill() {
         kills++;
+        Ledger.scathaKill(ledger(), System.currentTimeMillis(), java.time.ZoneId.systemDefault());
         save();
     }
 

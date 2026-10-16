@@ -48,6 +48,9 @@ public final class LedgerData {
     public long coins;
     /** The Scatha kill the first pet came on (0 = none yet; backfilled as an upper bound). */
     public long firstPetKill;
+    /** Today's Scatha kills, for Beginner's Luck (the user: it resets every day): the day (local epoch day) and the
+     *  kills on it. A new day starts the count again. */
+    public long scathaDay = -1, scathaDayKills;
     /** The last rare drops, newest last, at most {@link Ledger#RECENT}. */
     public List<Drop> recent = new ArrayList<>();
     /** The stats have been read into the Ledger once (the "pre-ledger" stamps). */
@@ -83,6 +86,7 @@ public final class LedgerData {
         skips = Math.max(0, skips);
         coins = Math.max(0, coins);
         firstPetKill = Math.max(0, firstPetKill);
+        scathaDayKills = Math.max(0, scathaDayKills);
         return this;
     }
 }

@@ -19,6 +19,9 @@ every build, so the gaps between entries are builds nobody ran - not missing not
   over it. Switch it off under General, set its volume under Sound.
 - Stamps outlive every stats reset.
 
+- Beginner's Luck is now a pet within your first 10 Scatha kills **of the day**, so it is never out of reach.
+- Fixed: Back to Back and In the Black were earned but never stamped. They now are, and anyone who already earned them
+  gets them the next time a stamp is checked.
 - **33 more stamps**, so every chapter fills a page: drop counts, every Demonlord and lava drop, Caged Wisp, Frozen
   Scute and Skeleton Key from corpses, Inquisitor kills, Dwarven O's busts, a drop worth 10M+ in one go, and the Ghosts'
   and sharks' runs of luck (two drops in ten minutes, three in an hour, Sorrow and Plasma together, one at midnight).

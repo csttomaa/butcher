@@ -41,7 +41,7 @@ public class LedgerTest {
     /** The stamps whose value is an event, kept by award() - the rest are counted from the stats. */
     static final Set<String> EVENTS = Set.of("house_hot_streak", "house_night_shift", "house_jackpot_777",
             "scatha_back_to_back", "vg_negative_equity", "vg_in_the_black", "diana_shared_custody", "lava_jaw_dropping",
-            "fin_bigger_fish", "house_big_ticket", "fin_feeding_frenzy", "wisp_double_haunting", "wisp_poltergeist",
+            "fin_bigger_fish", "scatha_beginners_luck", "house_big_ticket", "fin_feeding_frenzy", "wisp_double_haunting", "wisp_poltergeist",
             "wisp_matched_pair", "wisp_witching_hour");
 
     static final ZoneId UTC = ZoneOffset.UTC;
@@ -81,7 +81,7 @@ public class LedgerTest {
             if (EVENTS.contains(s.id())) {
                 check(s.id() + " is 0 until it happens", Ledger.value(s, rich, d0) == 0);
                 Ledger.award(d0, s.id(), 7);
-                check(s.id() + " counts once awarded", Ledger.value(s, rich, d0) == 1);
+                check(s.id() + " counts once awarded", Ledger.gradeFor(s, Ledger.value(s, rich, d0)) >= 1);
             } else {
                 check(s.id() + " reads the stats", Ledger.value(s, rich, d0) > 0, "value 0 with every number high");
             }
@@ -168,15 +168,23 @@ public class LedgerTest {
         check("pets within reach", b2b.flags.containsKey("scatha_back_to_back"));
         check("first pet kill kept", b2b.firstPetKill == 100);
 
+        // Beginner's Luck: a pet within the day's first N kills, the count starting again each day.
         Stamp beginner = Ledger.byId("scatha_beginners_luck");
-        LedgerData lucky = new LedgerData();
-        Ledger.drop(lucky, "scatha", "rare", beginner.number(20), at(9, 0), UTC);
-        Ledger.refresh(new Facts(), lucky, 1, false);
-        check("pet within the first kills", Ledger.grade(beginner, lucky) == 1);
+        long n = beginner.number(10);
         LedgerData late = new LedgerData();
-        Ledger.drop(late, "scatha", "rare", beginner.number(20) + 1, at(9, 0), UTC);
+        for (int i = 0; i < n + 1; i++) Ledger.scathaKill(late, at(9, i), UTC);
+        Ledger.drop(late, "scatha", "rare", 500, at(9, 30), UTC);
         Ledger.refresh(new Facts(), late, 1, false);
-        check("pet one kill too late", Ledger.grade(beginner, late) == 0);
+        check("pet one kill too late in the day", Ledger.grade(beginner, late) == 0);
+        Ledger.scathaKill(late, at(17, 8, 0), UTC);
+        check("a new day starts the count again", late.scathaDayKills == 1);
+        Ledger.drop(late, "scatha", "epic", 501, at(17, 8, 1), UTC);
+        Ledger.refresh(new Facts(), late, 1, false);
+        check("pet on the first kill of the next day", Ledger.grade(beginner, late) == 1);
+        LedgerData lucky = new LedgerData();
+        for (int i = 0; i < n; i++) Ledger.scathaKill(lucky, at(9, i), UTC);
+        Ledger.drop(lucky, "scatha", "rare", 9000, at(9, 30), UTC);
+        check("pet on the day's Nth kill, whatever the lifetime count", lucky.flags.containsKey("scatha_beginners_luck"));
 
         // ---- the House's runs, corpses' worth
         LedgerData runs = new LedgerData();
@@ -193,6 +201,15 @@ public class LedgerTest {
         check("coins counted", worth.coins == 40_000 + black.number(0) + 50_000);
         check("recent is capped", capped());
 
+        // ---- every event, once awarded, is stamped - numbered ones too (a flag read as 1 never met "50 kills")
+        for (String id : EVENTS) {
+            Stamp e = Ledger.byId(id);
+            LedgerData one = new LedgerData();
+            Ledger.award(one, id, 7);
+            Ledger.refresh(new Facts(), one, 1, false);
+            check(id + " stamps once awarded", Ledger.grade(e, one) == 1, "number " + e.number(0));
+        }
+
         // ---- the Fin and Wisp runs of luck
         LedgerData runs2 = new LedgerData();
         Ledger.drop(runs2, "shark", "Megalodon", 10, at(14, 0), UTC);
@@ -202,15 +219,19 @@ public class LedgerTest {
         Ledger.drop(runs2, "shark", "Great White Shark Tooth", 12, at(14, 8), UTC);
         check("two shark drops in 10 minutes", runs2.flags.containsKey("fin_feeding_frenzy"));
         LedgerData g = new LedgerData();
-        Ledger.drop(g, "ghost", "Sorrow", 0, at(13, 0), UTC);
-        Ledger.drop(g, "ghost", "Sorrow", 0, at(13, 20), UTC);
-        check("20 minutes apart is no double haunting", !g.flags.containsKey("wisp_double_haunting"));
-        check("two Sorrows are no matched pair", !g.flags.containsKey("wisp_matched_pair"));
-        check("two in an hour is no poltergeist", !g.flags.containsKey("wisp_poltergeist"));
-        Ledger.drop(g, "ghost", "Plasma", 0, at(13, 25), UTC);
-        check("double haunting", g.flags.containsKey("wisp_double_haunting"));
-        check("poltergeist", g.flags.containsKey("wisp_poltergeist"));
-        check("matched pair", g.flags.containsKey("wisp_matched_pair"));
+        long t0 = at(13, 0);
+        Ledger.drop(g, "ghost", "Sorrow", 0, t0, UTC);
+        Ledger.drop(g, "ghost", "Plasma", 0, t0 + 61_000, UTC);
+        check("61 seconds apart is no double haunting", !g.flags.containsKey("wisp_double_haunting"));
+        check("61 seconds apart is no matched pair", !g.flags.containsKey("wisp_matched_pair"));
+        Ledger.drop(g, "ghost", "Plasma", 0, t0 + 61_000 + 31_000, UTC);
+        check("31 seconds apart is no double haunting", !g.flags.containsKey("wisp_double_haunting"));
+        check("two Plasmas are no matched pair", !g.flags.containsKey("wisp_matched_pair"));
+        check("two in a minute is no poltergeist", !g.flags.containsKey("wisp_poltergeist"));
+        Ledger.drop(g, "ghost", "Sorrow", 0, t0 + 61_000 + 31_000 + 20_000, UTC);
+        check("double haunting in 20 seconds", g.flags.containsKey("wisp_double_haunting"));
+        check("poltergeist: three in 51 seconds", g.flags.containsKey("wisp_poltergeist"));
+        check("matched pair within a minute", g.flags.containsKey("wisp_matched_pair"));
         check("1 PM is no witching hour", !g.flags.containsKey("wisp_witching_hour"));
         Ledger.drop(g, "ghost", "Sorrow", 0, at(17, 0, 30), UTC);
         check("witching hour", g.flags.containsKey("wisp_witching_hour"));

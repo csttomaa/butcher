@@ -25,8 +25,8 @@ public final class Ledger {
     public static final int RECENT = 60;
     /** "Hot Streak": two rare drops this close together. */
     public static final long HOT_STREAK_MS = 10 * 60_000L;
-    /** The window for the Ghosts' hour-long runs (Poltergeist, Matched Pair). */
-    public static final long HOUR_MS = 60 * 60_000L;
+    /** The Ghosts' windows (the user's numbers): Double Haunting 30 s; Poltergeist and Matched Pair a minute. */
+    public static final long HAUNT_MS = 30_000L, GHOST_RUN_MS = 60_000L;
 
     private static final Map<String, Stamp> BY_ID = new HashMap<>();
     private static final Map<Chapter, List<Stamp>> BY_CHAPTER = new EnumMap<>(Chapter.class);
@@ -86,8 +86,6 @@ public final class Ledger {
             case "scatha_choice_cut" -> f.petsEpic;
             case "scatha_prime_cut" -> f.petsLegendary;
             case "scatha_full_set" -> Math.min(f.petsRare, Math.min(f.petsEpic, f.petsLegendary));
-            // Reached when the first pet came within the stamp's number of kills: the value is that number then.
-            case "scatha_beginners_luck" -> d.firstPetKill > 0 && d.firstPetKill <= s.number(20) ? s.number(20) : 0;
             case "scatha_dry_aged", "scatha_dry_aged_45" -> f.scathaWorstDry;
             case "scatha_slippery" -> f.scathaMisses;
             case "scatha_dozen" -> f.pets();
@@ -165,8 +163,9 @@ public final class Ledger {
             case "wisp_high_voltage" -> f.drops("ghost", "Plasma");
             case "wisp_bittersweet" -> Math.min(f.drops("ghost", "Sorrow"), f.drops("ghost", "Plasma"));
 
-            // Everything else is an event: it happened (award) or it did not.
-            default -> d.flags.containsKey(s.id()) ? 1 : 0;
+            // Everything else is an event: it happened (award) or it did not. Happened, it reads as its own number
+            // (Back to Back's 50, In the Black's 30M), so a numbered event stamps too - read as 1, it never did.
+            default -> d.flags.containsKey(s.id()) ? s.need(s.grades()) : 0;
         };
     }
 
@@ -244,6 +243,12 @@ public final class Ledger {
         if (kill > 0 && kill == (jackpot == null ? 777 : jackpot.number(777))) award(d, "house_jackpot_777", kill);
         if ("scatha".equals(source)) {
             if (d.firstPetKill <= 0) d.firstPetKill = kill;
+            // A pet within the day's first N kills (scathaKill counts them; a new day starts again).
+            Stamp lucky = byId("scatha_beginners_luck");
+            long today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay();
+            if (d.scathaDay == today && d.scathaDayKills > 0 && d.scathaDayKills <= (lucky == null ? 10 : lucky.number(10))) {
+                award(d, "scatha_beginners_luck", kill);
+            }
             Stamp b2b = byId("scatha_back_to_back");
             long within = b2b == null ? 50 : b2b.number(50);
             for (LedgerData.Drop prev : d.recent) {
@@ -262,6 +267,16 @@ public final class Ledger {
         while (d.recent.size() > RECENT) d.recent.remove(0);
     }
 
+    /** A real Scatha kill: today's count goes up, or starts again on a new day (local time). */
+    public static void scathaKill(LedgerData d, long now, ZoneId zone) {
+        long today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay();
+        if (today != d.scathaDay) {
+            d.scathaDay = today;
+            d.scathaDayKills = 0;
+        }
+        d.scathaDayKills++;
+    }
+
     /** The awards that read the clock: the hot streak, the night shift, and the Fin and Wisp runs of luck. */
     private static void timed(LedgerData d, String source, String title, long kill, long now, ZoneId zone) {
         for (LedgerData.Drop prev : d.recent) {
@@ -273,22 +288,23 @@ public final class Ledger {
         int hour = Instant.ofEpochMilli(now).atZone(zone).getHour();
         if (hour >= 3 && hour < 5) award(d, "house_night_shift", kill);
         // A source's own runs of luck, against its earlier drops (this one is not in the list yet).
-        int sameHour = 0;
-        boolean sameTen = false, otherKindHour = false;
+        int inRun = 0;
+        boolean sameTen = false, haunt = false, otherKind = false;
         for (LedgerData.Drop prev : d.recent) {
             if (!source.equals(prev.source) || prev.at > now) continue;
             long ago = now - prev.at;
             if (ago <= HOT_STREAK_MS) sameTen = true;
-            if (ago <= HOUR_MS) {
-                sameHour++;
-                if (!title.equals(prev.title)) otherKindHour = true;
+            if (ago <= HAUNT_MS) haunt = true;
+            if (ago <= GHOST_RUN_MS) {
+                inRun++;
+                if (!title.equals(prev.title)) otherKind = true;
             }
         }
         if ("shark".equals(source) && sameTen) award(d, "fin_feeding_frenzy", kill);
         if ("ghost".equals(source)) {
-            if (sameTen) award(d, "wisp_double_haunting", kill);
-            if (sameHour >= 2) award(d, "wisp_poltergeist", kill);
-            if (otherKindHour) award(d, "wisp_matched_pair", kill);
+            if (haunt) award(d, "wisp_double_haunting", kill);
+            if (inRun >= 2) award(d, "wisp_poltergeist", kill);
+            if (otherKind) award(d, "wisp_matched_pair", kill);
             if (hour == 0) award(d, "wisp_witching_hour", kill);
         }
     }
