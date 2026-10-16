@@ -24,7 +24,10 @@ public final class StampPopup {
     // ---- timing, ms from the start
     private static final long FALL = com.butcher.gui.menu.StampCard.FALL, END = com.butcher.gui.menu.StampCard.END;
 
-    private static final ConcurrentLinkedQueue<Stamp> QUEUE = new ConcurrentLinkedQueue<>();
+    /** A pop-up waiting: its stamp, and a grade to show (0: whatever the book says when it comes up). */
+    private record Item(Stamp stamp, int grade, boolean test) {}
+
+    private static final ConcurrentLinkedQueue<Item> QUEUE = new ConcurrentLinkedQueue<>();
     private static Stamp current;
     private static int grade;
     private static long startedAt = -1;
@@ -38,7 +41,12 @@ public final class StampPopup {
 
     /** A stamp earned or raised a grade (ButcherStats.stamped). Any thread. */
     public static void queue(Stamp s) {
-        QUEUE.add(s);
+        QUEUE.add(new Item(s, 0, false));
+    }
+
+    /** /butcher test ledger: a pop-up at a chosen grade, shown even with pop-ups switched off. */
+    public static void queueTest(Stamp s, int grade) {
+        QUEUE.add(new Item(s, grade, true));
     }
 
     /** Whether one is showing or waiting. */
@@ -65,9 +73,14 @@ public final class StampPopup {
             burst = 0;
             return;
         }
-        if ((ButcherClient.config != null && !ButcherClient.config.ledgerPopups) || !com.butcher.Safety.on("ledger")) {
+        boolean off = ButcherClient.config != null && !ButcherClient.config.ledgerPopups;
+        if (!com.butcher.Safety.on("ledger")) {
             QUEUE.clear();
             return;
+        }
+        if (off) {
+            QUEUE.removeIf(it -> !it.test());
+            if (QUEUE.isEmpty()) return;
         }
         if (burst >= CAP) {
             int n = 0;
@@ -78,10 +91,11 @@ public final class StampPopup {
             thumped = true;
             return;
         }
-        Stamp next = QUEUE.poll();
+        Item next = QUEUE.poll();
         burst++;
-        current = next;
-        grade = Ledger.grade(next, ButcherStats.get().ledger());
+        current = next.stamp();
+        grade = next.grade() > 0 ? Math.min(next.grade(), next.stamp().grades())
+                : Math.max(1, Ledger.grade(next.stamp(), ButcherStats.get().ledger()));
         startedAt = System.currentTimeMillis();
         thumped = false;
     }

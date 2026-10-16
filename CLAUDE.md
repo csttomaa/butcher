@@ -911,6 +911,12 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
   in-game `Draw`, shared. `Voices.stamp` (thump, edge click, paper, two bell notes, a third for a raised grade) on
   `ledgerVolume`; `ledgerPopups` under General. Offline: the scratchpad's `menu/src/CardPreview.java`.
 - `PANEL_W` is 392 for five tabs; a tab too narrow for its name draws its icon alone.
+- **`/butcher test ledger`** (developers only - it hangs off `test`, so `Dev.allowed()`; `ButcherClient.ledgerTestNode`):
+  `popup <id> [grade]` (only the pop-up, `StampPopup.queueTest`, shown even with pop-ups off; `popup burst` queues
+  six to see the cap), `give <id> [grade]` / `take <id>`, `info <id>` (what `Ledger.value` counts now, the grade it
+  earns, what is in the book), `fill` (every stamp at its top, the Seraph's left out), `unseen` (fresh ink) and
+  `wipe confirm` (empty, then the backfill again). Every stamp id is its own literal, so tab completes them. All but
+  popup and info change the real Ledger (`ButcherStats.test*`).
 
 ## Fail-safes (2026-10-16)
 

@@ -329,6 +329,54 @@ public final class ButcherStats {
         return added;
     }
 
+    // ---------------------------------------------------------------- /butcher test ledger (developers only)
+    // These change the real Ledger in stats.json: undo with "take" or "wipe" (the daily backups are there too).
+
+    /** Puts {@code s} in the book at grade {@code g} (clamped to its grades), dated now, as if just earned. */
+    public void testGive(Stamp s, int g) {
+        LedgerData l = ledger();
+        LedgerData.Entry e = l.stamps.computeIfAbsent(s.id(), k -> new LedgerData.Entry());
+        e.grade = Math.max(1, Math.min(g, s.grades()));
+        e.at = System.currentTimeMillis();
+        e.value = s.tiered() ? s.need(e.grade) : 0;
+        l.seen.remove(s.id());
+        save();
+    }
+
+    /** Takes a stamp out of the book, its event flag too. The next check puts it back if the stats prove it. */
+    public boolean testTake(String id) {
+        LedgerData l = ledger();
+        boolean had = l.stamps.remove(id) != null;
+        l.flags.remove(id);
+        l.seen.remove(id);
+        save();
+        return had;
+    }
+
+    /** Every stamp at its top grade (the Seraph's chapter, under maintenance, left out). */
+    public int testFill() {
+        int n = 0;
+        for (Stamp s : Ledger.STAMPS) {
+            if (s.chapter() == com.butcher.ledger.Chapter.SERAPH) continue;
+            testGive(s, s.grades());
+            n++;
+        }
+        return n;
+    }
+
+    /** An empty Ledger, then the backfill from the stats again - as on the first launch with it. */
+    public void testWipe() {
+        ledger = null;
+        ledger();
+        save();
+    }
+
+    /** Every stamp shows fresh ink again. */
+    public void testUnseen() {
+        ledger().seen.clear();
+        save();
+    }
+
     /** Earns whatever the numbers now reach and tells the pop-up. The caller saves. */
     private void stampCheck() {
         java.util.List<Stamp> fresh = Ledger.refresh(facts(), ledger(), System.currentTimeMillis(), false);

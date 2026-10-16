@@ -979,14 +979,16 @@ public class ButcherClient implements ClientModInitializer {
                             "shark", "Fin, the Fishing Festival pop-up",
                             "ghost", "Wisp, a Ghost's Sorrow or Plasma",
                             "slayer", "the slayer bosses",
-                            "lava", "Eruption, lava fishing"))
+                            "lava", "Eruption, lava fishing",
+                            "ledger", "the Ledger: pop-ups, stamps, the book"))
                     .then(scathaNode)
                     .then(vanguardNode)
                     .then(dianaNode)
                     .then(sharkNode)
                     .then(ghostNode)
                     .then(slayerNode)
-                    .then(lavaNode);
+                    .then(lavaNode)
+                    .then(ledgerTestNode());
 
             dispatcher.register(ClientCommands.literal("butcher")
                     .executes(ctx -> {
@@ -1851,6 +1853,125 @@ public class ButcherClient implements ClientModInitializer {
      *
      * @param pairs option, description, option, description...
      */
+    /**
+     * /butcher test ledger - developers only (it hangs off "test", which carries Dev.allowed()). A stamp's id is a
+     * word of its own under each verb, so tab completes every one.
+     * <ul>
+     *   <li>{@code popup <id> [grade]} - its pop-up, nothing saved; {@code popup burst} six at once (the cap).</li>
+     *   <li>{@code give <id> [grade]} - in the book as if earned now, with its pop-up; {@code take <id>} out again.</li>
+     *   <li>{@code info <id>} - what it counts, the number now, the grade that earns and the next one's need.</li>
+     *   <li>{@code fill} - every stamp at its top grade; {@code unseen} - all fresh ink;
+     *   {@code wipe confirm} - empty, then backfilled from the stats as on the first launch.</li>
+     * </ul>
+     * Everything but popup and info changes the real Ledger.
+     */
+    private static LiteralArgumentBuilder<FabricClientCommandSource> ledgerTestNode() {
+        LiteralArgumentBuilder<FabricClientCommandSource> node = ClientCommands.literal("ledger")
+                .executes(ctx -> options(ctx, "test ledger",
+                        "popup", "<stamp> [grade] - its pop-up only, nothing saved; \"burst\" for six at once",
+                        "give", "<stamp> [grade] - stamp it in the book now, with its pop-up",
+                        "take", "<stamp> - take it out of the book",
+                        "info", "<stamp> - what it counts and how far along it is",
+                        "fill", "every stamp at its top grade",
+                        "unseen", "every stamp back to fresh ink",
+                        "wipe", "confirm - empty the Ledger and backfill it from the stats again"));
+        LiteralArgumentBuilder<FabricClientCommandSource> popup = ClientCommands.literal("popup");
+        LiteralArgumentBuilder<FabricClientCommandSource> give = ClientCommands.literal("give");
+        LiteralArgumentBuilder<FabricClientCommandSource> take = ClientCommands.literal("take");
+        LiteralArgumentBuilder<FabricClientCommandSource> info = ClientCommands.literal("info");
+        for (com.butcher.ledger.Stamp s : com.butcher.ledger.Ledger.STAMPS) {
+            LiteralArgumentBuilder<FabricClientCommandSource> p = ClientCommands.literal(s.id())
+                    .executes(ctx -> ledgerPopup(ctx, s, s.grades()));
+            LiteralArgumentBuilder<FabricClientCommandSource> g = ClientCommands.literal(s.id())
+                    .executes(ctx -> ledgerGive(ctx, s, s.grades()));
+            if (s.tiered()) {
+                for (int i = 1; i <= s.grades(); i++) {
+                    int grade = i;
+                    p.then(ClientCommands.literal(Integer.toString(i)).executes(ctx -> ledgerPopup(ctx, s, grade)));
+                    g.then(ClientCommands.literal(Integer.toString(i)).executes(ctx -> ledgerGive(ctx, s, grade)));
+                }
+            }
+            popup.then(p);
+            give.then(g);
+            take.then(ClientCommands.literal(s.id()).executes(ctx -> {
+                boolean had = ButcherStats.get().testTake(s.id());
+                ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7" + (had
+                        ? "Took §f" + s.name() + "§7 out of the Ledger. If your stats prove it, the next kill stamps it again."
+                        : "§f" + s.name() + "§7 was not in the Ledger.")));
+                return 1;
+            }));
+            info.then(ClientCommands.literal(s.id()).executes(ctx -> {
+                ButcherStats st = ButcherStats.get();
+                com.butcher.ledger.LedgerData l = st.ledger();
+                long v = com.butcher.ledger.Ledger.value(s, st.facts(), l);
+                int have = com.butcher.ledger.Ledger.grade(s, l), earns = com.butcher.ledger.Ledger.gradeFor(s, v);
+                com.butcher.ledger.LedgerData.Entry e = l.stamps.get(s.id());
+                ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §f" + s.name() + " §8(" + s.id() + ", "
+                        + s.chapter().title + (s.hidden() ? ", hidden" : "") + ")"));
+                ctx.getSource().sendFeedback(Component.literal("  §7" + s.desc()));
+                ctx.getSource().sendFeedback(Component.literal("  §7Counts now: §f" + v
+                        + (s.tiered() ? "§7, tiers §f" + java.util.Arrays.toString(s.tiers()) : "")
+                        + "§7 - earns grade §f" + earns + "§7 of §f" + s.grades()));
+                ctx.getSource().sendFeedback(Component.literal("  §7In the book: " + (e == null ? "§8not yet"
+                        : "§fgrade " + have + (e.at > 0 ? "§7, " + new java.util.Date(e.at) : "§7, pre-ledger")
+                        + (e.value > 0 ? "§7, on §f" + e.value : "")
+                        + (l.flags.containsKey(s.id()) ? "§7, event at kill §f" + l.flags.get(s.id()) : ""))));
+                return 1;
+            }));
+        }
+        popup.then(ClientCommands.literal("burst").executes(ctx -> {
+            java.util.List<com.butcher.ledger.Stamp> all = new java.util.ArrayList<>(com.butcher.ledger.Ledger.STAMPS);
+            java.util.Collections.shuffle(all);
+            for (int i = 0; i < 6; i++) com.butcher.render.StampPopup.queueTest(all.get(i), all.get(i).grades());
+            ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7Six pop-ups queued: three, then \"+3 more\"."));
+            return 1;
+        }));
+        return node.then(popup).then(give).then(take).then(info)
+                .then(ClientCommands.literal("fill").executes(ctx -> {
+                    int n = ButcherStats.get().testFill();
+                    ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7" + n
+                            + " stamps at their top grade. §8/butcher test ledger wipe confirm§7 to undo."));
+                    return 1;
+                }))
+                .then(ClientCommands.literal("unseen").executes(ctx -> {
+                    ButcherStats.get().testUnseen();
+                    ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7Every stamp shows fresh ink again."));
+                    return 1;
+                }))
+                .then(ClientCommands.literal("wipe")
+                        .executes(ctx -> {
+                            ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7This empties the Ledger and "
+                                    + "backfills it from your stats: skips, coins and luck history are lost. "
+                                    + "§f/butcher test ledger wipe confirm§7 to do it."));
+                            return 1;
+                        })
+                        .then(ClientCommands.literal("confirm").executes(ctx -> {
+                            ButcherStats.get().testWipe();
+                            int earned = com.butcher.ledger.Ledger.earnedGrades(ButcherStats.get().ledger());
+                            ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7Ledger wiped and backfilled: §f"
+                                    + earned + "§7 grade(s) from your stats."));
+                            return 1;
+                        })));
+    }
+
+    private static int ledgerPopup(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> ctx,
+                                   com.butcher.ledger.Stamp s, int grade) {
+        com.butcher.render.StampPopup.queueTest(s, grade);
+        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7Pop-up for §f" + s.name()
+                + (s.tiered() ? "§7 at " + com.butcher.ledger.Grade.of(grade).title : "") + "§7 - close chat to see it."));
+        return 1;
+    }
+
+    private static int ledgerGive(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> ctx,
+                                  com.butcher.ledger.Stamp s, int grade) {
+        ButcherStats.get().testGive(s, grade);
+        com.butcher.render.StampPopup.queueTest(s, grade);
+        ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7Stamped §f" + s.name()
+                + (s.tiered() ? "§7 at " + com.butcher.ledger.Grade.of(grade).title : "")
+                + "§7. §8/butcher test ledger take " + s.id() + "§7 to undo."));
+        return 1;
+    }
+
     private static int options(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> ctx,
                                String path, String... pairs) {
         ctx.getSource().sendFeedback(Component.literal("§6[Butcher] §7/butcher " + path + " §8- pick one:"));
