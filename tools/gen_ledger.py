@@ -3,7 +3,7 @@
     python3 tools/gen_ledger.py
 
 Reads docs/ledger_stamps.xlsx (sheet "Stamps": ID, Chapter, Stamp name, What earns it, Kind, four tier columns,
-Hidden?, Backfill, Keep?, notes) and writes src/main/java/com/butcher/ledger/StampTable.java. Rows with Keep? = No
+Hidden?, Backfill, Keep?, notes, Hint) and writes src/main/java/com/butcher/ledger/StampTable.java. Rows with Keep? = No
 are left out. Edit the sheet and re-run this rather than editing StampTable.java, or the next run wipes the change.
 
 What each stamp *counts* is code, keyed by its ID, in Ledger.value - a new ID needs a line there too, or it can
@@ -15,6 +15,7 @@ from openpyxl import load_workbook
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHEET = os.path.join(HERE, "..", "docs", "ledger_stamps.xlsx")
+HINT = "Hint (secret stamps)"
 OUT = os.path.join(HERE, "..", "src", "main", "java", "com", "butcher", "ledger", "StampTable.java")
 
 
@@ -38,7 +39,8 @@ def main():
         tiers = [int(t) for t in tiers if t not in (None, "")]
         rows.append((str(sid).strip(), str(r[col["Chapter"]]).strip().upper(), r[col["Stamp name"]],
                      r[col["What earns it"]], str(r[col["Kind"]] or "Single").strip().lower() == "tiered",
-                     tiers, str(r[col["Hidden?"]] or "No").strip().lower() == "yes"))
+                     tiers, str(r[col["Hidden?"]] or "No").strip().lower() == "yes",
+                     r[col[HINT]] if HINT in col else None))
     lines = [
         "package com.butcher.ledger;",
         "",
@@ -54,9 +56,9 @@ def main():
         "    static final List<Stamp> ALL = List.of(",
     ]
     body = []
-    for sid, ch, name, desc, tiered, tiers, hidden in rows:
+    for sid, ch, name, desc, tiered, tiers, hidden, hint in rows:
         t = "new long[]{" + ", ".join(str(x) + "L" for x in tiers) + "}"
-        body.append(f"            new Stamp({jstr(sid)}, Chapter.{ch}, {jstr(name)}, {jstr(desc)}, {str(tiered).lower()}, {t}, {str(hidden).lower()})")
+        body.append(f"            new Stamp({jstr(sid)}, Chapter.{ch}, {jstr(name)}, {jstr(desc)}, {str(tiered).lower()}, {t}, {str(hidden).lower()}, {jstr(hint)})")
     lines.append(",\n".join(body))
     lines += ["    );", "}", ""]
     with open(OUT, "w", encoding="utf-8") as f:

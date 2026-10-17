@@ -42,7 +42,12 @@ public class LedgerTest {
     static final Set<String> EVENTS = Set.of("house_hot_streak", "house_night_shift", "house_jackpot_777",
             "scatha_back_to_back", "vg_negative_equity", "vg_in_the_black", "diana_shared_custody", "lava_jaw_dropping",
             "fin_bigger_fish", "scatha_beginners_luck", "house_big_ticket", "fin_feeding_frenzy", "wisp_double_haunting", "wisp_poltergeist",
-            "wisp_matched_pair", "wisp_witching_hour");
+            "wisp_matched_pair", "wisp_witching_hour",
+            // The secret stamps (2026-10-17).
+            "house_unlucky_13", "house_leap_of_faith", "house_christmas_ham", "house_two_timer", "house_health_inspector",
+            "house_natural", "house_loose_change", "scatha_round_number", "scatha_is_that_it", "scatha_cereal_killer",
+            "vg_brain_freeze", "diana_nobody_expects", "hellion_number_beast", "hellion_snake_eyes", "lava_hot_potato",
+            "fin_bigger_boat", "wisp_aint_afraid");
 
     static final ZoneId UTC = ZoneOffset.UTC;
 
@@ -235,6 +240,81 @@ public class LedgerTest {
         check("1 PM is no witching hour", !g.flags.containsKey("wisp_witching_hour"));
         Ledger.drop(g, "ghost", "Sorrow", 0, at(17, 0, 30), UTC);
         check("witching hour", g.flags.containsKey("wisp_witching_hour"));
+
+        // ---- the secret stamps
+        int secrets = 0;
+        for (Stamp s : Ledger.STAMPS) if (s.hidden()) {
+            secrets++;
+            check(s.id() + " has a hint", s.hint() != null && !s.hint().isEmpty());
+        }
+        check("20 or more secret stamps", secrets >= 20, "" + secrets);
+        LedgerData dates = new LedgerData();
+        Ledger.drop(dates, "lava", "Flash I", 40, LocalDateTime.of(2026, 11, 13, 12, 0).atZone(UTC).toInstant().toEpochMilli(), UTC);
+        check("Friday the 13th", dates.flags.containsKey("house_unlucky_13"));
+        Ledger.drop(dates, "lava", "Flash I", 41, LocalDateTime.of(2027, 12, 25, 12, 0).atZone(UTC).toInstant().toEpochMilli(), UTC);
+        check("Christmas", dates.flags.containsKey("house_christmas_ham"));
+        check("not a leap day", !dates.flags.containsKey("house_leap_of_faith"));
+        Ledger.drop(dates, "lava", "Flash I", 42, LocalDateTime.of(2028, 2, 29, 12, 0).atZone(UTC).toInstant().toEpochMilli(), UTC);
+        check("leap day", dates.flags.containsKey("house_leap_of_faith"));
+        check("a year apart is no hot potato", !dates.flags.containsKey("lava_hot_potato"));
+        LedgerData tues = new LedgerData();
+        Ledger.drop(tues, "lava", "Flash I", 40, at(13, 12, 0), UTC);     // a Tuesday the 13th
+        check("Tuesday the 13th is fine", !tues.flags.containsKey("house_unlucky_13"));
+        check("kill 40 is no natural", !tues.flags.containsKey("house_natural"));
+        Ledger.drop(tues, "blaze", "Duplex I", 1, at(13, 12, 3), UTC);
+        check("natural: a drop on the first kill", tues.flags.get("house_natural") == 1L);
+        check("two-timer: two animations in 3 minutes", tues.flags.containsKey("house_two_timer"));
+        Ledger.drop(tues, "lava", "Flash I", 41, at(13, 12, 4), UTC);
+        check("hot potato: two lava drops in 4 minutes", tues.flags.containsKey("lava_hot_potato"));
+
+        LedgerData dice = new LedgerData();
+        Ledger.drop(dice, "blaze", "Archfiend Dice", 20, at(10, 0), UTC);
+        Ledger.drop(dice, "blaze", "Duplex I", 30, at(11, 0), UTC);
+        Ledger.drop(dice, "blaze", "High Class Archfiend Dice", 40, at(12, 0), UTC);
+        check("dice with a Duplex between is no snake eyes", !dice.flags.containsKey("hellion_snake_eyes"));
+        Ledger.drop(dice, "lava", "Flash I", 9, at(12, 30), UTC);
+        Ledger.drop(dice, "blaze", "Archfiend Dice", 666, at(13, 0), UTC);
+        check("snake eyes: dice twice in a row (another source between)", dice.flags.get("hellion_snake_eyes") == 666L);
+        check("number of the beast", dice.flags.get("hellion_number_beast") == 666L);
+
+        LedgerData pets = new LedgerData();
+        Ledger.drop(pets, "scatha", "epic", 250, at(10, 0), UTC);
+        check("a first pet at 250 is not 'is that it' (epic)", !pets.flags.containsKey("scatha_is_that_it"));
+        Ledger.drop(pets, "scatha", "rare", 500, at(11, 0), UTC);
+        check("250 dry is not enough", !pets.flags.containsKey("scatha_is_that_it"));
+        check("round number: kill 500", pets.flags.get("scatha_round_number") == 500L);
+        Ledger.drop(pets, "scatha", "rare", 801, at(12, 0), UTC);
+        check("is that it: a rare pet after 301 dry", pets.flags.get("scatha_is_that_it") == 801L);
+        LedgerData firstRare = new LedgerData();
+        Ledger.drop(firstRare, "scatha", "rare", 333, at(12, 0), UTC);
+        check("is that it: a first pet, rare, at 333", firstRare.flags.containsKey("scatha_is_that_it"));
+        LedgerData unknownGap = new LedgerData();
+        unknownGap.firstPetKill = 40;                                      // backfilled: a pet, but not in the recent list
+        Ledger.drop(unknownGap, "scatha", "rare", 900, at(12, 0), UTC);
+        check("is that it: no guess when the last pet is unknown", !unknownGap.flags.containsKey("scatha_is_that_it"));
+
+        LedgerData cereal = new LedgerData();
+        Ledger.scathaResult(cereal, null, true, 1);
+        Ledger.scathaResult(cereal, null, true, 2);
+        Ledger.scathaResult(cereal, null, false, 3);                       // gemstones break the run
+        Ledger.scathaResult(cereal, null, true, 4);
+        Ledger.scathaResult(cereal, null, true, 5);
+        check("two O's, gems, two O's is no cereal killer", !cereal.flags.containsKey("scatha_cereal_killer"));
+        Ledger.scathaResult(cereal, null, true, 6);
+        check("cereal killer: three O's in a row", cereal.flags.get("scatha_cereal_killer") == 6L);
+
+        LedgerData sea = new LedgerData();
+        long s0 = at(15, 0);
+        Ledger.drop(sea, "shark", "Great White Shark Tooth", 10, s0, UTC);
+        Ledger.drop(sea, "shark", "Great White Shark Tooth", 11, s0 + 4 * 60_000, UTC);
+        check("two shark drops are no bigger boat", !sea.flags.containsKey("fin_bigger_boat"));
+        Ledger.drop(sea, "shark", "Megalodon", 12, s0 + 9 * 60_000, UTC);
+        check("bigger boat: three in 9 minutes", sea.flags.containsKey("fin_bigger_boat"));
+        LedgerData boo = new LedgerData();
+        for (int i = 0; i < 4; i++) Ledger.drop(boo, "ghost", "Sorrow", 0, s0 + i * 120_000L, UTC);
+        check("four ghost drops are not five", !boo.flags.containsKey("wisp_aint_afraid"));
+        Ledger.drop(boo, "ghost", "Plasma", 0, s0 + 9 * 60_000, UTC);
+        check("ain't afraid: five in 9 minutes", boo.flags.containsKey("wisp_aint_afraid"));
 
         // ---- fail-safes: a clock that went back, and a file that was edited by hand
         LedgerData clock = new LedgerData();

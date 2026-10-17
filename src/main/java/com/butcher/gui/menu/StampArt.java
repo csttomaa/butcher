@@ -33,12 +33,14 @@ public final class StampArt {
         return all[(i + s.chapter().ordinal() * 2) % all.length];
     }
 
-    /** The stamp's own item: a vanilla item's registry path (GuiDraw knows them all); the chapter's if it has none. */
+    /** The stamp's own item: a SkyBlock head ("head:set:name" - the drop itself, from the bundled NEU skins) or a
+     *  vanilla item's registry path (GuiDraw knows them all); the chapter's if it has none. */
     public static String item(Stamp s) {
         return ITEMS.getOrDefault(s.id(), s.chapter().icon);
     }
 
-    /** One item per stamp. Each must also be in GuiDraw's list, or it draws as paper. On 26.2 coloured items (wool,
+    /** One item per stamp: the SkyBlock item where its skin is bundled, else a vanilla stand-in (docs/TODO.md lists
+     *  those). A vanilla one must also be in GuiDraw's list, or it draws as paper. On 26.2 coloured items (wool,
      *  dyes) and copper ones (lightning rods...) are collections, not single items: wool is {@code WOOL.pick(colour)}
      *  in GuiDraw, and the copper family is avoided - one of them in the switch breaks GuiDraw's ItemStack. */
     static final Map<String, String> ITEMS = Map.ofEntries(
@@ -49,43 +51,43 @@ public final class StampArt {
             Map.entry("house_jackpot_777", "emerald"), Map.entry("house_well_done", "cooked_beef"),
             Map.entry("house_collector", "item_frame"), Map.entry("house_big_ticket", "diamond"),
 
-            Map.entry("scatha_worm_food", "rotten_flesh"), Map.entry("scatha_rare_cut", "lapis_lazuli"),
-            Map.entry("scatha_choice_cut", "amethyst_shard"), Map.entry("scatha_prime_cut", "glowstone_dust"),
+            Map.entry("scatha_worm_food", "rotten_flesh"), Map.entry("scatha_rare_cut", "head:scatha:pet"),
+            Map.entry("scatha_choice_cut", "head:scatha:pet"), Map.entry("scatha_prime_cut", "head:scatha:pet"),
             Map.entry("scatha_full_set", "chest"), Map.entry("scatha_beginners_luck", "rabbit_foot"),
             Map.entry("scatha_dry_aged", "beef"), Map.entry("scatha_dry_aged_45", "bone"),
             Map.entry("scatha_slippery", "slime_ball"), Map.entry("scatha_back_to_back", "egg"),
-            Map.entry("scatha_dozen", "bread"), Map.entry("scatha_cereal", "wheat"),
+            Map.entry("scatha_dozen", "bread"), Map.entry("scatha_cereal", "head:vanguard:Dwarven O's Metallic Minis"),
 
-            Map.entry("vg_thawed_out", "ice"), Map.entry("vg_cold_hands", "packed_ice"),
-            Map.entry("vg_heart_of_glass", "heart_of_the_sea"), Map.entry("vg_frostbitten", "snowball"),
+            Map.entry("vg_thawed_out", "ice"), Map.entry("vg_cold_hands", "head:vanguard:Glacite Amalgamation"),
+            Map.entry("vg_heart_of_glass", "head:vanguard:Shattered Locket"), Map.entry("vg_frostbitten", "head:vanguard:Frostbitten Dye"),
             Map.entry("vg_ice_cold", "blue_ice"), Map.entry("vg_negative_equity", "redstone"),
-            Map.entry("vg_in_the_black", "coal"), Map.entry("vg_skeleton_crew", "skeleton_skull"),
-            Map.entry("vg_cold_storage", "barrel"), Map.entry("vg_will_o_wisp", "soul_torch"),
-            Map.entry("vg_tough_skin", "shield"), Map.entry("vg_master_key", "tripwire_hook"),
+            Map.entry("vg_in_the_black", "head:vanguard:Flawless Onyx Gemstone"), Map.entry("vg_skeleton_crew", "head:vanguard:Suspicious Scrap"),
+            Map.entry("vg_cold_storage", "barrel"), Map.entry("vg_will_o_wisp", "head:vanguard:Caged Wisp"),
+            Map.entry("vg_tough_skin", "head:vanguard:Frozen Scute"), Map.entry("vg_master_key", "tripwire_hook"),
 
-            Map.entry("diana_heads", "golden_shovel"), Map.entry("diana_brain_food", "cookie"),
-            Map.entry("diana_chimera", "enchanted_book"), Map.entry("diana_stinger", "spider_eye"),
-            Map.entry("diana_manticore", "nether_star"), Map.entry("diana_crown", "golden_helmet"),
-            Map.entry("diana_wool", "yellow_wool"), Map.entry("diana_relic", "compass"),
-            Map.entry("diana_dye", "green_wool"), Map.entry("diana_pantheon", "totem_of_undying"),
-            Map.entry("diana_shared_custody", "name_tag"), Map.entry("diana_inquisition", "golden_sword"),
+            Map.entry("diana_heads", "golden_shovel"), Map.entry("diana_brain_food", "head:diana:Brain Food"),
+            Map.entry("diana_chimera", "enchanted_book"), Map.entry("diana_stinger", "head:diana:Fateful Stinger"),
+            Map.entry("diana_manticore", "head:diana:Manti-core"), Map.entry("diana_crown", "golden_helmet"),
+            Map.entry("diana_wool", "yellow_wool"), Map.entry("diana_relic", "head:diana:Minos Relic"),
+            Map.entry("diana_dye", "head:diana:Mythological Dye"), Map.entry("diana_pantheon", "head:creatures:KING_MINOS"),
+            Map.entry("diana_shared_custody", "name_tag"), Map.entry("diana_inquisition", "head:creatures:INQUISITOR"),
 
             Map.entry("hellion_fire_watch", "blaze_rod"), Map.entry("hellion_double_down", "enchanted_book"),
-            Map.entry("hellion_roll_dice", "bone"), Map.entry("hellion_high_roller", "gold_block"),
-            Map.entry("hellion_playing_fire", "flint_and_steel"), Map.entry("hellion_ashes", "gunpowder"),
-            Map.entry("hellion_power_trip", "redstone"), Map.entry("hellion_cold_feet", "powder_snow_bucket"),
-            Map.entry("hellion_blueprints", "map"), Map.entry("hellion_paragon", "prismarine_crystals"),
+            Map.entry("hellion_roll_dice", "head:slayer:Archfiend Dice"), Map.entry("hellion_high_roller", "head:slayer:High Class Archfiend Dice"),
+            Map.entry("hellion_playing_fire", "head:slayer:Flame Dye"), Map.entry("hellion_ashes", "gunpowder"),
+            Map.entry("hellion_power_trip", "head:slayer:Scorched Power Crystal"), Map.entry("hellion_cold_feet", "powder_snow_bucket"),
+            Map.entry("hellion_blueprints", "map"), Map.entry("hellion_paragon", "head:slayer:Paragon Shard"),
             Map.entry("hellion_hellfire_club", "magma_cream"), Map.entry("hellion_seventh_circle", "nether_star"),
 
-            Map.entry("lava_magma_maker", "magma_block"), Map.entry("lava_flash", "glowstone_dust"),
-            Map.entry("lava_meltdown", "experience_bottle"), Map.entry("lava_end_times", "writable_book"),
-            Map.entry("lava_kuudra", "red_wool"), Map.entry("lava_jaw_dropping", "iron_block"),
-            Map.entry("lava_thermal_runaway", "lava_bucket"), Map.entry("lava_chained", "lead"),
-            Map.entry("lava_pinch_me", "nautilus_shell"), Map.entry("lava_forged", "anvil"),
-            Map.entry("lava_shell_shocked", "turtle_helmet"), Map.entry("lava_hot_catch", "fishing_rod"),
+            Map.entry("lava_magma_maker", "head:lava:Thunder"), Map.entry("lava_flash", "enchanted_book"),
+            Map.entry("lava_meltdown", "head:lava:RADIOACTIVE_VIAL"), Map.entry("lava_end_times", "head:lava:BURNT_TEXTS"),
+            Map.entry("lava_kuudra", "head:lava:DYE_CARMINE"), Map.entry("lava_jaw_dropping", "head:lava:Lord Jawbus"),
+            Map.entry("lava_thermal_runaway", "lava_bucket"), Map.entry("lava_chained", "head:lava:CHAIN_END_TIMES"),
+            Map.entry("lava_pinch_me", "head:lava:SEVERED_PINCER"), Map.entry("lava_forged", "anvil"),
+            Map.entry("lava_shell_shocked", "head:lava:SCUTTLER_SHELL"), Map.entry("lava_hot_catch", "fishing_rod"),
 
-            Map.entry("fin_shark_week", "cod"), Map.entry("fin_big_fish", "tropical_fish"),
-            Map.entry("fin_bigger_fish", "pufferfish"), Map.entry("fin_tooth_fairy", "prismarine_shard"),
+            Map.entry("fin_shark_week", "cod"), Map.entry("fin_big_fish", "head:fishing:Megalodon"),
+            Map.entry("fin_bigger_fish", "head:fishing:Megalodon"), Map.entry("fin_tooth_fairy", "ghast_tear"),
             Map.entry("fin_off_the_hook", "fishing_rod"), Map.entry("fin_dentist", "bone_meal"),
             Map.entry("fin_school", "salmon"), Map.entry("fin_dry_dock", "oak_boat"),
             Map.entry("fin_feeding_frenzy", "kelp"), Map.entry("fin_both_ends", "nautilus_shell"),
@@ -94,7 +96,18 @@ public final class StampArt {
             Map.entry("wisp_spirit_level", "phantom_membrane"), Map.entry("wisp_drowning", "water_bucket"),
             Map.entry("wisp_high_voltage", "end_rod"), Map.entry("wisp_bittersweet", "honey_bottle"),
             Map.entry("wisp_double_haunting", "soul_lantern"), Map.entry("wisp_poltergeist", "echo_shard"),
-            Map.entry("wisp_matched_pair", "glass_bottle"), Map.entry("wisp_witching_hour", "jack_o_lantern"));
+            Map.entry("wisp_matched_pair", "glass_bottle"), Map.entry("wisp_witching_hour", "jack_o_lantern"),
+
+            // The secret stamps (2026-10-17).
+            Map.entry("house_unlucky_13", "cobweb"), Map.entry("house_leap_of_faith", "lily_pad"),
+            Map.entry("house_christmas_ham", "cooked_porkchop"), Map.entry("house_two_timer", "spyglass"),
+            Map.entry("house_health_inspector", "barrier"), Map.entry("house_natural", "golden_apple"),
+            Map.entry("house_loose_change", "gold_nugget"), Map.entry("scatha_round_number", "ender_pearl"),
+            Map.entry("scatha_is_that_it", "stick"), Map.entry("scatha_cereal_killer", "bowl"),
+            Map.entry("vg_brain_freeze", "snow_block"), Map.entry("diana_nobody_expects", "head:creatures:INQUISITOR"),
+            Map.entry("hellion_number_beast", "wither_skeleton_skull"), Map.entry("hellion_snake_eyes", "fermented_spider_eye"),
+            Map.entry("lava_hot_potato", "baked_potato"), Map.entry("fin_bigger_boat", "trident"),
+            Map.entry("wisp_aint_afraid", "carved_pumpkin"));
 
     /** How crooked this stamp sits, in radians - fixed per stamp. */
     public static float tilt(Stamp s) {

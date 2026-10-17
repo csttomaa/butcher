@@ -78,6 +78,24 @@ public final class HeadSkins {
         return blobs().containsKey(name);
     }
 
+    /** The bundled texture blob (base64 "textures" property) for this head, or null. */
+    public String blob(String name) {
+        return blobs().get(name);
+    }
+
+    /** A bundled set by its short name ("vanguard", "diana", "creatures", "fishing", "slayer", "lava"), or null. */
+    public static HeadSkins named(String set) {
+        return switch (set) {
+            case "vanguard" -> VANGUARD;
+            case "diana" -> DIANA;
+            case "creatures" -> CREATURES;
+            case "fishing" -> FISHING;
+            case "slayer" -> SLAYER;
+            case "lava" -> LAVA;
+            default -> null;
+        };
+    }
+
     /** Starts every head's skin lookup. Cheap, idempotent; call once there is a player. */
     public void prewarm() {
         if (prewarmed) return;

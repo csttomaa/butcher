@@ -950,6 +950,17 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
   `inside(shape, x, y, r)` is the one definition; `fill`/`outline` draw it a row of runs at a time, and empty slots
   pencil the same outline dashed. **The cover keeps its face while it swings**: `cover` draws `coverFace` whole,
   squeezed towards the spine with `Draw.scale(sx, 1)` and darkened as it turns, opening and closing alike.
+- **Secrets and SkyBlock items (2026-10-17, the user: more secret, funnier stamps; SkyBlock items not vanilla)**:
+  109 stamps, 27 secret, each with a `hint` (the sheet's last column, "Hint (secret stamps)") pencilled on its page in
+  place of the rule; the pop-up says "SECRET STAMP!". The new ones are events: dates (Friday 13th, 29 Feb, Christmas -
+  in `Ledger.timed`, so the clock check covers them), Two-Timer (two sources within 5 min), Natural Talent (a drop on
+  kill 1), Round Number, Is That It? (a rare pet after 300+ dry - the gap from `recent`, or the whole count for a first
+  pet, never guessed), Cereal Killer (`Ledger.scathaResult`, `LedgerData.cerealRun`), Brain Freeze (`onCorpse`, 2+
+  legendaries), Nobody Expects It (`onDiana`), Number of the Beast, Snake Eyes, Hot Potato, Bigger Boat, Ain't Afraid,
+  Loose Change (`onCoins`), Health Inspector (`stopAll(true)` with something playing). A desc's "N" / "Nth" is filled
+  with the stamp's number by `LedgerView.describe`. **Icons**: `head:<set>:<name>` in `StampArt.ITEMS` draws the
+  drop's own SkyBlock head (`HeadSkins.named(set).blob(name)`, `head:scatha:pet` is `PetHeadPopup.SKIN_BASE64`) as a
+  PLAYER_HEAD with a resolved profile (`GuiDraw.head`); the ones still vanilla are listed in `docs/TODO.md`.
 - Saving the sheet with openpyxl drops Excel's extension-form dropdowns (the Chapter list): re-add it as a plain
   `DataValidation` (`=Chapters!$A$2:$A$10`, B2:B140) after any scripted edit.
 - **`/butcher test ledger`** (developers only - it hangs off `test`, so `Dev.allowed()`; `ButcherClient.ledgerTestNode`):

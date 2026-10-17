@@ -47,7 +47,7 @@ public final class StampCard {
         }
         int textA = Math.round(255 * fade);
         if (t >= WORDS && textA > 8) {
-            String head = "STAMPED!";
+            String head = s.hidden() ? "SECRET STAMP!" : "STAMPED!";
             words(d, head, cx, cy + r + 6, 1.3f, s.chapter().ink, textA, true);
         }
         if (t >= NAME && textA > 8) {

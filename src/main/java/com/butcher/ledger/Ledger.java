@@ -27,6 +27,8 @@ public final class Ledger {
     public static final long HOT_STREAK_MS = 10 * 60_000L;
     /** The Ghosts' windows (the user's numbers): Double Haunting 30 s; Poltergeist and Matched Pair a minute. */
     public static final long HAUNT_MS = 30_000L, GHOST_RUN_MS = 60_000L;
+    /** The secret runs of luck: Two-Timer and Hot Potato within 5 minutes; a Bigger Boat and No Ghost within 10. */
+    public static final long TWO_TIMER_MS = 5 * 60_000L, FRENZY_MS = 10 * 60_000L;
 
     private static final Map<String, Stamp> BY_ID = new HashMap<>();
     private static final Map<Chapter, List<Stamp>> BY_CHAPTER = new EnumMap<>(Chapter.class);
@@ -241,7 +243,23 @@ public final class Ledger {
         if (clockOk) timed(d, source, title, kill, now, zone);
         Stamp jackpot = byId("house_jackpot_777");
         if (kill > 0 && kill == (jackpot == null ? 777 : jackpot.number(777))) award(d, "house_jackpot_777", kill);
+        if (kill == 1) award(d, "house_natural", kill);
+        if ("blaze".equals(source)) {
+            Stamp beast = byId("hellion_number_beast");
+            if (kill > 0 && kill == (beast == null ? 666 : beast.number(666))) award(d, "hellion_number_beast", kill);
+            LedgerData.Drop last = lastOf(d, source);
+            if (last != null && title.contains("Archfiend Dice") && last.title != null && last.title.contains("Archfiend Dice")) {
+                award(d, "hellion_snake_eyes", kill);
+            }
+        }
         if ("scatha".equals(source)) {
+            // Is That It?: the gap back to the last pet - from the recent drops, or the whole count for the first pet.
+            LedgerData.Drop last = lastOf(d, source);
+            long gap = last != null && last.kill > 0 && kill > last.kill ? kill - last.kill
+                    : last == null && d.firstPetKill <= 0 ? kill : -1;
+            Stamp meh = byId("scatha_is_that_it");
+            if ("rare".equals(title) && gap >= (meh == null ? 300 : meh.number(300))) award(d, "scatha_is_that_it", kill);
+            if (kill > 0 && kill % 100 == 0) award(d, "scatha_round_number", kill);
             if (d.firstPetKill <= 0) d.firstPetKill = kill;
             // A pet within the day's first N kills (scathaKill counts them; a new day starts again).
             Stamp lucky = byId("scatha_beginners_luck");
@@ -267,6 +285,26 @@ public final class Ledger {
         while (d.recent.size() > RECENT) d.recent.remove(0);
     }
 
+    /** The newest of this source's recent drops, or null. */
+    private static LedgerData.Drop lastOf(LedgerData d, String source) {
+        for (int i = d.recent.size() - 1; i >= 0; i--) {
+            LedgerData.Drop prev = d.recent.get(i);
+            if (source.equals(prev.source)) return prev;
+        }
+        return null;
+    }
+
+    /** A real Scatha kill's outcome, for Cereal Killer: Dwarven O's busts in a row. A pet or gemstones end the run. */
+    public static void scathaResult(LedgerData d, String rarity, boolean dwarvenOs, long kill) {
+        if (rarity == null && dwarvenOs) {
+            d.cerealRun++;
+            Stamp cereal = byId("scatha_cereal_killer");
+            if (d.cerealRun >= (cereal == null ? 3 : cereal.number(3))) award(d, "scatha_cereal_killer", kill);
+        } else {
+            d.cerealRun = 0;
+        }
+    }
+
     /** A real Scatha kill: today's count goes up, or starts again on a new day (local time). */
     public static void scathaKill(LedgerData d, long now, ZoneId zone) {
         long today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay();
@@ -277,7 +315,7 @@ public final class Ledger {
         d.scathaDayKills++;
     }
 
-    /** The awards that read the clock: the hot streak, the night shift, and the Fin and Wisp runs of luck. */
+    /** The awards that read the clock: the hot streak, the night shift, the dates, and each source's runs of luck. */
     private static void timed(LedgerData d, String source, String title, long kill, long now, ZoneId zone) {
         for (LedgerData.Drop prev : d.recent) {
             if (now - prev.at <= HOT_STREAK_MS && now >= prev.at) {
@@ -285,15 +323,27 @@ public final class Ledger {
                 break;
             }
         }
-        int hour = Instant.ofEpochMilli(now).atZone(zone).getHour();
+        java.time.ZonedDateTime when = Instant.ofEpochMilli(now).atZone(zone);
+        int hour = when.getHour();
         if (hour >= 3 && hour < 5) award(d, "house_night_shift", kill);
+        if (when.getDayOfMonth() == 13 && when.getDayOfWeek() == java.time.DayOfWeek.FRIDAY) award(d, "house_unlucky_13", kill);
+        if (when.getMonthValue() == 2 && when.getDayOfMonth() == 29) award(d, "house_leap_of_faith", kill);
+        if (when.getMonthValue() == 12 && when.getDayOfMonth() == 25) award(d, "house_christmas_ham", kill);
+        for (LedgerData.Drop prev : d.recent) {
+            if (prev.source != null && !source.equals(prev.source) && now >= prev.at && now - prev.at <= TWO_TIMER_MS) {
+                award(d, "house_two_timer", kill);
+                break;
+            }
+        }
         // A source's own runs of luck, against its earlier drops (this one is not in the list yet).
-        int inRun = 0;
-        boolean sameTen = false, haunt = false, otherKind = false;
+        int inRun = 0, inFrenzy = 0;
+        boolean sameTen = false, haunt = false, otherKind = false, sameFive = false;
         for (LedgerData.Drop prev : d.recent) {
             if (!source.equals(prev.source) || prev.at > now) continue;
             long ago = now - prev.at;
             if (ago <= HOT_STREAK_MS) sameTen = true;
+            if (ago <= TWO_TIMER_MS) sameFive = true;
+            if (ago <= FRENZY_MS) inFrenzy++;
             if (ago <= HAUNT_MS) haunt = true;
             if (ago <= GHOST_RUN_MS) {
                 inRun++;
@@ -301,6 +351,9 @@ public final class Ledger {
             }
         }
         if ("shark".equals(source) && sameTen) award(d, "fin_feeding_frenzy", kill);
+        if ("shark".equals(source) && inFrenzy >= 2) award(d, "fin_bigger_boat", kill);
+        if ("lava".equals(source) && sameFive) award(d, "lava_hot_potato", kill);
+        if ("ghost".equals(source) && inFrenzy >= 4) award(d, "wisp_aint_afraid", kill);
         if ("ghost".equals(source)) {
             if (haunt) award(d, "wisp_double_haunting", kill);
             if (inRun >= 2) award(d, "wisp_poltergeist", kill);

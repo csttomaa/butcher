@@ -2238,6 +2238,9 @@ public class ButcherClient implements ClientModInitializer {
      */
     public static void stopAll(boolean byPlayer) {
         com.butcher.gui.Cutscene c = currentCutscene();
+        // The Ledger's secret Health Inspector: the player shut a cutscene down themselves.
+        boolean playing = c != null || (currentScope != null && currentScope.isActive()) || thawActive();
+        if (byPlayer && playing) quietly(() -> ButcherStats.get().award("house_health_inspector", 0));
         quietly(() -> { if (c != null) c.interrupt(); });
         quietly(() -> {
             if (currentScope != null && currentScope.isActive()) {

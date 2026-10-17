@@ -67,9 +67,46 @@ public final class GuiDraw implements Draw {
         return bold ? Component.literal(s).withStyle(ChatFormatting.BOLD) : Component.literal(s);
     }
 
-    /** The cards', tabs' and stamps' icons: vanilla items, by registry path. */
+    /** The cards', tabs' and stamps' icons: vanilla items by registry path, or a SkyBlock head ("head:set:name"). */
     private ItemStack stack(String id) {
-        return items.computeIfAbsent(id, k -> new ItemStack(switch (k) {
+        return items.computeIfAbsent(id, k -> k.startsWith("head:") ? head(k) : vanilla(k));
+    }
+
+    /**
+     * A SkyBlock item that is a player head, as the game draws it in an inventory: a PLAYER_HEAD with the item's
+     * real skin from a bundled NEU blob ({@code head:diana:Brain Food}; {@code head:scatha:pet} is the Scatha pet).
+     * The game fetches the skin itself. Anything unknown draws as paper.
+     */
+    private static ItemStack head(String id) {
+        String[] p = id.split(":", 3);
+        String blob = null;
+        if (p.length == 3) {
+            if (p[1].equals("scatha")) {
+                blob = com.butcher.anim.PetHeadPopup.SKIN_BASE64;
+            } else {
+                com.butcher.render.HeadSkins set = com.butcher.render.HeadSkins.named(p[1]);
+                if (set != null) blob = set.blob(p[2]);
+            }
+        }
+        if (blob == null) return new ItemStack(Items.PAPER);
+        try {
+            ItemStack stack = new ItemStack(Items.PLAYER_HEAD);
+            com.mojang.authlib.GameProfile profile = new com.mojang.authlib.GameProfile(
+                    java.util.UUID.nameUUIDFromBytes(blob.getBytes(java.nio.charset.StandardCharsets.UTF_8)), "ButcherItem",
+                    new com.mojang.authlib.properties.PropertyMap(com.google.common.collect.ImmutableMultimap.of(
+                            "textures", new com.mojang.authlib.properties.Property("textures", blob))));
+            stack.applyComponents(net.minecraft.core.component.DataComponentPatch.builder()
+                    .set(net.minecraft.core.component.DataComponents.PROFILE,
+                            net.minecraft.world.item.component.ResolvableProfile.createResolved(profile))
+                    .build());
+            return stack;
+        } catch (RuntimeException e) {
+            return new ItemStack(Items.PAPER);
+        }
+    }
+
+    private static ItemStack vanilla(String k) {
+        return new ItemStack(switch (k) {
             case "amethyst_shard" -> Items.AMETHYST_SHARD;
             case "blue_ice" -> Items.BLUE_ICE;
             case "golden_shovel" -> Items.GOLDEN_SHOVEL;
@@ -157,7 +194,21 @@ public final class GuiDraw implements Draw {
             case "wheat" -> Items.WHEAT;
             case "writable_book" -> Items.WRITABLE_BOOK;
             case "yellow_wool" -> Items.WOOL.pick(net.minecraft.world.item.DyeColor.YELLOW);
+            case "baked_potato" -> Items.BAKED_POTATO;
+            case "barrier" -> Items.BARRIER;
+            case "bowl" -> Items.BOWL;
+            case "carved_pumpkin" -> Items.CARVED_PUMPKIN;
+            case "cobweb" -> Items.COBWEB;
+            case "cooked_porkchop" -> Items.COOKED_PORKCHOP;
+            case "fermented_spider_eye" -> Items.FERMENTED_SPIDER_EYE;
+            case "golden_apple" -> Items.GOLDEN_APPLE;
+            case "lily_pad" -> Items.LILY_PAD;
+            case "snow_block" -> Items.SNOW_BLOCK;
+            case "spyglass" -> Items.SPYGLASS;
+            case "stick" -> Items.STICK;
+            case "trident" -> Items.TRIDENT;
+            case "wither_skeleton_skull" -> Items.WITHER_SKELETON_SKULL;
             default -> Items.PAPER;
-        }));
+        });
     }
 }

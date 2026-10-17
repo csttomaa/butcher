@@ -120,6 +120,11 @@ public final class ButcherStats {
             Ledger.drop(l, "diana", drop, kills, now, java.time.ZoneId.systemDefault());
             long shared = dianaShareAt.getAsLong();
             if (shared > 0 && now - shared <= SHARE_MS) Ledger.award(l, "diana_shared_custody", kills);
+            Stamp early = Ledger.byId("diana_nobody_expects");
+            int inquisitors = dianaKills.getOrDefault("INQUISITOR", 0);
+            if ("INQUISITOR".equals(creature) && inquisitors <= (early == null ? 10 : early.number(10))) {
+                Ledger.award(l, "diana_nobody_expects", inquisitors);
+            }
         }
         stampCheck();
         save();
@@ -403,6 +408,8 @@ public final class ButcherStats {
         if (coins <= 0) return;
         ledger().coins += coins;
         if (coins >= BIG_TICKET) Ledger.award(ledger(), "house_big_ticket", 0);
+        Stamp change = Ledger.byId("house_loose_change");
+        if (coins < (change == null ? 500_000 : change.number(500_000))) Ledger.award(ledger(), "house_loose_change", 0);
         stampCheck();
         save();
     }
@@ -492,6 +499,7 @@ public final class ButcherStats {
         LedgerData l = ledger();
         Ledger.run(l, rarity != null);
         if (rarity != null) Ledger.drop(l, "scatha", rarity, kills, System.currentTimeMillis(), java.time.ZoneId.systemDefault());
+        Ledger.scathaResult(l, rarity, blocked, kills);
         stampCheck();
         save();
     }
@@ -526,6 +534,7 @@ public final class ButcherStats {
         Ledger.run(l, win);
         if (win) Ledger.drop(l, "vanguard", specials > 0 ? "Frostbitten Dye" : "legendary", corpses,
                 System.currentTimeMillis(), java.time.ZoneId.systemDefault());
+        if (legendaries + specials >= 2) Ledger.award(l, "vg_brain_freeze", corpses);
         stampCheck();
         save();
     }

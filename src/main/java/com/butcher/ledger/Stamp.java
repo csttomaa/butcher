@@ -5,9 +5,11 @@ package com.butcher.ledger;
  *
  * A tiered stamp has up to four {@code tiers} (Select, Choice, Prime, A5 Wagyu) and its grade is how many of them
  * {@link Ledger#value} has reached. A single stamp has one grade: its one number, or - with no number - simply having
- * happened (value 1). A hidden one shows as "???" until it is earned.
+ * happened (value 1). A hidden one shows as "???" until it is earned, with its {@code hint} (may be empty) in
+ * pencil in place of the rule.
  */
-public record Stamp(String id, Chapter chapter, String name, String desc, boolean tiered, long[] tiers, boolean hidden) {
+public record Stamp(String id, Chapter chapter, String name, String desc, boolean tiered, long[] tiers, boolean hidden,
+                    String hint) {
 
     /** How many grades it has: a single stamp has one. */
     public int grades() {

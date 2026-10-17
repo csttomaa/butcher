@@ -809,7 +809,15 @@ final class LedgerView {
         y += 14;
 
         if (hidden) {
-            wrap(d, "A hidden stamp. It shows what it is for once you have earned it.", x, y, right - x, PENCIL);
+            y = wrap(d, "A secret stamp. It shows what it is for once you have earned it.", x, y, right - x, PENCIL) + 6;
+            // Someone's pencilled a clue underneath.
+            if (s.hint() != null && !s.hint().isEmpty()) {
+                d.push();
+                d.translate(x + 4, y);
+                d.rotate(-0.03f);
+                wrap(d, "Hint: " + s.hint(), 0, 0, right - x - 8, PENCIL);
+                d.pop();
+            }
             return;
         }
         y = wrap(d, describe(s), x, y, right - x, INK) + 3;
@@ -848,6 +856,8 @@ final class LedgerView {
         if (s.id().equals("scatha_beginners_luck")) return "A pet within your first " + s.need(1) + " Scatha kills of the day.";
         if (s.id().equals("scatha_back_to_back")) return "Two pets within " + s.need(1) + " kills.";
         if (s.id().equals("vg_in_the_black")) return "A corpse worth " + String.format(Locale.ROOT, "%,d", s.need(1)) + " coins or more.";
+        // The sheet writes a stamp's number as N ("your Nth Demonlord kill"), so editing the number keeps the words true.
+        if (s.tiers().length > 0) desc = desc.replaceAll("\\bN(?=\\b|th\\b)", String.format(Locale.ROOT, "%,d", s.need(1)));
         return desc.endsWith(".") ? desc : desc + ".";
     }
 
@@ -855,7 +865,9 @@ final class LedgerView {
     private static boolean isEvent(Stamp s) {
         return switch (s.id()) {
             case "house_hot_streak", "house_night_shift", "house_jackpot_777", "scatha_back_to_back", "scatha_beginners_luck",
-                 "vg_negative_equity", "vg_in_the_black", "diana_shared_custody", "lava_jaw_dropping", "fin_bigger_fish" -> true;
+                 "vg_negative_equity", "vg_in_the_black", "diana_shared_custody", "lava_jaw_dropping", "fin_bigger_fish",
+                 "house_loose_change", "scatha_is_that_it", "scatha_cereal_killer", "diana_nobody_expects",
+                 "hellion_number_beast" -> true;
             default -> false;
         };
     }

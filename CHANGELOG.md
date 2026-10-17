@@ -13,6 +13,10 @@ every build, so the gaps between entries are builds nobody ran - not missing not
 - **59 stamps**, tiered ones graded Select, Choice, Prime and A5 Wagyu: kill counts, every rare drop, and luck -
   Beginner's Luck, Back to Back, Dry Aged, Night Shift, Hot Streak, Jackpot 777, Tycoon. Hidden ones show as "???"
   until earned.
+- **27 secret stamps** with a pencilled hint each - a drop on Friday the 13th, Christmas or a leap day, Cereal Killer,
+  Snake Eyes, Number of the Beast, Health Inspector and more. Earning one says "SECRET STAMP!".
+- Stamps for a drop show the SkyBlock item itself (its real skin) where the mod has it - the Scatha pet, the Relic,
+  the dice, the Megalodon and so on.
 - **Your old stats count.** The first launch stamps everything they already prove, marked "pre-ledger" with no
   date. The stamps that need history the stats never kept start counting now.
 - **A stamp pop-up**: earned in game, a stamp thumps down on screen with its own sound - after the cutscene, never
