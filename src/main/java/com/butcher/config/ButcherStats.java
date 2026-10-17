@@ -113,17 +113,22 @@ public final class ButcherStats {
         }
         LedgerData l = ledger();
         Ledger.run(l, drop != null);
+        long at = System.currentTimeMillis();
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+        Ledger.kill(l, "diana", at, zone);
+        if (creature != null) Ledger.kill(l, "diana:" + creature, at, zone);
         if (drop != null) {
-            long now = System.currentTimeMillis();
+            long now = at;
             long kills = 0;
             for (int n : dianaKills.values()) kills += n;
             Ledger.drop(l, "diana", drop, kills, now, java.time.ZoneId.systemDefault());
             long shared = dianaShareAt.getAsLong();
             if (shared > 0 && now - shared <= SHARE_MS) Ledger.award(l, "diana_shared_custody", kills);
+            // Nobody Expects It: a drop within the day's first N Inquisitors (the user: 5, and it resets every day).
             Stamp early = Ledger.byId("diana_nobody_expects");
-            int inquisitors = dianaKills.getOrDefault("INQUISITOR", 0);
-            if ("INQUISITOR".equals(creature) && inquisitors <= (early == null ? 10 : early.number(10))) {
-                Ledger.award(l, "diana_nobody_expects", inquisitors);
+            long inquisitors = Ledger.killsToday(l, "diana:INQUISITOR", now, zone);
+            if ("INQUISITOR".equals(creature) && inquisitors > 0 && inquisitors <= (early == null ? 5 : early.number(5))) {
+                Ledger.award(l, "diana_nobody_expects", dianaKills.getOrDefault("INQUISITOR", 0));
             }
         }
         stampCheck();
@@ -182,6 +187,7 @@ public final class ButcherStats {
         }
         LedgerData l = ledger();
         Ledger.run(l, drop != null);
+        Ledger.kill(l, key, System.currentTimeMillis(), java.time.ZoneId.systemDefault());
         if (drop != null) Ledger.drop(l, key, drop, s.kills, System.currentTimeMillis(), java.time.ZoneId.systemDefault());
         stampCheck();
         save();
@@ -532,6 +538,7 @@ public final class ButcherStats {
         LedgerData l = ledger();
         boolean win = legendaries + specials > 0;
         Ledger.run(l, win);
+        Ledger.kill(l, "vanguard", System.currentTimeMillis(), java.time.ZoneId.systemDefault());
         if (win) Ledger.drop(l, "vanguard", specials > 0 ? "Frostbitten Dye" : "legendary", corpses,
                 System.currentTimeMillis(), java.time.ZoneId.systemDefault());
         if (legendaries + specials >= 2) Ledger.award(l, "vg_brain_freeze", corpses);

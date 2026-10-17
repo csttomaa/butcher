@@ -51,6 +51,10 @@ public final class LedgerData {
     /** Today's Scatha kills, for Beginner's Luck (the user: it resets every day): the day (local epoch day) and the
      *  kills on it. A new day starts the count again. */
     public long scathaDay = -1, scathaDayKills;
+    /** Today's kills per animation ("blaze", "diana", "diana:INQUISITOR"...), for the stamps that reset every day
+     *  (Natural Talent, Nobody Expects It): the day they are for (local epoch day) and the counts. Ledger.kill. */
+    public long killsDay = -1;
+    public Map<String, Long> dayKills = new LinkedHashMap<>();
     /** Dwarven O's busts in a row (Cereal Killer). */
     public long cerealRun;
     /** The last rare drops, newest last, at most {@link Ledger#RECENT}. */
@@ -69,6 +73,8 @@ public final class LedgerData {
         if (flags == null) flags = new LinkedHashMap<>();
         if (seen == null) seen = new HashSet<>();
         if (recent == null) recent = new ArrayList<>();
+        if (dayKills == null) dayKills = new LinkedHashMap<>();
+        dayKills.values().removeIf(v -> v == null || v < 0);
         stamps.values().removeIf(e -> e == null || e.grade <= 0);
         for (Map.Entry<String, Entry> me : stamps.entrySet()) {
             Entry e = me.getValue();

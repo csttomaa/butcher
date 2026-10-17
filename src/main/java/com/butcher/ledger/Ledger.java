@@ -243,7 +243,10 @@ public final class Ledger {
         if (clockOk) timed(d, source, title, kill, now, zone);
         Stamp jackpot = byId("house_jackpot_777");
         if (kill > 0 && kill == (jackpot == null ? 777 : jackpot.number(777))) award(d, "house_jackpot_777", kill);
-        if (kill == 1) award(d, "house_natural", kill);
+        // Natural Talent: a drop on the day's first kill of that animation (the user: it resets every day).
+        if ("scatha".equals(source) ? d.scathaDay == day(now, zone) && d.scathaDayKills == 1 : killsToday(d, source, now, zone) == 1) {
+            award(d, "house_natural", kill);
+        }
         if ("blaze".equals(source)) {
             Stamp beast = byId("hellion_number_beast");
             if (kill > 0 && kill == (beast == null ? 666 : beast.number(666))) award(d, "hellion_number_beast", kill);
@@ -303,6 +306,28 @@ public final class Ledger {
         } else {
             d.cerealRun = 0;
         }
+    }
+
+    private static long day(long now, ZoneId zone) {
+        return Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay();
+    }
+
+    /**
+     * A real kill of {@code key} - an animation's source key, or "diana:" + the creature - for today's counts. A new
+     * day (local time) starts every count again. The Scatha's own day count is {@link #scathaKill}.
+     */
+    public static void kill(LedgerData d, String key, long now, ZoneId zone) {
+        long today = day(now, zone);
+        if (today != d.killsDay) {
+            d.killsDay = today;
+            d.dayKills.clear();
+        }
+        d.dayKills.merge(key, 1L, Long::sum);
+    }
+
+    /** Today's kills of {@code key} so far (0 when the counts are for another day). */
+    public static long killsToday(LedgerData d, String key, long now, ZoneId zone) {
+        return d.killsDay == day(now, zone) ? d.dayKills.getOrDefault(key, 0L) : 0;
     }
 
     /** A real Scatha kill: today's count goes up, or starts again on a new day (local time). */

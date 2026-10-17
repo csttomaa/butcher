@@ -917,10 +917,10 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
   draws its icon alone.
 - **The book is shown on its own (2026-10-16, the user)**: the Ledger tab sets `MenuView.ledgerMode` (static, so the
   menu reopens in it); the menu fades out over 180 ms and the book drops in (`LedgerView.enter`, `backOut`), shut, and
-  swings open. "< Back to the menu" top left, a hint line at the bottom, Esc (`MenuView.escape` from
-  `ButcherMenuScreen.onClose`) and the ribbon (`shutByRibbon` -> `wantsLeave`) put it away (`leave`, `gone`). `tab`
+  swings open. Esc (`MenuView.escape` from `ButcherMenuScreen.onClose`) and the ribbon (`shutByRibbon` -> `wantsLeave`) put it away (`leave`, `gone`). `tab`
   never becomes `TAB_LEDGER` any more. The book is 412 x 250, scaled to the screen in quarter steps (2.0 at a 960 x 540
-  GUI), resting at `TILT` -0.02 rad with more while it lands, leaves, opens and turns; `toBook` undoes the transform for
+  GUI; 10 px kept clear above and below - the user had the "Back to the menu" and hint lines removed, 2026-10-17),
+  resting at `TILT` -0.02 rad with more while it lands, leaves, opens and turns; `toBook` undoes the transform for
   the mouse. Stamp names are 0.75x, wrapped at 36.
 - **Pages turn** (`Spot` = chapter + page; `next`/`prev` run through the whole book): the folded corners (click, or drag -
   `drag`/`release`, over at `TURN_COMMIT` 0.3), the wheel, and the divider tabs. While a page turns the statics stay at
@@ -954,9 +954,11 @@ maybe like a binder", a chapter per animation, old stats backfilled. They edited
   109 stamps, 27 secret, each with a `hint` (the sheet's last column, "Hint (secret stamps)") pencilled on its page in
   place of the rule; the pop-up says "SECRET STAMP!". The new ones are events: dates (Friday 13th, 29 Feb, Christmas -
   in `Ledger.timed`, so the clock check covers them), Two-Timer (two sources within 5 min), Natural Talent (a drop on
-  kill 1), Round Number, Is That It? (a rare pet after 300+ dry - the gap from `recent`, or the whole count for a first
+  the day's first kill of that animation - `Ledger.kill` keeps per-key counts for the local day, `killsDay`/`dayKills`;
+  the Scatha's comes from `scathaDayKills`), Round Number, Is That It? (a rare pet after 300+ dry - the gap from `recent`, or the whole count for a first
   pet, never guessed), Cereal Killer (`Ledger.scathaResult`, `LedgerData.cerealRun`), Brain Freeze (`onCorpse`, 2+
-  legendaries), Nobody Expects It (`onDiana`), Number of the Beast, Snake Eyes, Hot Potato, Bigger Boat, Ain't Afraid,
+  legendaries), Nobody Expects It (`onDiana`: within the day's first 5 Inquisitors,
+  `killsToday(l, "diana:INQUISITOR")`; both daily rules are the user's), Number of the Beast, Snake Eyes, Hot Potato, Bigger Boat, Ain't Afraid,
   Loose Change (`onCoins`), Health Inspector (`stopAll(true)` with something playing). A desc's "N" / "Nth" is filled
   with the stamp's number by `LedgerView.describe`. **Icons**: `head:<set>:<name>` in `StampArt.ITEMS` draws the
   drop's own SkyBlock head (`HeadSkins.named(set).blob(name)`, `head:scatha:pet` is `PetHeadPopup.SKIN_BASE64`) as a

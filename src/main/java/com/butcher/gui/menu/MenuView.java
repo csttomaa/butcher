@@ -98,8 +98,8 @@ public final class MenuView {
     private static boolean ledgerMode;
     /** When the Ledger came up or went away, for the menu's fade (-1: never this time). */
     private long modeAt = -1;
-    /** The strips above and below the book, for the way back and the hints. */
-    private static final int LEDGER_TOP = 24, LEDGER_BOTTOM = 18;
+    /** The margins kept clear above and below the book. */
+    private static final int LEDGER_TOP = 10, LEDGER_BOTTOM = 10;
     private static final Set<String> openGroups = new HashSet<>();
     /** What each group's "Try it" will play. */
     private static final Map<String, Integer> TRY = new HashMap<>();
@@ -186,24 +186,7 @@ public final class MenuView {
         if (menuShown > 0f) drawMenu(d, Math.min(open, ease(menuShown)), mouseX, mouseY, !ledgerMode);
         if (ledgerMode) {
             ledger.draw(d, width, height, LEDGER_TOP, LEDGER_BOTTOM, mouseX, mouseY);
-            ledgerChrome(d, mouseX, mouseY);
         }
-    }
-
-    /** The way back to the menu above the book, and how to use it below. */
-    private void ledgerChrome(Draw d, int mx, int my) {
-        String back = "< Back to the menu";
-        int bw = d.width(back, false);
-        boolean hover = within(mx, my, 6, 4, 14 + bw, 20);
-        if (hover) d.fill(6, 4, 14 + bw, 20, 0x30FFFFFF);
-        d.text(back, 10, 8, hover ? GOLD_BRIGHT : DIM, false, false);
-        String hint = "Click a stamp to read it  ·  drag a corner or scroll to turn the page  ·  Esc for the menu";
-        if (d.width(hint, false) > width - 20) hint = "Drag a corner or scroll to turn  ·  Esc for the menu";
-        d.text(hint, (width - d.width(hint, false)) / 2, height - 13, FAINT, false, false);
-    }
-
-    private static boolean onBack(double mx, double my) {
-        return mx >= 6 && mx < 130 && my >= 4 && my < 20;
     }
 
     /** Opens the Ledger on its own. */
@@ -1407,8 +1390,7 @@ public final class MenuView {
     /** @return whether the menu used the click */
     public boolean mouseClicked(double mx, double my, int button) {
         if (ledgerMode) {
-            if (button == 0 && onBack(mx, my)) ledger.leave();
-            else if (button == 0) ledger.click(mx, my);
+            if (button == 0) ledger.click(mx, my);
             return true;
         }
         int px = panelX(), py = panelY(), pw = panelW();

@@ -260,11 +260,27 @@ public class LedgerTest {
         LedgerData tues = new LedgerData();
         Ledger.drop(tues, "lava", "Flash I", 40, at(13, 12, 0), UTC);     // a Tuesday the 13th
         check("Tuesday the 13th is fine", !tues.flags.containsKey("house_unlucky_13"));
-        check("kill 40 is no natural", !tues.flags.containsKey("house_natural"));
-        Ledger.drop(tues, "blaze", "Duplex I", 1, at(13, 12, 3), UTC);
-        check("natural: a drop on the first kill", tues.flags.get("house_natural") == 1L);
+        check("no kill counted today is no natural", !tues.flags.containsKey("house_natural"));
+        Ledger.kill(tues, "blaze", at(12, 23, 0), UTC);                    // yesterday's kill
+        Ledger.kill(tues, "blaze", at(13, 12, 2), UTC);
+        Ledger.kill(tues, "blaze", at(13, 12, 3), UTC);
+        Ledger.drop(tues, "blaze", "Duplex I", 300, at(13, 12, 3), UTC);
+        check("the day's second kill is no natural", !tues.flags.containsKey("house_natural"));
+        Ledger.kill(tues, "blaze", at(14, 9, 0), UTC);                     // a new day starts the count again
+        Ledger.drop(tues, "blaze", "Duplex I", 301, at(14, 9, 0), UTC);
+        check("natural: a drop on the day's first kill", tues.flags.get("house_natural") == 301L);
+        LedgerData scathaDay = new LedgerData();
+        Ledger.scathaKill(scathaDay, at(9, 0), UTC);
+        Ledger.drop(scathaDay, "scatha", "epic", 900, at(9, 0), UTC);
+        check("natural: the Scatha's day count", scathaDay.flags.containsKey("house_natural"));
+        LedgerData inq = new LedgerData();
+        for (int i = 0; i < 6; i++) Ledger.kill(inq, "diana:INQUISITOR", at(10, i), UTC);
+        check("six Inquisitors today", Ledger.killsToday(inq, "diana:INQUISITOR", at(10, 9), UTC) == 6);
+        check("a new day has none", Ledger.killsToday(inq, "diana:INQUISITOR", at(17, 10, 0), UTC) == 0);
+        check("nobody expects: 5 a day", Ledger.byId("diana_nobody_expects").number(0) == 5);
         check("two-timer: two animations in 3 minutes", tues.flags.containsKey("house_two_timer"));
-        Ledger.drop(tues, "lava", "Flash I", 41, at(13, 12, 4), UTC);
+        Ledger.drop(tues, "lava", "Flash I", 41, at(14, 9, 2), UTC);
+        Ledger.drop(tues, "lava", "Flash I", 42, at(14, 9, 4), UTC);
         check("hot potato: two lava drops in 4 minutes", tues.flags.containsKey("lava_hot_potato"));
 
         LedgerData dice = new LedgerData();
